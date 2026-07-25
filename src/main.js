@@ -500,10 +500,11 @@ class Game {
   updateCafeSim(dt) {
     const st = this.state;
     // "Is anyone minding the shop" is a question about everybody, not just us.
-    st.cafeOccupied = st.inCafe || (st.shared && net.onMap('cafe').length > 0);
+    const othersInCafe = st.shared ? net.onMap('cafe').length : 0;
+    st.cafeOccupied = st.inCafe || othersInCafe > 0;
     if (net.simOwner) {
       st.cafeSim.update(dt, this.ambienceCtx || (this.ambienceCtx = {}));
-      net.sendCustomers(dt, st.cafeSim.customers);
+      net.sendCustomers(dt, st.cafeSim.customers, othersInCafe);
     } else {
       st.cafeSim.updatePuppets(dt);
     }

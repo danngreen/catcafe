@@ -1,9 +1,15 @@
 // A minimal WebSocket server, no dependencies.
 //
-// We only ever send and receive small JSON text frames between machines on the
-// same LAN, so this implements the useful subset of RFC 6455: the handshake,
-// unmasking client frames, writing unmasked server frames, ping/pong and close.
-// Fragmented and binary frames are not used by the protocol and are ignored.
+// We only ever exchange JSON text frames between machines on the same LAN, so
+// this implements the useful subset of RFC 6455: the handshake, unmasking
+// client frames, writing unmasked server frames, ping/pong, close — and
+// reassembly of fragmented messages.
+//
+// That last one is not optional, however small the messages look. Whether a
+// browser splits a message across frames is its own business and depends on
+// size, timing and the socket underneath; a client that fragments would have
+// had every long message silently dropped here, which is invisible on loopback
+// and intermittent over real wifi.
 
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -19,12 +25,17 @@ export class WSSocket {
     this.open = true;
     this.handlers = { message: [], close: [] };
     this.data = {};                       // room state hangs off here
+    this.fragOp = 0;                      // opcode of the message being assembled
+    this.frag = [];                       // its pieces so far
 
     socket.on('data', (chunk) => {
       this.buf = Buffer.concat([this.buf, chunk]);
       try {
         this.drain();
       } catch (err) {
+        // Say so out loud. A silent hang-up here looks, from the game, exactly
+        // like the other player wandering off and freezing.
+        console.warn(`[ws] dropped ${this.id}: ${err.message}`);
         this.close(1002, 'bad frame');
       }
     });
@@ -41,6 +52,7 @@ export class WSSocket {
     for (;;) {
       if (this.buf.length < 2) return;
       const b0 = this.buf[0], b1 = this.buf[1];
+      const fin = (b0 & 0x80) !== 0;
       const opcode = b0 & 0x0f;
       const masked = (b1 & 0x80) !== 0;
       let len = b1 & 0x7f;
@@ -64,15 +76,27 @@ export class WSSocket {
       if (mask) for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i & 3];
       this.buf = this.buf.subarray(off + len);
 
-      if (opcode === OP.TEXT) {
-        this.emit('message', payload.toString('utf8'));
-      } else if (opcode === OP.PING) {
-        this.frame(OP.PONG, payload);
-      } else if (opcode === OP.CLOSE) {
-        this.close(1000, '');
-        return;
+      // Control frames are never fragmented and may arrive between the pieces
+      // of a message, so deal with them before touching the assembly buffer.
+      if (opcode === OP.PING) { this.frame(OP.PONG, payload); continue; }
+      if (opcode === OP.PONG) continue;
+      if (opcode === OP.CLOSE) { this.close(1000, ''); return; }
+
+      if (opcode === OP.CONT) {
+        if (!this.fragOp) continue;             // a continuation of nothing
+        this.frag.push(payload);
+      } else {
+        this.fragOp = opcode;
+        this.frag = [payload];
       }
-      // CONT / BINARY / PONG: nothing in this protocol produces them.
+      if (!fin) continue;                       // more pieces to come
+
+      const whole = this.frag.length === 1 ? this.frag[0] : Buffer.concat(this.frag);
+      const op = this.fragOp;
+      this.fragOp = 0;
+      this.frag = [];
+      if (op === OP.TEXT) this.emit('message', whole.toString('utf8'));
+      // BINARY: nothing in this protocol produces it.
     }
   }
 

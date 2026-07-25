@@ -182,6 +182,11 @@ export class Room {
    * simulated its own customers, each would ring up the same sale.
    */
   chooseOwner() {
+    // Sticky: hand over only when the current owner has actually gone. A player
+    // who drops and comes back gets a new socket, and re-running the vote on
+    // every reconnect would pass the cafe back and forth.
+    const held = this.players.get(this.owner);
+    if (held && held.joined) return;
     const joined = [...this.players.values()].filter((p) => p.joined);
     joined.sort((a, b) => a.number - b.number);
     const next = joined.length ? joined[0].id : null;
@@ -211,7 +216,10 @@ export class Room {
     this.lastTick = now;
 
     for (const p of [...this.players.values()]) {
-      if (now - p.lastSeen > IDLE_TIMEOUT_MS) p.ws.close(1001, 'idle');
+      if (now - p.lastSeen > IDLE_TIMEOUT_MS) {
+        console.warn(`[room] ${p.name || p.id} went quiet for ${Math.round((now - p.lastSeen) / 1000)}s`);
+        p.ws.close(1001, 'idle');
+      }
     }
 
     const joined = [...this.players.values()].filter((p) => p.joined);
@@ -235,7 +243,16 @@ export class Room {
     }
 
     if (joined.length < 2) return;        // nobody to tell
-    const pos = joined.map((p) => [p.id, Math.round(p.x), Math.round(p.y), p.dir, p.frame, p.map]);
+    // Only people who have actually moved. Standing about is the common case,
+    // and it used to cost fifteen messages a second per player to say so.
+    const moved = joined.filter((p) => {
+      const key = `${Math.round(p.x)},${Math.round(p.y)},${p.dir},${p.frame},${p.map}`;
+      if (p.lastPos === key) return false;
+      p.lastPos = key;
+      return true;
+    });
+    if (!moved.length) return;
+    const pos = moved.map((p) => [p.id, Math.round(p.x), Math.round(p.y), p.dir, p.frame, p.map]);
     const text = JSON.stringify({ t: 'pos', p: pos });
     for (const p of joined) p.ws.send(text);
   }

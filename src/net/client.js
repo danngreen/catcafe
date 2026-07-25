@@ -38,6 +38,15 @@ export class NetClient {
     this.retryIn = 0;
     this.reconnecting = false;
     this.keepalive = null;
+    // Counters for the `?netdebug` readout. Cheap, and the difference between
+    // "it feels laggy" and "we dropped nine times in a minute".
+    this.debug = typeof location !== 'undefined' && location.search.includes('netdebug');
+    this.rttMs = 0;
+    this.lastPosAt = 0;
+    this.lastCustAt = 0;
+    this.dropCount = 0;
+    this.rejoinCount = 0;
+    this.msgCount = 0;
   }
 
   startKeepalive() {
@@ -62,6 +71,7 @@ export class NetClient {
       // valley's books say now rather than what we remember of them.
       if (this.rejoin) {
         const j = this.rejoin;
+        this.rejoinCount++;
         this.lastSent = { x: -1, y: -1, dir: '', map: '' };
         this.join(j.name, j.look, j.x, j.y, j.map);
       }
@@ -72,8 +82,19 @@ export class NetClient {
   /** True once we are actually playing in somebody's valley. */
   get shared() { return this.connected && this.joined; }
 
-  /** Are we the client that simulates the cafe? Alone, we always are. */
-  get simOwner() { return !this.shared || this.owner === this.id; }
+  /**
+   * Are we the client that simulates the cafe? Alone, always. In a session,
+   * only while we can actually reach the server and it has named us.
+   *
+   * The "while we can reach it" half matters: a client that has lost the link
+   * used to fall back to true and start running its own cafe, so its customers
+   * flickered between the ones it invented and the copies that arrived when it
+   * got back — and both sets rang up sales against the shared till.
+   */
+  get simOwner() {
+    if (!this.everConnected) return true;
+    return this.connected && this.joined && this.owner === this.id;
+  }
 
   on(evt, fn) { (this.handlers[evt] ||= []).push(fn); return this; }
   emit(evt, ...a) { for (const fn of this.handlers[evt] || []) fn(...a); }
@@ -101,9 +122,16 @@ export class NetClient {
 
       let ws;
       try { ws = new WebSocket(url); } catch { clearTimeout(timer); return done(false); }
+      // Abandon whatever we were using. Without this an attempt that timed out
+      // and then connected anyway would keep feeding us messages — including a
+      // `welcome` carrying a different player id, which is enough to make us
+      // ignore the real other player and think we run the cafe.
+      const old = this.ws;
+      if (old && old !== ws) { try { old.close(); } catch { /* already gone */ } }
       this.ws = ws;
 
       ws.onmessage = (ev) => {
+        if (this.ws !== ws) return;            // a socket we have moved on from
         let msg;
         try { msg = JSON.parse(ev.data); } catch { return; }
         this.receive(msg);
@@ -118,12 +146,13 @@ export class NetClient {
         this.owner = null;
         this.remotes.clear();
         this.retryIn = 1;
-        if (wasConnected) this.emit('disconnected');
+        if (wasConnected) { this.dropCount++; this.emit('disconnected'); }
       };
     });
   }
 
   receive(msg) {
+    this.msgCount++;
     switch (msg.t) {
       case 'welcome':
         this.id = msg.id;
@@ -167,6 +196,7 @@ export class NetClient {
         this.emit('owner', msg.id);
         break;
       case 'cust':
+        this.lastCustAt = performance.now();
         this.emit('cust', msg.c || []);
         break;
       case 'serve':
@@ -193,12 +223,16 @@ export class NetClient {
         break;
       }
       case 'pos':
+        this.lastPosAt = performance.now();
         for (const [id, x, y, dir, frame, map] of msg.p) {
           if (id === this.id) continue;
           const r = this.remotes.get(id);
           if (r) { r.x = x; r.y = y; r.dir = dir; r.frame = frame; r.map = map; }
         }
         this.emit('pos');
+        break;
+      case 'pong':
+        if (msg.at) this.rttMs = Math.round(Date.now() - msg.at);
         break;
       default:
         break;
@@ -229,9 +263,13 @@ export class NetClient {
   /** Ask whoever runs the cafe to serve whoever is standing here. */
   askServe(x, y) { if (this.shared) this.send({ t: 'serve', x: Math.round(x), y: Math.round(y) }); }
 
-  /** Owner only: publish the customers, throttled, so the others can draw them. */
-  sendCustomers(dt, customers) {
-    if (!this.shared || !this.simOwner) return;
+  /**
+   * Owner only: publish the customers, throttled, so the others can draw them.
+   * Skipped when nobody else is in the room to draw them — ten messages a
+   * second for an audience of nobody is the bulk of a quiet session's traffic.
+   */
+  sendCustomers(dt, customers, audience) {
+    if (!this.shared || !this.simOwner || !audience) return;
     this.custTimer -= dt;
     if (this.custTimer > 0) return;
     this.custTimer = 1 / CUST_HZ;

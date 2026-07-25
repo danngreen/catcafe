@@ -397,6 +397,42 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!ts || ts.stage !== 'create') window.__errors.push('did not reach the chooser: ' + window.__create);
         if (ts && !ts.joining) window.__errors.push('offered to repaint somebody else\'s cafe');
         await wait(600);
+      } else if (SCRIPT === 'netwalkhost' || SCRIPT === 'netwalkguest') {
+        // A long run with somebody actually walking about. Positions have to
+        // keep arriving, and the link has to stay up the whole time.
+        let drops = 0, backs = 0;
+        g.net.on('disconnected', () => { drops++; });
+        g.net.on('reconnected', () => { backs++; });
+        const host = SCRIPT === 'netwalkhost';
+        if (host) {
+          const codes = ['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'];
+          for (let i = 0; i < 30; i++) {
+            const c = codes[i % codes.length];
+            key(c, true); await wait(1400); key(c, false); await wait(120);
+          }
+          window.__walkn = `owner=${g.net.simOwner} drops=${drops} backs=${backs}`
+            + ` sees=${g.net.remotes.size}`;
+        } else {
+          let w = 0;
+          while (g.remotes.size === 0 && w < 20000) { await wait(500); w += 500; }
+          const samples = [];
+          let ownerFlips = 0, lastOwner = g.net.simOwner;
+          for (let i = 0; i < 22; i++) {
+            const r = [...g.remotes.values()][0];
+            samples.push(r ? `${Math.round(r.goalX)},${Math.round(r.goalY)}` : 'none');
+            if (g.net.simOwner !== lastOwner) { ownerFlips++; lastOwner = g.net.simOwner; }
+            await wait(2000);
+          }
+          const distinct = new Set(samples).size;
+          const mine = g.state.cafeSim.customers.filter((c) => !c.puppet).length;
+          window.__walkn = `drops=${drops} backs=${backs} distinct=${distinct}/${samples.length}`
+            + ` flips=${ownerFlips} ownSim=${mine} last=${samples[samples.length - 1]}`;
+          if (drops) window.__errors.push('the link kept dropping: ' + window.__walkn);
+          if (ownerFlips) window.__errors.push('drifted in and out of running the cafe: ' + window.__walkn);
+          if (mine) window.__errors.push('simulated its own customers: ' + window.__walkn);
+          if (distinct < 5) window.__errors.push('the other player barely moved: ' + window.__walkn
+            + ' [' + samples.join(' ') + ']');
+        }
       } else if (SCRIPT === 'netdrop') {
         // Wifi blips, laptops sleep, servers get restarted. Coming back should
         // not need a page reload, and should not leave us out of step.
@@ -933,6 +969,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__drop ? ` ${window.__drop}` : '')
         + (window.__create ? ` ${window.__create}` : '')
         + (window.__slow ? ` ${window.__slow}` : '')
+        + (window.__walkn ? ` ${window.__walkn}` : '')
         + (window.__netConnected !== undefined ? ` net=${window.__netConnected} sawJoin=${window.__sawJoin} remote=${window.__remote} afterLeave=${window.__afterLeave} standing=${window.__standing}` : '')
         + (window.__ext ? ` ${window.__ext}` : '')
         + (window.__bookTreat ? ` book[${window.__bookTreat}] pet[${window.__petTreat}] choices=${window.__choices}` : '')

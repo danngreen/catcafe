@@ -282,6 +282,25 @@ export class Hud {
     }
   }
 
+  /** `?netdebug` — the numbers you'd want when the valley misbehaves. */
+  drawNetDebug(ctx, net) {
+    const age = (ms) => (ms ? `${Math.round((performance.now() - ms) / 100) / 10}s` : '-');
+    const lines = [
+      `link ${net.connected ? 'up' : 'DOWN'}  joined ${net.joined}  here ${net.here}`,
+      `me ${net.id || '-'}  cafe run by ${net.owner === net.id ? 'me' : (net.owner || 'nobody')}`,
+      `others ${net.remotes.size}  ping ${net.rttMs ? `${net.rttMs}ms` : '-'}`,
+      `last pos ${age(net.lastPosAt)}  last cust ${age(net.lastCustAt)}`,
+      `drops ${net.dropCount}  rejoins ${net.rejoinCount}  msgs ${net.msgCount}`,
+    ];
+    const w = Math.max(...lines.map((l) => textWidth(l))) + 12;
+    ctx.fillStyle = 'rgba(10,8,18,0.82)';
+    ctx.fillRect(4, VIEW_H - 12 - lines.length * 10, w, lines.length * 10 + 6);
+    lines.forEach((l, i) => {
+      drawText(ctx, l, 8, VIEW_H - 10 - (lines.length - i) * 10 + 4,
+        { color: i === 0 && !net.connected ? P.uiRed : P.uiTextDim });
+    });
+  }
+
   draw(ctx, st, t) {
     // --- clock / date, top left ---
     const clock = st.clock;
@@ -312,6 +331,20 @@ export class Hud {
       ctx.fillRect(4, 34, cw, 1);
       drawText(ctx, label, 10, 36, { color: P.uiText, shadow: P.uiShadow });
     }
+
+    // --- the link, when it isn't well ---
+    // A toast fades; being cut off does not, and everything that follows from
+    // it (nobody moving, the cafe going strange) is baffling without a light.
+    const net = st.net;
+    if (net && net.everConnected && !net.connected) {
+      const label = 'OFFLINE';
+      const ow = textWidth(label) + 12;
+      ctx.fillStyle = 'rgba(120,50,50,0.92)';
+      ctx.fillRect(VIEW_W - ow - 4, 28, ow, 12);
+      drawText(ctx, label, VIEW_W - ow + 2, 30, { color: '#ffd8d8', shadow: P.uiShadow });
+    }
+
+    if (net && net.debug) this.drawNetDebug(ctx, net);
 
     // --- location banner ---
     if (this.locationT > 0) {

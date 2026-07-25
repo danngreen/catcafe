@@ -47,6 +47,13 @@ without saving; `SESSION_SAVE=/some/path.json` puts it elsewhere.
 Clients say hello every few seconds and reconnect on their own, so standing
 still, reading the title screen, closing a lid or restarting the server doesn't
 strand anyone — you come back where you were, with the books as they are now.
+A client that has lost the link stops simulating rather than quietly running a
+second cafe, and says **OFFLINE** in the corner until it's back.
+
+If something looks wrong, add `?netdebug` to the URL: it shows the link state,
+who the server thinks runs the cafe, round-trip time, how long since the last
+position and customer update, and how many times you've dropped. The server
+prints a line whenever it hangs up on anyone, and why.
 
 ## Controls
 
@@ -190,7 +197,8 @@ browser and reports console errors:
 ```bash
 node tools/check.js walk cafe shop furnshop build furnish exterior treats taxi sleep map night door title systems1 systems2 --clean
 node tools/check.js runmobile tabmobile pausemobile dialogmobile --mobile 844x390 --clean   # touch
-node tools/check.js net netmobile netbooks netclock solo --clean        # multiplayer
+node tools/check.js net netmobile netbooks netclock netdrop netidle solo --clean   # multiplayer
+node tools/wsframes.js                                  # WebSocket framing, no browser needed
 # Paired scenarios need two browsers at once: start the first in the background,
 # then the second a few seconds later (netfound/netguest, netcafehost/netcafeguest,
 # nettitle/netpresence). netsave/netsaved bracket a server restart.
