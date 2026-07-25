@@ -522,6 +522,7 @@ export class CafeScreen extends Screen {
     this.tab = 0;
     this.index = 0;
     this.scroll = 0;
+    this.tabRects = [];
     this.msg = '';
     this.msgT = 0;
   }
@@ -532,6 +533,12 @@ export class CafeScreen extends Screen {
     const st = this.game.state;
 
     if (input.hit('shift')) { this.tab = (this.tab + 1) % TABS.length; this.index = 0; this.scroll = 0; audio.sfx('ui_move'); }
+    for (const r of this.tabRects || []) {
+      if (input.tapIn(r.x, r.y, r.w, r.h) && r.tab !== this.tab) {
+        this.tab = r.tab; this.index = 0; this.scroll = 0; audio.sfx('ui_move');
+        break;
+      }
+    }
     if (this.tab !== 4) {
       if (input.repeat('left', dt)) { this.tab = (this.tab - 1 + TABS.length) % TABS.length; this.index = 0; this.scroll = 0; audio.sfx('ui_move'); }
       if (input.repeat('right', dt)) { this.tab = (this.tab + 1) % TABS.length; this.index = 0; this.scroll = 0; audio.sfx('ui_move'); }
@@ -652,6 +659,7 @@ export class CafeScreen extends Screen {
 
     // Tabs.
     let tx = x + 8;
+    this.tabRects = [];
     TABS.forEach((name, i) => {
       const tw = textWidth(name) + 14;
       const sel = i === this.tab;
@@ -659,6 +667,7 @@ export class CafeScreen extends Screen {
       ctx.fillRect(tx, y - 6, tw, 14);
       if (sel) { ctx.fillStyle = P.uiGold; ctx.fillRect(tx, y - 6, tw, 1); }
       drawText(ctx, name, tx + 7, y - 3, { color: sel ? P.uiText : P.uiTextDim, shadow: P.uiShadow });
+      this.tabRects.push({ x: tx, y: y - 8, w: tw, h: 18, tab: i });
       tx += tw + 3;
     });
     drawTextRight(ctx, money(this.game.state.money), x + w - 10, y + 8, { color: P.uiGold, shadow: P.uiShadow });

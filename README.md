@@ -41,6 +41,10 @@ tap it and it stays on until you tap it off. Or double-tap an arrow and keep
 holding it for a burst, which ends when you stop walking. (RUN also stands in
 for Shift in build mode, where it cycles the furniture you're placing.)
 
+**Tabs and lists are tappable.** The mode tabs in build mode, the tabs of the
+cafe book, and the furniture strip along the bottom all respond to a tap, so
+nothing depends on a key that a phone doesn't have.
+
 **Fullscreen on mobile.** The ⛶ button (and Menu -> Sound -> Fullscreen) calls
 the Fullscreen API, which works on Android and iPadOS. iPhone Safari has no
 Fullscreen API at all, so there the answer is **Share -> Add to Home Screen**:
@@ -149,7 +153,7 @@ browser and reports console errors:
 
 ```bash
 node tools/check.js walk cafe shop furnshop build furnish exterior treats taxi sleep map night door title systems1 systems2 --clean
-node tools/check.js runmobile pausemobile dialogmobile --mobile 844x390 --clean   # touch layout
+node tools/check.js runmobile tabmobile pausemobile dialogmobile --mobile 844x390 --clean   # touch
 node tools/check.js town --shotdir /tmp/shots      # also writes screenshots
 ```
 

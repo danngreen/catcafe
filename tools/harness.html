@@ -180,6 +180,36 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
         window.__step = 'done';
         await wait(300);
+      } else if (SCRIPT === 'tabmobile') {
+        // Build-mode tabs by touch: Tab is keyboard-only.
+        const st = g.state;
+        st.workers = 2; st.materials = 3; st.money = 5000;
+        g.openBuildMode();
+        await wait(800);
+        const bs = g.screens[g.screens.length - 1];
+        window.__mode0 = bs.modeName;
+        const canvas = document.getElementById('screen');
+        const tapCanvas = (gx, gy) => {
+          const r = canvas.getBoundingClientRect();
+          const cx = r.left + (gx / 480) * r.width;
+          const cy = r.top + (gy / 270) * r.height;
+          for (const type of ['pointerdown', 'pointerup']) {
+            canvas.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: cx, clientY: cy }));
+          }
+        };
+        // Tap the last tab (Style).
+        const last = bs.tabRects[bs.tabRects.length - 1];
+        tapCanvas(last.x + last.w / 2, last.y + last.h / 2);
+        await wait(400);
+        window.__mode1 = bs.modeName;
+        // And back to the first.
+        const first = bs.tabRects[0];
+        tapCanvas(first.x + first.w / 2, first.y + first.h / 2);
+        await wait(400);
+        window.__mode2 = bs.modeName;
+        window.__tabs2 = `${window.__mode0}->${window.__mode1}->${window.__mode2}`;
+        if (window.__mode1 === window.__mode0) window.__errors.push('tapping a tab did nothing: ' + window.__tabs2);
+        if (window.__mode2 !== window.__mode0) window.__errors.push('could not tap back: ' + window.__tabs2);
       } else if (SCRIPT === 'runmobile') {
         // Three ways to run: Shift, the RUN toggle, and double-tap-and-hold.
         const tap = (sel, type) => {
@@ -484,6 +514,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__stage ? ` stage=${window.__stage}` : '')
         + (window.__paused ? ` paused=${window.__paused} safe=${window.__safe}` : '')
         + (window.__run ? ` ${window.__run}` : '')
+        + (window.__tabs2 ? ` modes=${window.__tabs2}` : '')
         + (window.__ext ? ` ${window.__ext}` : '')
         + (window.__bookTreat ? ` book[${window.__bookTreat}] pet[${window.__petTreat}] choices=${window.__choices}` : '')
         + (window.__mapSel ? ` mapSel=${window.__mapSel}` : '')

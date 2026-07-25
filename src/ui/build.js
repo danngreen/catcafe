@@ -48,6 +48,8 @@ export class BuildScreen extends Screen {
     this.dragStart = null;
     this.palette = 0;
     this.styleRow = 0;
+    this.tabRects = [];
+    this.slotRects = [];
     this.msg = '';
     this.msgT = 0;
     this.renderer = new Renderer(game.tileset);
@@ -123,6 +125,15 @@ export class BuildScreen extends Screen {
       this.mode = (this.mode + 1) % this.modes.length;
       this.dragStart = null;
       audio.sfx('ui_move');
+    }
+    // Tapping a tab picks it outright, which is the only route on a phone.
+    for (const r of this.tabRects || []) {
+      if (input.tapIn(r.x, r.y, r.w, r.h) && r.mode !== this.mode) {
+        this.mode = r.mode;
+        this.dragStart = null;
+        audio.sfx('ui_move');
+        break;
+      }
     }
 
     if (this.modeName === 'Style') {
@@ -226,6 +237,14 @@ export class BuildScreen extends Screen {
     // strip when holding no direction is impractical, so bind to 'map'/'inventory'.
     if (input.hit('map')) { this.palette = (this.palette + 1) % Math.max(1, stock.length); audio.sfx('ui_move'); }
     if (input.hit('inventory')) { this.palette = (this.palette - 1 + Math.max(1, stock.length)) % Math.max(1, stock.length); audio.sfx('ui_move'); }
+    // Or just tap the piece you want in the strip along the bottom.
+    for (const r of this.slotRects || []) {
+      if (input.tapIn(r.x, r.y, r.w, r.h)) {
+        this.palette = r.index;
+        audio.sfx('ui_move');
+        break;
+      }
+    }
 
     if (input.hit('use')) {
       const existing = this.draft.furniture.find((f) => f.x === this.cur.x && f.y === this.cur.y);
@@ -382,15 +401,18 @@ export class BuildScreen extends Screen {
     ctx.fillRect(0, 22, VIEW_W, 1);
 
     let tx = 8;
+    this.tabRects = [];
     this.modes.forEach((m, i) => {
       const tw = textWidth(m) + 12;
       const sel = i === this.mode;
       ctx.fillStyle = sel ? P.uiGoldDk : '#2a2440';
       ctx.fillRect(tx, 4, tw, 14);
       drawText(ctx, m, tx + 6, 7, { color: sel ? P.uiText : P.uiTextDim, shadow: P.uiShadow });
+      // Remembered so a tap can select the tab directly — Tab is keyboard-only.
+      this.tabRects.push({ x: tx, y: 2, w: tw, h: 18, mode: i });
       tx += tw + 4;
     });
-    drawText(ctx, '[Tab] switch', tx + 6, 7, { color: P.uiTextDim, shadow: P.uiShadow });
+    drawText(ctx, 'Tab / tap', tx + 6, 7, { color: P.uiTextDim, shadow: P.uiShadow });
 
     const area = this.areaOf(this.draft.rooms);
     const maxA = st.maxFloorArea();
@@ -407,6 +429,7 @@ export class BuildScreen extends Screen {
 
     if (this.modeName === 'Furnish') {
       const stock = this.furnitureStock;
+      this.slotRects = [];
       if (!stock.length) {
         drawText(ctx, 'Nothing to place. Buy furniture at Velvet & Oak in Thistlewick.', 10 + SAFE.left, VIEW_H - 34, { color: P.uiTextDim, shadow: P.uiShadow });
       } else {
@@ -414,6 +437,7 @@ export class BuildScreen extends Screen {
           const key = stock[(this.palette + i) % stock.length];
           const px = 8 + SAFE.left + i * 22;
           const sel = i === 0;
+          this.slotRects.push({ x: px, y: VIEW_H - 40, w: 20, h: 24, index: (this.palette + i) % stock.length });
           ctx.fillStyle = sel ? 'rgba(255,207,107,0.25)' : 'rgba(255,255,255,0.06)';
           ctx.fillRect(px, VIEW_H - 38, 20, 20);
           const spr = objSprite(ITEMS[baseId(key)].place, variantOf(key));

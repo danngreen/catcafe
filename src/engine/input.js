@@ -15,6 +15,8 @@ const TOUCHMAP = {
   ' ': 'use', x: 'cancel', Escape: 'menu',
 };
 
+import { VIEW_W, VIEW_H } from './display.js';
+
 const DIRS = new Set(['up', 'down', 'left', 'right']);
 const DOUBLE_TAP_MS = 320;
 
@@ -27,6 +29,11 @@ export class Input {
     this.tapRun = false;
     this.lastTapBtn = null;
     this.lastTapAt = 0;
+    // Taps on the canvas, in game pixels, so on-screen tabs and lists can be
+    // touched directly. Without this, anything bound only to a key — build
+    // mode's Tab, for one — is unreachable on a phone.
+    this.tapped = null;
+    this.tapStart = null;
     this.pressed = new Set();
     this.released = new Set();
     this.repeatTimers = new Map();
@@ -104,10 +111,43 @@ export class Input {
         });
       }
     }
+
+    const canvas = document.getElementById('screen');
+    if (canvas) {
+      canvas.addEventListener('pointerdown', (e) => {
+        this.tapStart = this.canvasPoint(canvas, e);
+        this.anyKeyPressed = true;
+      });
+      canvas.addEventListener('pointerup', (e) => {
+        const p = this.canvasPoint(canvas, e);
+        // Only count it as a tap if the finger stayed put; a drag isn't a press.
+        if (this.tapStart && Math.hypot(p.x - this.tapStart.x, p.y - this.tapStart.y) < 10) {
+          this.tapped = p;
+        }
+        this.tapStart = null;
+      });
+      canvas.addEventListener('pointercancel', () => { this.tapStart = null; });
+    }
   }
 
   /** Run is held (Shift), latched (the toggle), or burst (double-tap). */
   isRunning() { return this.held.has('run') || this.runLatch || this.tapRun; }
+
+  /** Convert a pointer event into framebuffer coordinates. */
+  canvasPoint(canvas, e) {
+    const r = canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return { x: -1, y: -1 };
+    return {
+      x: (e.clientX - r.left) * (VIEW_W / r.width),
+      y: (e.clientY - r.top) * (VIEW_H / r.height),
+    };
+  }
+
+  /** Did a tap land inside this rect (in game pixels) this frame? */
+  tapIn(x, y, w, h) {
+    const p = this.tapped;
+    return !!p && p.x >= x && p.y >= y && p.x < x + w && p.y < y + h;
+  }
 
   down(b) { return b === 'run' ? this.isRunning() : this.held.has(b); }
   hit(b) { return this.pressed.has(b); }
@@ -141,6 +181,7 @@ export class Input {
   endFrame() {
     this.pressed.clear();
     this.released.clear();
+    this.tapped = null;
     this.anyKeyPressed = false;
   }
 }
