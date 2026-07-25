@@ -288,7 +288,7 @@ export class Hud {
     const lines = [
       `link ${net.connected ? 'up' : 'DOWN'}  joined ${net.joined}  here ${net.here}`,
       `me ${net.id || '-'}  cafe run by ${net.owner === net.id ? 'me' : (net.owner || 'nobody')}`,
-      `others ${net.remotes.size}  ping ${net.rttMs ? `${net.rttMs}ms` : '-'}`,
+      `others ${net.remotes.size}  ping ${net.rttMs ? `${net.rttMs}ms` : '-'}  heard ${age(net.lastMsgAt)}`,
       `last pos ${age(net.lastPosAt)}  last cust ${age(net.lastCustAt)}`,
       `drops ${net.dropCount}  rejoins ${net.rejoinCount}  msgs ${net.msgCount}`,
     ];

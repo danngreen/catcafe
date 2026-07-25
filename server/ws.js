@@ -27,8 +27,13 @@ export class WSSocket {
     this.data = {};                       // room state hangs off here
     this.fragOp = 0;                      // opcode of the message being assembled
     this.frag = [];                       // its pieces so far
+    // Last time anything at all arrived — a message, a pong, a stray ping.
+    // Liveness is a property of the socket, not of whether the game upstairs
+    // happens to be sending anything.
+    this.lastActivity = Date.now();
 
     socket.on('data', (chunk) => {
+      this.lastActivity = Date.now();
       this.buf = Buffer.concat([this.buf, chunk]);
       try {
         this.drain();
@@ -124,6 +129,15 @@ export class WSSocket {
 
   send(text) { this.frame(OP.TEXT, Buffer.from(text, 'utf8')); }
   sendJSON(obj) { this.send(JSON.stringify(obj)); }
+
+  /**
+   * A protocol-level ping. Every browser answers these itself, down in its
+   * networking code — no page script, no timers, nothing that a busy main
+   * thread, a throttled background tab or a wedged frame loop can stop. That
+   * makes it a far better test of "is anyone there" than asking the game to
+   * send something.
+   */
+  ping() { this.frame(OP.PING, Buffer.alloc(0)); }
 
   close(code = 1000, reason = '') {
     if (!this.open) return;

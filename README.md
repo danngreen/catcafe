@@ -50,10 +50,21 @@ strand anyone — you come back where you were, with the books as they are now.
 A client that has lost the link stops simulating rather than quietly running a
 second cafe, and says **OFFLINE** in the corner until it's back.
 
-If something looks wrong, add `?netdebug` to the URL: it shows the link state,
-who the server thinks runs the cafe, round-trip time, how long since the last
-position and customer update, and how many times you've dropped. The server
-prints a line whenever it hangs up on anyone, and why.
+Staying in the game doesn't depend on the game: the server pings each socket
+itself and the browser answers in its own networking code, with no page script
+involved, so a busy tab or a message that doesn't get through can't get you
+thrown out. And the roster is restated every few seconds rather than relying on
+one-shot arrival messages — miss one of those and two players would disagree
+about who is in the valley for the rest of the session.
+
+If something looks wrong, there are two places to look. Add `?netdebug` to the
+URL for the client's view: link state, who the server thinks runs the cafe,
+round-trip time, how long since anything was heard, and how many times you've
+dropped. Open `/status` on the host — `http://192.168.x.x:8080/status` — for the
+server's view: every socket, whether it has actually joined the game, where it
+is, and how long it has been silent. When two screens disagree about who can
+see whom, that page settles it. The server also prints a line whenever it hangs
+up on anyone, and why.
 
 ## Controls
 
@@ -197,7 +208,8 @@ browser and reports console errors:
 ```bash
 node tools/check.js walk cafe shop furnshop build furnish exterior treats taxi sleep map night door title systems1 systems2 --clean
 node tools/check.js runmobile tabmobile pausemobile dialogmobile --mobile 844x390 --clean   # touch
-node tools/check.js net netmobile netbooks netclock netdrop netidle solo --clean   # multiplayer
+node tools/check.js net netmobile netbooks netclock netdrop netforget solo --clean  # multiplayer
+node tools/check.js netping netmute netidle --ms 82000 --clean       # keepalive (slow)
 node tools/wsframes.js                                  # WebSocket framing, no browser needed
 # Paired scenarios need two browsers at once: start the first in the background,
 # then the second a few seconds later (netfound/netguest, netcafehost/netcafeguest,

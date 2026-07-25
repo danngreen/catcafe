@@ -138,5 +138,32 @@ function harness() {
   check('server frames are unmasked', (a[1] & 0x80) === 0, true);
 }
 
+// --- the server's own ping, and a browser's automatic answer ----------------
+{
+  const { sock, ws } = harness();
+  ws.ping();
+  const p = sock.written[0];
+  check('server ping is a PING frame', [p[0], p[1]], [0x89, 0]);
+
+  // A browser answers PONG in its networking code, with no page script running.
+  // That answer has to count as liveness or we hang up on live players.
+  const before = ws.lastActivity;
+  ws.lastActivity = 0;
+  sock.emit('data', clientFrame(0xa, ''));
+  check('a pong counts as being alive', ws.lastActivity > 0, true);
+  check('and is not mistaken for a message', typeof before, 'number');
+  if (!ws.open) { console.log('FAIL  a pong closed the socket'); failures++; }
+}
+
+// --- a socket that only ever pongs is still alive ---------------------------
+{
+  const { sock, ws } = harness();
+  const got = [];
+  ws.on('message', (m) => got.push(m));
+  for (let i = 0; i < 5; i++) sock.emit('data', clientFrame(0xa, ''));
+  check('pong-only traffic yields no messages', got, []);
+  check('pong-only traffic still counts', Date.now() - ws.lastActivity < 1000, true);
+}
+
 console.log(failures ? `\n${failures} failure(s)` : '\nall frame tests passed');
 process.exit(failures ? 1 : 0);

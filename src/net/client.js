@@ -42,6 +42,7 @@ export class NetClient {
     // "it feels laggy" and "we dropped nine times in a minute".
     this.debug = typeof location !== 'undefined' && location.search.includes('netdebug');
     this.rttMs = 0;
+    this.lastMsgAt = 0;
     this.lastPosAt = 0;
     this.lastCustAt = 0;
     this.dropCount = 0;
@@ -153,6 +154,7 @@ export class NetClient {
 
   receive(msg) {
     this.msgCount++;
+    this.lastMsgAt = performance.now();
     switch (msg.t) {
       case 'welcome':
         this.id = msg.id;
@@ -212,6 +214,21 @@ export class NetClient {
         for (const p of msg.players || []) this.remotes.set(p.id, { ...p });
         this.emit('roster');
         break;
+      // The periodic restatement of who is here. Reconciled rather than
+      // replaced, so it can repair a missed arrival without throwing away
+      // positions that are fresher than this list.
+      case 'who': {
+        const here = new Set();
+        for (const info of msg.p || []) {
+          here.add(info.id);
+          const cur = this.remotes.get(info.id);
+          if (!cur) this.remotes.set(info.id, { ...info });
+          else if (info.n) { cur.n = info.n; cur.look = info.look || cur.look; }
+        }
+        for (const id of [...this.remotes.keys()]) if (!here.has(id)) this.remotes.delete(id);
+        this.emit('roster');
+        break;
+      }
       case 'joined':
         this.remotes.set(msg.p.id, { ...msg.p });
         this.emit('joined', msg.p);

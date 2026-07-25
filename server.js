@@ -39,6 +39,13 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 
 const server = createServer(async (req, res) => {
   let path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  // The server's own view of the session. Open it from any machine on the LAN
+  // when the game and the players disagree about who is in the valley.
+  if (path === '/status') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify(room.status(), null, 2));
+    return;
+  }
   if (path === '/') path = '/index.html';
   const file = join(ROOT, normalize(path).replace(/^(\.\.[/\\])+/, ''));
   try {

@@ -463,14 +463,74 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!g.net.connected || !g.net.joined) window.__errors.push('never came back: ' + window.__drop);
         if (st.money !== before - 100) window.__errors.push('missed what happened while away: ' + window.__drop);
         bot.close();
+      } else if (SCRIPT === 'netforget') {
+        // Losing track of somebody has to be recoverable. Arrivals are one-shot
+        // messages, and if one goes astray the two clients disagree about who
+        // is in the valley for the rest of the session — the player who missed
+        // it never draws them and never sends them customers.
+        const st = g.state;
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const bot = new WebSocket(`${proto}//${location.host}/ws`);
+        let ready = false;
+        bot.onmessage = (ev) => {
+          const m = JSON.parse(ev.data);
+          if (m.t === 'welcome' && !ready) {
+            ready = true;
+            bot.send(JSON.stringify({ t: 'join', name: 'Lost', look: st.playerLook,
+              x: g.player.x + 30, y: g.player.y, map: st.mapId }));
+          }
+        };
+        let w = 0;
+        while (g.net.remotes.size === 0 && w < 10000) { await wait(250); w += 250; }
+        const sawJoin = g.net.remotes.size;
+        // Forget them, exactly as a lost arrival message would have left us.
+        g.net.remotes.clear();
+        g.remotes.clear();
+        let back = 0;
+        while (g.net.remotes.size === 0 && back < 12000) { await wait(250); back += 250; }
+        await wait(600);
+        window.__forget = `saw=${sawJoin} recoveredIn=${back}ms`
+          + ` roster=${g.net.remotes.size} actors=${g.remotes.size}`;
+        if (!sawJoin) window.__errors.push('never saw them arrive: ' + window.__forget);
+        if (!g.net.remotes.size) window.__errors.push('never recovered them: ' + window.__forget);
+        if (!g.remotes.size) window.__errors.push('recovered but never drawn: ' + window.__forget);
+        bot.close();
+      } else if (SCRIPT === 'netmute') {
+        // A client that says nothing whatsoever, for longer than the idle
+        // timeout. The server pings it and the browser answers down in its own
+        // networking code, so it stays in the game without the page lifting a
+        // finger. This is the case that survives a throttled tab, a wedged
+        // frame loop, or an outgoing message that never made it.
+        clearInterval(g.net.keepalive);
+        g.net.keepalive = 'disabled';
+        g.net.beat = () => {};
+        const msgs0 = g.net.msgCount;
+        await wait(75000);
+        window.__mute = `drops=${g.net.dropCount} connected=${g.net.connected}`
+          + ` joined=${g.net.joined} msgsGained=${g.net.msgCount - msgs0}`;
+        if (g.net.dropCount) window.__errors.push('hung up on a silent but live client: ' + window.__mute);
+        if (!g.net.connected || !g.net.joined) window.__errors.push('not in the game: ' + window.__mute);
+      } else if (SCRIPT === 'netping') {
+        // The heartbeat itself, not merely its consequences. Checking only that
+        // we're connected at the end proves nothing: a drop followed by a
+        // reconnect a few seconds later looks identical.
+        await wait(60000);
+        window.__ping = `rtt=${g.net.rttMs} drops=${g.net.dropCount}`
+          + ` rejoins=${g.net.rejoinCount} msgs=${g.net.msgCount}`;
+        if (!g.net.rttMs) window.__errors.push('no pong ever came back: ' + window.__ping);
+        if (g.net.dropCount) window.__errors.push('dropped despite the heartbeat: ' + window.__ping);
       } else if (SCRIPT === 'netidletitle') {
         // Two people reading the title screen and choosing an apron colour are
         // not idle, and neither is anyone standing still. Nothing the client
         // does on the title screen sends a byte, so without a heartbeat the
         // server hangs up on both of them before either presses Space.
         await wait(50000);
-        window.__idle = `mode=${g.mode} connected=${g.net.connected} here=${g.net.here}`;
+        window.__idle = `mode=${g.mode} connected=${g.net.connected} here=${g.net.here}`
+          + ` drops=${g.net.dropCount} rtt=${g.net.rttMs}`;
+        // Being connected *now* is not enough: a drop papered over by a
+        // reconnect is exactly the failure this is meant to catch.
         if (!g.net.connected) window.__errors.push('hung up on while choosing: ' + window.__idle);
+        if (g.net.dropCount) window.__errors.push('hung up on and had to crawl back: ' + window.__idle);
       } else if (SCRIPT === 'netidle') {
         // Standing still is not the same as being gone. Two people deciding
         // what colour their apron is take longer than any idle timeout.
@@ -970,6 +1030,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__create ? ` ${window.__create}` : '')
         + (window.__slow ? ` ${window.__slow}` : '')
         + (window.__walkn ? ` ${window.__walkn}` : '')
+        + (window.__ping ? ` ${window.__ping}` : '')
+        + (window.__mute ? ` ${window.__mute}` : '')
+        + (window.__forget ? ` ${window.__forget}` : '')
         + (window.__netConnected !== undefined ? ` net=${window.__netConnected} sawJoin=${window.__sawJoin} remote=${window.__remote} afterLeave=${window.__afterLeave} standing=${window.__standing}` : '')
         + (window.__ext ? ` ${window.__ext}` : '')
         + (window.__bookTreat ? ` book[${window.__bookTreat}] pet[${window.__petTreat}] choices=${window.__choices}` : '')

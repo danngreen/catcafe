@@ -6,9 +6,17 @@ import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { applyOp, WorldClock } from './world.js';
 
 const TICK_HZ = 15;
-// Clients say hello every 8 seconds. This only has to be long enough to ride
-// out a few missed beats — it is not a measure of how long you may stand still.
-const IDLE_TIMEOUT_MS = 45_000;
+// We ping each socket ourselves and the browser answers without involving the
+// page, so a silent socket really is a dead one. Generous all the same: this
+// costs us nothing and a wrongly dropped player is a wrecked game.
+const PING_EVERY_MS = 10_000;
+const IDLE_TIMEOUT_MS = 60_000;
+// The roster goes out as arrival/departure events, which is fine until one of
+// them goes missing — after that two clients disagree about who is in the
+// valley for as long as they both stay connected, and the one who missed an
+// arrival never draws that player, never sends them customers, never anything.
+// So re-state the whole thing regularly; it is a few hundred bytes.
+const ROSTER_EVERY_MS = 5_000;
 const CLOCK_BROADCAST_MS = 1000;
 const SAVE_EVERY_MS = 20_000;
 
@@ -25,6 +33,7 @@ export class Room {
     this.lastTick = Date.now();
     this.sinceClock = 0;
     this.sinceSave = 0;
+    this.sinceRoster = 0;
     this.restore();
     this.timer = setInterval(() => this.tick(), 1000 / TICK_HZ);
     this.timer.unref?.();
@@ -178,6 +187,32 @@ export class Room {
   get count() { return [...this.players.values()].filter((p) => p.joined).length; }
 
   /**
+   * What the server thinks is going on, for /status. When two people disagree
+   * about who can see whom, the useful question is which of them the server has
+   * actually got in the game — and that isn't visible from either screen.
+   */
+  status() {
+    const now = Date.now();
+    return {
+      seed: this.seed,
+      day: this.clock.day,
+      cafeOpened: !!this.world,
+      money: this.world ? this.world.money : null,
+      owner: this.owner,
+      sockets: this.players.size,
+      playing: this.count,
+      players: [...this.players.values()].map((p) => ({
+        id: p.id,
+        name: p.name,
+        joined: p.joined,
+        map: p.map,
+        at: `${Math.round(p.x)},${Math.round(p.y)}`,
+        quietFor: `${Math.round((now - p.ws.lastActivity) / 1000)}s`,
+      })),
+    };
+  }
+
+  /**
    * The longest-standing player runs the cafe. Somebody has to: if every client
    * simulated its own customers, each would ring up the same sale.
    */
@@ -216,9 +251,19 @@ export class Room {
     this.lastTick = now;
 
     for (const p of [...this.players.values()]) {
-      if (now - p.lastSeen > IDLE_TIMEOUT_MS) {
-        console.warn(`[room] ${p.name || p.id} went quiet for ${Math.round((now - p.lastSeen) / 1000)}s`);
+      // Anything arriving on the socket counts, including the automatic answer
+      // to our own ping. Judging liveness by game messages alone meant a player
+      // standing still — or one whose messages weren't getting through — looked
+      // identical to one who had closed the lid.
+      const quiet = now - p.ws.lastActivity;
+      if (quiet > IDLE_TIMEOUT_MS) {
+        console.warn(`[room] ${p.name || p.id} silent for ${Math.round(quiet / 1000)}s — hanging up`);
         p.ws.close(1001, 'idle');
+        continue;
+      }
+      if (now - (p.pingedAt || 0) > PING_EVERY_MS) {
+        p.pingedAt = now;
+        p.ws.ping();
       }
     }
 
@@ -243,6 +288,16 @@ export class Room {
     }
 
     if (joined.length < 2) return;        // nobody to tell
+
+    // Who is actually here, restated. Cheap insurance against a lost `joined`.
+    this.sinceRoster += dt * 1000;
+    if (this.sinceRoster >= ROSTER_EVERY_MS) {
+      this.sinceRoster = 0;
+      for (const p of joined) {
+        p.ws.sendJSON({ t: 'who', p: joined.filter((o) => o !== p).map(Room.describe) });
+      }
+    }
+
     // Only people who have actually moved. Standing about is the common case,
     // and it used to cost fifteen messages a second per player to say so.
     const moved = joined.filter((p) => {
