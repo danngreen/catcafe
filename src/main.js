@@ -27,6 +27,7 @@ import { shopOpen, hoursText } from './game/time.js';
 import { QUESTS, QUESTS_BY_GIVER, objectiveMet } from './game/quests.js';
 
 import { Dialogue, Hud, Fader, panel, panelTitle, dim, cursor } from './ui/core.js';
+import { SAFE, safeCenterX } from './engine/safe.js';
 import {
   Screen, ShopScreen, CatShopScreen, ServiceScreen, BuilderScreen,
   CafeScreen, JournalScreen, BagScreen, MapScreen, SummaryScreen, PauseScreen,
@@ -70,6 +71,7 @@ class Game {
       },
     });
 
+    this.safe = SAFE;   // measured control insets, handy when debugging layout
     this.boot();
   }
 
@@ -1112,7 +1114,8 @@ class Game {
     const KEY = 'SPACE';
     const kw = textWidth(KEY) + 8;
     const w = kw + textWidth(label) + 20;
-    const x = Math.round(VIEW_W / 2 - w / 2);
+    // Centre it between the thumb pads, not in the middle of the screen.
+    const x = Math.round(safeCenterX(VIEW_W) - w / 2);
     const y = VIEW_H - 42;
     ctx.fillStyle = 'rgba(20,17,32,0.86)';
     ctx.fillRect(x, y, w, 17);

@@ -7,6 +7,7 @@ import { P } from '../art/palette.js';
 import { wrapText, clamp, money } from '../engine/util.js';
 import { iconSprite } from '../art/icons.js';
 import { audio } from '../engine/audio.js';
+import { SAFE, fitRect, safeCenterX } from '../engine/safe.js';
 
 // ---------------------------------------------------------------------------
 // Panels
@@ -166,8 +167,7 @@ export class Dialogue {
   draw(ctx, t) {
     if (!this.active) return;
     const y = VIEW_H - DLG_H - 6;
-    const x = 8;
-    const w = VIEW_W - 16;
+    const { x, w } = fitRect(8, VIEW_W - 16, 200);
     panel(ctx, x, y, w, DLG_H);
 
     let tx = x + 10;
@@ -325,6 +325,7 @@ export class Hud {
 
     // --- toasts, bottom left ---
     let ty = VIEW_H - 22;
+    const tx = 4 + SAFE.left;
     for (let i = this.toasts.length - 1; i >= 0; i--) {
       const to = this.toasts[i];
       const a = clamp(to.t / 0.6, 0, 1);
@@ -332,10 +333,10 @@ export class Hud {
       const col = to.tone === 'bad' ? P.uiRed : to.tone === 'warn' ? P.uiGold : to.tone === 'good' ? P.uiGreen : P.uiText;
       const tw2 = textWidth(to.text) + 14;
       ctx.fillStyle = 'rgba(24,20,36,0.86)';
-      ctx.fillRect(4, ty - 3, tw2, 14);
+      ctx.fillRect(tx, ty - 3, tw2, 14);
       ctx.fillStyle = col;
-      ctx.fillRect(4, ty - 3, 2, 14);
-      drawText(ctx, to.text, 12, ty, { color: col, shadow: P.uiShadow });
+      ctx.fillRect(tx, ty - 3, 2, 14);
+      drawText(ctx, to.text, tx + 8, ty, { color: col, shadow: P.uiShadow });
       ctx.globalAlpha = 1;
       ty -= 16;
     }
@@ -370,3 +371,4 @@ export class Fader {
 }
 
 export { drawText, drawTextCentered, drawTextRight, textWidth, LINE_H };
+export { SAFE, fitRect, safeCenterX };

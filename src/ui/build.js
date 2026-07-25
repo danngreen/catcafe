@@ -12,6 +12,7 @@ import { buildCafeMap } from '../world/interiors.js';
 import { Renderer, Camera } from '../world/render.js';
 import { audio } from '../engine/audio.js';
 import { clamp, money } from '../engine/util.js';
+import { SAFE } from '../engine/safe.js';
 import { objSprite, buildingSprite } from '../art/objects.js';
 
 // Laying out rooms needs a hired crew; moving your own furniture about does
@@ -407,11 +408,11 @@ export class BuildScreen extends Screen {
     if (this.modeName === 'Furnish') {
       const stock = this.furnitureStock;
       if (!stock.length) {
-        drawText(ctx, 'Nothing to place. Buy furniture at Velvet & Oak in Thistlewick.', 10, VIEW_H - 34, { color: P.uiTextDim, shadow: P.uiShadow });
+        drawText(ctx, 'Nothing to place. Buy furniture at Velvet & Oak in Thistlewick.', 10 + SAFE.left, VIEW_H - 34, { color: P.uiTextDim, shadow: P.uiShadow });
       } else {
         for (let i = 0; i < Math.min(stock.length, 12); i++) {
           const key = stock[(this.palette + i) % stock.length];
-          const px = 8 + i * 22;
+          const px = 8 + SAFE.left + i * 22;
           const sel = i === 0;
           ctx.fillStyle = sel ? 'rgba(255,207,107,0.25)' : 'rgba(255,255,255,0.06)';
           ctx.fillRect(px, VIEW_H - 38, 20, 20);
@@ -423,16 +424,16 @@ export class BuildScreen extends Screen {
           drawText(ctx, String(st.inventory[key] || 0), px + 12, VIEW_H - 37, { color: P.uiText, shadow: '#000000' });
         }
         const cur = stock[this.palette];
-        drawText(ctx, `${ITEMS[baseId(cur)].name}  [M]/[I] to cycle`, 8 + Math.min(stock.length, 12) * 22 + 8, VIEW_H - 34,
+        drawText(ctx, `${ITEMS[baseId(cur)].name}  [M]/[I] to cycle`, 8 + SAFE.left + Math.min(stock.length, 12) * 22 + 8, VIEW_H - 34,
           { color: P.uiGold, shadow: P.uiShadow });
       }
-      drawText(ctx, 'Space place   X pick up   Esc done', 10, VIEW_H - 14, { color: P.uiTextDim, shadow: P.uiShadow });
+      drawText(ctx, 'Space place   X pick up   Esc done', 10 + SAFE.left, VIEW_H - 14, { color: P.uiTextDim, shadow: P.uiShadow });
     } else if (this.modeName === 'Rooms') {
       drawText(ctx, this.dragStart ? 'Space again to set the far corner   X cancel'
         : 'Space start room   X demolish   Esc done',
-        10, VIEW_H - 17, { color: P.uiTextDim, shadow: P.uiShadow });
+        10 + SAFE.left, VIEW_H - 17, { color: P.uiTextDim, shadow: P.uiShadow });
       drawTextRight(ctx, `Timber ${st.materials - this.spentMaterials}   Crew ${st.workers}`,
-        VIEW_W - 10, VIEW_H - 17, { color: P.uiTextDim, shadow: P.uiShadow });
+        VIEW_W - 10 - SAFE.right, VIEW_H - 17, { color: P.uiTextDim, shadow: P.uiShadow });
     }
 
     if (this.modeName === 'Style') this.drawStylePanel(ctx);

@@ -5,6 +5,8 @@
 // along the bottom and the game sits above; in landscape they float over the
 // game so the view keeps the whole height.
 
+import { SAFE } from './safe.js';
+
 export const VIEW_W = 480;
 export const VIEW_H = 270;
 
@@ -98,6 +100,32 @@ export class Display {
     this.canvas.style.width = `${Math.round(VIEW_W * s)}px`;
     this.canvas.style.height = `${Math.round(VIEW_H * s)}px`;
     this.ctx.imageSmoothingEnabled = false;
+    this.measureSafeArea();
+  }
+
+  /**
+   * Work out how far the floating controls reach into the canvas, in game
+   * pixels, by comparing their on-screen boxes with the canvas box. Only the
+   * horizontal reach matters: the pads sit in the bottom corners, so insetting
+   * the sides is enough and looks far better than lifting everything.
+   */
+  measureSafeArea() {
+    if (!document.body.classList.contains('controls-overlay')) {
+      SAFE.left = SAFE.right = SAFE.bottom = 0;
+      return;
+    }
+    const r = this.canvas.getBoundingClientRect();
+    const s = this.scale || 1;
+    const box = (sel) => {
+      const el = document.querySelector(sel);
+      return el && el.offsetParent !== null ? el.getBoundingClientRect() : null;
+    };
+    const cap = VIEW_W * 0.34;
+    const pad = box('.dpad');
+    const act = box('.abtns');
+    SAFE.left = pad ? Math.max(0, Math.min(cap, (pad.right - r.left) / s + 4)) : 0;
+    SAFE.right = act ? Math.max(0, Math.min(cap, (r.right - act.left) / s + 4)) : 0;
+    SAFE.bottom = 0;
   }
 
   clear(color = '#000000') {

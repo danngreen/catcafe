@@ -32,7 +32,9 @@ Click once anywhere to start the audio (browsers require a gesture).
 
 On a touch device an on-screen d-pad appears alongside **ACT**, **BACK** and
 **MENU** — the same three actions as Space, X and Esc. In landscape the controls
-float over the edges of the view; in portrait they take a band under it.
+float over the edges of the view — the game measures how far they reach in and
+keeps dialogue, toasts and menu panels clear of them — and in portrait they
+take a band under it.
 
 **Fullscreen on mobile.** The ⛶ button (and Menu -> Sound -> Fullscreen) calls
 the Fullscreen API, which works on Android and iPadOS. iPhone Safari has no

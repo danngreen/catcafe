@@ -26,6 +26,22 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
   <div id="frame">
     <canvas id="screen" width="480" height="270"></canvas>
   </div>
+
+  <!-- Mirrors index.html so the touch layout can be exercised here too. -->
+  <button id="fsbtn" hidden aria-label="Fullscreen">&#9974;</button>
+  <div id="touch" hidden>
+    <div class="dpad">
+      <button data-key="ArrowUp" class="tb up">&#9650;</button>
+      <button data-key="ArrowLeft" class="tb left">&#9664;</button>
+      <button data-key="ArrowRight" class="tb right">&#9654;</button>
+      <button data-key="ArrowDown" class="tb down">&#9660;</button>
+    </div>
+    <div class="abtns">
+      <button data-key="Escape" class="tb menu">MENU</button>
+      <button data-key="x" class="tb back">BACK</button>
+      <button data-key=" " class="tb act">ACT</button>
+    </div>
+  </div>
   <pre id="out" style="position:absolute;left:0;top:0;color:#0f0;font:12px monospace;z-index:99;background:#000;max-width:100%;white-space:pre-wrap"></pre>
   <script type="module">
     // Drive the game for a while, then report.
@@ -163,6 +179,18 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
         window.__step = 'done';
         await wait(300);
+      } else if (SCRIPT === 'pausemobile') {
+        // Pause menu with the touch pads overlaid: the info card must clear them.
+        await wait(400);
+        key('Escape', true); await wait(200); key('Escape', false);
+        await wait(700);
+        const top = g.screens[g.screens.length - 1];
+        window.__paused = top ? top.constructor.name : 'none';
+        window.__safe = `${Math.round(g.safe ? g.safe.left : -1)},${Math.round(g.safe ? g.safe.right : -1)}`;
+        if (window.__paused !== 'PauseScreen') window.__errors.push('pause menu did not open');
+      } else if (SCRIPT === 'dialogmobile') {
+        g.dialogue.say('Testing how a long line of dialogue sits when the thumb pads are floating over the bottom corners of the view.', { speaker: 'Hollis' });
+        await wait(1500);
       } else if (SCRIPT === 'furnshop') {
         // The furniture catalogue, where every row used to be the same brown box.
         const st = g.state;
@@ -421,6 +449,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__door ? ` door=[${window.__door}]` : '')
         + (window.__build ? ` book=${window.__book} build=${window.__build} mode=${window.__buildMode} tabs=${window.__tabs} placed=${window.__placed} seats=${window.__seats} liveMap=${window.__liveMap} chairs=${window.__chairs}` : '')
         + (window.__stage ? ` stage=${window.__stage}` : '')
+        + (window.__paused ? ` paused=${window.__paused} safe=${window.__safe}` : '')
         + (window.__ext ? ` ${window.__ext}` : '')
         + (window.__bookTreat ? ` book[${window.__bookTreat}] pet[${window.__petTreat}] choices=${window.__choices}` : '')
         + (window.__mapSel ? ` mapSel=${window.__mapSel}` : '')

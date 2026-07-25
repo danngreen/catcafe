@@ -3,6 +3,7 @@
 // morning summary. Screens are pushed onto a stack the game loop draws.
 
 import { panel, panelTitle, bar, cursor, dim, drawText, drawTextCentered, drawTextRight, textWidth, LINE_H } from './core.js';
+import { SAFE, fitRect } from '../engine/safe.js';
 import { VIEW_W, VIEW_H } from '../engine/display.js';
 import { P } from '../art/palette.js';
 import { ITEMS, CAT as ICAT, baseId, variantOf, invKey } from '../game/items.js';
@@ -138,7 +139,8 @@ export class ShopScreen extends ListScreen {
 
   draw(ctx) {
     dim(ctx, 0.6);
-    const x = 10, y = 22, w = VIEW_W - 20, h = VIEW_H - 44;
+    const { x, w } = fitRect(10, VIEW_W - 20, 260);
+    const y = 22, h = VIEW_H - 44;
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, this.title);
 
@@ -275,7 +277,8 @@ export class CatShopScreen extends ListScreen {
 
   draw(ctx) {
     dim(ctx, 0.6);
-    const x = 10, y = 22, w = VIEW_W - 20, h = VIEW_H - 44;
+    const { x, w } = fitRect(10, VIEW_W - 20, 260);
+    const y = 22, h = VIEW_H - 44;
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, this.shop.name);
     drawTextRight(ctx, money(this.game.state.money), x + w - 10, y + 8, { color: P.uiGold, shadow: P.uiShadow });
@@ -377,7 +380,8 @@ export class ServiceScreen extends ListScreen {
 
   draw(ctx) {
     dim(ctx, 0.6);
-    const x = 30, y = 26, w = VIEW_W - 60, h = VIEW_H - 52;
+    const { x, w } = fitRect(30, VIEW_W - 60, 240);
+    const y = 26, h = VIEW_H - 52;
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, this.kind === 'vet' ? 'Surgery' : 'Grooming Parlour');
     drawTextRight(ctx, money(this.game.state.money), x + w - 10, y + 8, { color: P.uiGold, shadow: P.uiShadow });
@@ -474,7 +478,8 @@ export class BuilderScreen extends ListScreen {
 
   draw(ctx) {
     dim(ctx, 0.6);
-    const x = 36, y = 34, w = VIEW_W - 72, h = VIEW_H - 68;
+    const { x, w } = fitRect(36, VIEW_W - 72, 240);
+    const y = 34, h = VIEW_H - 68;
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, "Trowel & Sons");
     drawTextRight(ctx, money(this.game.state.money), x + w - 10, y + 8, { color: P.uiGold, shadow: P.uiShadow });
@@ -641,7 +646,8 @@ export class CafeScreen extends Screen {
 
   draw(ctx) {
     dim(ctx, 0.62);
-    const x = 8, y = 20, w = VIEW_W - 16, h = VIEW_H - 40;
+    const { x, w } = fitRect(8, VIEW_W - 16, 300);
+    const y = 20, h = VIEW_H - 40;
     panel(ctx, x, y, w, h);
 
     // Tabs.
@@ -901,7 +907,8 @@ export class JournalScreen extends ListScreen {
 
   draw(ctx) {
     dim(ctx, 0.62);
-    const x = 16, y = 22, w = VIEW_W - 32, h = VIEW_H - 44;
+    const { x, w } = fitRect(16, VIEW_W - 32, 280);
+    const y = 22, h = VIEW_H - 44;
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, 'Journal');
 
@@ -965,7 +972,8 @@ export class BagScreen extends ListScreen {
   }
   draw(ctx) {
     dim(ctx, 0.62);
-    const x = 40, y = 26, w = VIEW_W - 80, h = VIEW_H - 52;
+    const { x, w } = fitRect(40, VIEW_W - 80, 240);
+    const y = 26, h = VIEW_H - 52;
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, 'Bag');
     if (!this.items.length) {
@@ -1062,7 +1070,8 @@ export class MapScreen extends Screen {
 
   draw(ctx) {
     dim(ctx, 0.72);
-    const x = 12, y = 18, w = VIEW_W - 24, h = VIEW_H - 36;
+    const { x, w } = fitRect(12, VIEW_W - 24, 300);
+    const y = 18, h = VIEW_H - 36;
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, this.pickMode ? 'Where to?' : 'Bramble Valley');
 
@@ -1294,7 +1303,7 @@ export class PauseScreen extends ListScreen {
   draw(ctx) {
     dim(ctx, 0.55);
     const w = 130, h = this.items.length * 16 + 22;
-    const x = VIEW_W - w - 14, y = 34;
+    const x = VIEW_W - w - 14 - SAFE.right, y = 34;
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, 'Menu');
     this.items.forEach((label, i) => {
@@ -1304,10 +1313,12 @@ export class PauseScreen extends ListScreen {
       drawText(ctx, label, x + 22, ry, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
     });
     const st = this.game.state;
-    panel(ctx, 14, VIEW_H - 62, 190, 48, { fill: 'rgba(30,25,45,0.9)' });
-    drawText(ctx, st.cafe.name, 22, VIEW_H - 56, { color: P.uiGold, shadow: P.uiShadow });
-    drawText(ctx, `${st.cats.length} cats   ${st.cafeSim.seats().length} seats`, 22, VIEW_H - 44, { color: P.uiTextDim, shadow: P.uiShadow });
-    drawText(ctx, `Day ${st.clock.day + 1} — ${st.clock.dayFull}`, 22, VIEW_H - 32, { color: P.uiTextDim, shadow: P.uiShadow });
+    // The d-pad lives in this corner on a phone, so start clear of it.
+    const ix = 14 + SAFE.left;
+    panel(ctx, ix, VIEW_H - 62, 190, 48, { fill: 'rgba(30,25,45,0.9)' });
+    drawText(ctx, st.cafe.name, ix + 8, VIEW_H - 56, { color: P.uiGold, shadow: P.uiShadow });
+    drawText(ctx, `${st.cats.length} cats   ${st.cafeSim.seats().length} seats`, ix + 8, VIEW_H - 44, { color: P.uiTextDim, shadow: P.uiShadow });
+    drawText(ctx, `Day ${st.clock.day + 1} — ${st.clock.dayFull}`, ix + 8, VIEW_H - 32, { color: P.uiTextDim, shadow: P.uiShadow });
   }
 }
 
