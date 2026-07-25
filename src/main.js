@@ -101,15 +101,21 @@ class Game {
     st.net = net;
     net.on('joined', (p) => this.hud.toast(`${p.n} joined the valley.`, 'good'));
     net.on('left', (p) => this.hud.toast(`${p.n} left.`, 'info'));
-    net.on('disconnected', () => this.hud.toast('Lost the connection to the cafe.', 'bad'));
+    net.on('disconnected', () => this.hud.toast('Lost the cafe — trying to get back...', 'bad'));
+    net.on('reconnected', () => {
+      // We may have missed a whole afternoon of other people's changes, so take
+      // the valley's books wholesale rather than trusting our stale copy.
+      if (net.world && this.mode === 'play') st.adopt(net.world, net.clock);
+      this.hud.toast('Back in the valley.', 'good');
+    });
 
     // The shared books. Every one of these arrives because somebody — possibly
     // us — changed something, and the server's copy is the one that counts.
     net.on('sync', (k, v) => st.applySync(k, v));
+    // The authoritative books, sent when we join and whenever a cafe is opened.
+    // On the title screen we only file it away; `announce` adopts it on start.
     net.on('world', (world, clock) => {
-      if (this.mode !== 'play') return;      // we'll adopt it when we start
-      st.adopt(world, clock);
-      this.hud.toast('Joined a cafe that was already open.', 'info');
+      if (this.mode === 'play') st.adopt(world, clock);
     });
     net.on('clock', (c) => { st.clock.day = c.day; st.clock.t = c.t; });
     net.on('newday', (m) => {
@@ -1456,6 +1462,10 @@ class TitleScreen extends Screen {
         VIEW_W / 2, VIEW_H - 26, { color: here > 1 ? '#1f4d2a' : '#2f3d22' });
         drawTextCentered(ctx, 'Everyone must open this same address',
           VIEW_W / 2, VIEW_H - 14, { color: '#2f3d22' });
+      } else if (n.everConnected) {
+        // Never leave a stale count on screen: it reads as "we're fine".
+        drawTextCentered(ctx, `Lost the valley on ${n.host} — trying again...`,
+          VIEW_W / 2, VIEW_H - 18, { color: '#6b2f2f' });
       } else {
         drawTextCentered(ctx, 'Arrows / WASD to move   Space to act   Esc for the menu',
           VIEW_W / 2, VIEW_H - 18, { color: '#2f3d22' });
@@ -1465,7 +1475,7 @@ class TitleScreen extends Screen {
 
     // --- creation ---
     dim(ctx, 0.28);
-    const w = 340, h = this.joining ? 176 : (this.multiplayer ? 218 : 196);
+    const w = 340, h = this.joining ? 200 : (this.multiplayer ? 218 : 196);
     const x = Math.round((VIEW_W - w) / 2), y = this.multiplayer ? 18 : 26;
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, 'Before you open');
@@ -1541,10 +1551,14 @@ class TitleScreen extends Screen {
 
     // ...and the name on its own line under the preview, where it has room.
     if (this.joining) {
-      drawTextCentered(ctx, `${this.style.name || 'The cafe'} is already open`,
-        x + w / 2, y + h - 44, { color: P.uiGold, shadow: P.uiShadow });
-      drawTextCentered(ctx, 'You just need a face and a name',
-        x + w / 2, y + h - 32, { color: P.uiTextDim, shadow: P.uiShadow });
+      // In the right-hand column, under the swatches: across the whole panel it
+      // would be written over the cafe we're previewing.
+      const mid = (colX - 12 + x + w - 10) / 2;
+      drawTextCentered(ctx, `${this.style.name || 'The cafe'}`,
+        mid, y + 112, { color: P.uiGold, shadow: P.uiShadow });
+      drawTextCentered(ctx, 'is already open', mid, y + 124, { color: P.uiGold, shadow: P.uiShadow });
+      drawTextCentered(ctx, 'You just need a face', mid, y + 146, { color: P.uiTextDim, shadow: P.uiShadow });
+      drawTextCentered(ctx, 'and a name', mid, y + 158, { color: P.uiTextDim, shadow: P.uiShadow });
     } else {
       const ry = y + h - 46;
       const sel = this.row === 4 + nameRow;

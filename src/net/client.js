@@ -8,6 +8,10 @@
 
 const SEND_HZ = 15;
 const CUST_HZ = 10;
+// The server hangs up on a socket that has gone quiet, and a player choosing an
+// apron colour or standing still sends nothing at all — so say hello regularly.
+const PING_SECONDS = 8;
+const RETRY_SECONDS = 3;
 
 export class NetClient {
   constructor() {
@@ -26,6 +30,43 @@ export class NetClient {
     this.sendTimer = 0;
     this.custTimer = 0;
     this.lastSent = { x: -1, y: -1, dir: '', map: '' };
+    // Keepalive and reconnection. On a timer rather than the frame loop: the
+    // title screen, an open menu and a backgrounded tab all still need them.
+    this.everConnected = false;
+    this.rejoin = null;       // what to send again after a drop
+    this.beats = 0;
+    this.retryIn = 0;
+    this.reconnecting = false;
+    this.keepalive = null;
+  }
+
+  startKeepalive() {
+    if (this.keepalive || typeof setInterval !== 'function') return;
+    this.keepalive = setInterval(() => this.beat(), 1000);
+  }
+
+  beat() {
+    if (this.connected) {
+      this.beats++;
+      if (this.beats % PING_SECONDS === 0) this.send({ t: 'ping', at: Date.now() });
+      return;
+    }
+    if (!this.everConnected || this.reconnecting) return;
+    if (--this.retryIn > 0) return;
+    this.retryIn = RETRY_SECONDS;
+    this.reconnecting = true;
+    this.connect(4000).then((ok) => {
+      this.reconnecting = false;
+      if (!ok) return;
+      // Pick up where we left off: same name, same face, and whatever the
+      // valley's books say now rather than what we remember of them.
+      if (this.rejoin) {
+        const j = this.rejoin;
+        this.lastSent = { x: -1, y: -1, dir: '', map: '' };
+        this.join(j.name, j.look, j.x, j.y, j.map);
+      }
+      this.emit('reconnected');
+    });
   }
 
   /** True once we are actually playing in somebody's valley. */
@@ -70,11 +111,14 @@ export class NetClient {
       };
       ws.onerror = () => { clearTimeout(timer); done(false); };
       ws.onclose = () => {
+        if (this.ws !== ws) return;            // an older socket finally closing
+        const wasConnected = this.connected;
         this.connected = false;
         this.joined = false;
         this.owner = null;
         this.remotes.clear();
-        this.emit('disconnected');
+        this.retryIn = 1;
+        if (wasConnected) this.emit('disconnected');
       };
     });
   }
@@ -90,6 +134,8 @@ export class NetClient {
         this.clock = msg.clock || null;
         this.owner = msg.owner || null;
         this.connected = true;
+        this.everConnected = true;
+        this.startKeepalive();
         for (const p of msg.players || []) this.remotes.set(p.id, { ...p });
         this.emit('welcome', msg);
         break;
@@ -100,6 +146,10 @@ export class NetClient {
         this.emit('world', msg.world, msg.clock);
         break;
       case 'sync':
+        // Keep our copy of the books current even while we're still reading the
+        // title screen: whoever starts later adopts this, and a snapshot frozen
+        // at connect time would undo everything that happened since.
+        if (this.world) this.world[msg.k] = msg.v;
         this.emit('sync', msg.k, msg.v);
         break;
       case 'clock':
@@ -162,6 +212,7 @@ export class NetClient {
   join(name, look, x, y, map) {
     if (!this.connected) return;
     this.joined = true;
+    this.rejoin = { name, look, x, y, map };
     this.send({ t: 'join', name, look, x: Math.round(x), y: Math.round(y), map });
   }
 
@@ -201,6 +252,7 @@ export class NetClient {
     const last = this.lastSent;
     if (x === last.x && y === last.y && player.dir === last.dir && mapId === last.map) return;
     this.lastSent = { x, y, dir: player.dir, map: mapId };
+    if (this.rejoin) { this.rejoin.x = x; this.rejoin.y = y; this.rejoin.map = mapId; }
     this.send({ t: 'move', x, y, dir: player.dir, frame: player.frame, map: mapId });
   }
 

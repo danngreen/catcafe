@@ -350,6 +350,107 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         window.__flag = String(!!st.flags.barrier_eastpass);
         if (!st.flags.barrier_eastpass) window.__errors.push('flags did not follow');
         ws.close();
+      } else if (SCRIPT === 'nettitlehost' || SCRIPT === 'nettitleguest') {
+        // The way two people actually start: read the title, dawdle over the
+        // colours, and only then press Space. That takes longer than any idle
+        // timeout, and both used to be quietly hung up on before they began.
+        const st = g.state;
+        const host = SCRIPT === 'nettitlehost';
+        if (host) await wait(35000);
+        else { let w = 0; while (!g.net.world && w < 60000) { await wait(500); w += 500; } }
+        key('Space', true); await wait(200); key('Space', false);   // New game / Join
+        await wait(3000);                                           // choosing colours
+        key('Space', true); await wait(200); key('Space', false);   // begin
+        await wait(2500);
+
+        if (host) {
+          st.earn(555);
+          let w = 0;
+          while (g.net.remotes.size === 0 && w < 15000) { await wait(500); w += 500; }
+          window.__slow = `connected=${g.net.connected} joined=${g.net.joined}`
+            + ` owner=${g.net.simOwner} sees=${g.net.remotes.size} money=${st.money}`;
+        } else {
+          let w = 0;
+          while (st.money !== 1035 && w < 12000) { await wait(500); w += 500; }
+          window.__slow = `connected=${g.net.connected} joined=${g.net.joined}`
+            + ` guest=${!!g.joinedExisting} owner=${g.net.simOwner}`
+            + ` sees=${g.net.remotes.size} money=${st.money}`;
+          if (!g.joinedExisting) window.__errors.push('did not join the open cafe: ' + window.__slow);
+          if (st.money !== 1035) window.__errors.push('books never synced: ' + window.__slow);
+          if (g.net.simOwner) window.__errors.push('both clients running the cafe: ' + window.__slow);
+        }
+        if (!g.net.connected) window.__errors.push('dropped before starting: ' + window.__slow);
+        if (!g.net.joined) window.__errors.push('not in the roster: ' + window.__slow);
+        if (g.net.remotes.size === 0) window.__errors.push('cannot see the other player: ' + window.__slow);
+        if (g.remotes.size === 0) window.__errors.push('no actor for the other player: ' + window.__slow);
+      } else if (SCRIPT === 'netcreatetitle') {
+        // What the second player actually gets asked. Joining an open cafe you
+        // pick a name and a face; the paint is already dry.
+        let waited = 0;
+        while (!g.net.world && waited < 12000) { await wait(250); waited += 250; }
+        key('Space', true); await wait(200); key('Space', false);
+        await wait(800);
+        const ts = g.screens[g.screens.length - 1];
+        window.__create = `world=${!!g.net.world} stage=${ts && ts.stage}`
+          + ` joining=${ts && ts.joining} rows=${ts && ts.joining ? 3 : '?'}`;
+        if (!g.net.world) window.__errors.push('never saw the open cafe: ' + window.__create);
+        if (!ts || ts.stage !== 'create') window.__errors.push('did not reach the chooser: ' + window.__create);
+        if (ts && !ts.joining) window.__errors.push('offered to repaint somebody else\'s cafe');
+        await wait(600);
+      } else if (SCRIPT === 'netdrop') {
+        // Wifi blips, laptops sleep, servers get restarted. Coming back should
+        // not need a page reload, and should not leave us out of step.
+        const st = g.state;
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const bot = new WebSocket(`${proto}//${location.host}/ws`);
+        let ready = false;
+        bot.onmessage = (ev) => {
+          const m = JSON.parse(ev.data);
+          if (m.t === 'welcome' && !ready) {
+            ready = true;
+            bot.send(JSON.stringify({ t: 'join', name: 'Ledger', look: st.playerLook, x: 0, y: 0, map: 'overworld' }));
+          }
+        };
+        await wait(900);
+        const before = st.money;
+        g.net.ws.close();                      // the connection drops under us
+        await wait(600);
+        const dropped = g.net.connected;
+        // While we're away the other player spends; we must not miss it.
+        bot.send(JSON.stringify({ t: 'op', op: 'money', d: -100 }));
+        let waited = 0;
+        while (!g.net.joined && waited < 12000) { await wait(250); waited += 250; }
+        await wait(1500);
+        window.__drop = `dropped=${dropped} back=${g.net.connected}/${g.net.joined}`
+          + ` after=${waited}ms money ${before}->${st.money}`;
+        if (dropped) window.__errors.push('the drop was not noticed: ' + window.__drop);
+        if (!g.net.connected || !g.net.joined) window.__errors.push('never came back: ' + window.__drop);
+        if (st.money !== before - 100) window.__errors.push('missed what happened while away: ' + window.__drop);
+        bot.close();
+      } else if (SCRIPT === 'netidletitle') {
+        // Two people reading the title screen and choosing an apron colour are
+        // not idle, and neither is anyone standing still. Nothing the client
+        // does on the title screen sends a byte, so without a heartbeat the
+        // server hangs up on both of them before either presses Space.
+        await wait(50000);
+        window.__idle = `mode=${g.mode} connected=${g.net.connected} here=${g.net.here}`;
+        if (!g.net.connected) window.__errors.push('hung up on while choosing: ' + window.__idle);
+      } else if (SCRIPT === 'netidle') {
+        // Standing still is not the same as being gone. Two people deciding
+        // what colour their apron is take longer than any idle timeout.
+        const st = g.state;
+        const before = `${g.net.connected}/${g.net.joined}`;
+        await wait(50000);
+        window.__idle = `was=${before} now=${g.net.connected}/${g.net.joined}`
+          + ` money=${st.money}`;
+        if (!g.net.connected) window.__errors.push('dropped while standing still: ' + window.__idle);
+        if (!g.net.joined) window.__errors.push('no longer in the roster: ' + window.__idle);
+        // And the link must still work, not merely look alive.
+        const money0 = st.money;
+        st.spend(7);
+        await wait(1200);
+        window.__idle += ` spend ${money0}->${st.money}`;
+        if (st.money !== money0 - 7) window.__errors.push('books stopped syncing: ' + window.__idle);
       } else if (SCRIPT === 'netclock') {
         // The server owns the clock. When another player sleeps, our morning
         // arrives too — and the books are cashed up exactly once.
@@ -828,6 +929,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__sim ? ` ${window.__sim}` : '')
         + (window.__clock ? ` ${window.__clock}` : '')
         + (window.__save ? ` ${window.__save}` : '')
+        + (window.__idle ? ` ${window.__idle}` : '')
+        + (window.__drop ? ` ${window.__drop}` : '')
+        + (window.__create ? ` ${window.__create}` : '')
+        + (window.__slow ? ` ${window.__slow}` : '')
         + (window.__netConnected !== undefined ? ` net=${window.__netConnected} sawJoin=${window.__sawJoin} remote=${window.__remote} afterLeave=${window.__afterLeave} standing=${window.__standing}` : '')
         + (window.__ext ? ` ${window.__ext}` : '')
         + (window.__bookTreat ? ` book[${window.__bookTreat}] pet[${window.__petTreat}] choices=${window.__choices}` : '')

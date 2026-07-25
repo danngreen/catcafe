@@ -6,7 +6,9 @@ import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { applyOp, WorldClock } from './world.js';
 
 const TICK_HZ = 15;
-const IDLE_TIMEOUT_MS = 30_000;
+// Clients say hello every 8 seconds. This only has to be long enough to ride
+// out a few missed beats — it is not a measure of how long you may stand still.
+const IDLE_TIMEOUT_MS = 45_000;
 const CLOCK_BROADCAST_MS = 1000;
 const SAVE_EVERY_MS = 20_000;
 
@@ -98,8 +100,13 @@ export class Room {
         player.map = String(msg.map || 'overworld');
         player.joined = true;
         this.broadcast({ t: 'joined', p: Room.describe(player) }, player.id);
-        // Late joiners need the roster as it stands now, not as it was at connect.
+        // Late joiners need the roster and the books as they stand *now*, not as
+        // they were at connect: somebody who left the title screen open while
+        // the rest of you played a morning would otherwise undo it.
         player.ws.sendJSON({ t: 'roster', players: this.roster(player.id) });
+        if (this.world) {
+          player.ws.sendJSON({ t: 'world', world: this.world, clock: this.clock.save() });
+        }
         this.chooseOwner();
         this.announcePresence();
         console.log(`[room] ${player.name} joined (${this.count} playing)`);
@@ -124,7 +131,9 @@ export class Room {
         this.clock = WorldClock.from(msg.clock);
         this.dirty = true;
         console.log(`[room] ${player.name || player.id} opened the cafe`);
-        this.broadcast({ t: 'world', world: this.world, clock: this.clock.save() });
+        // Not back to the seeder: it's their own world, and adopting it would
+        // rebuild the cafe under their feet for no reason.
+        this.broadcast({ t: 'world', world: this.world, clock: this.clock.save() }, player.id);
         break;
       }
       case 'op': {

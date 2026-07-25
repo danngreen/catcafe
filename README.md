@@ -44,6 +44,10 @@ The server keeps the shared cafe in `valley.json` beside `server.js`, so closing
 the laptop doesn't cost anyone their afternoon. `SESSION_SAVE=0 npm start` plays
 without saving; `SESSION_SAVE=/some/path.json` puts it elsewhere.
 
+Clients say hello every few seconds and reconnect on their own, so standing
+still, reading the title screen, closing a lid or restarting the server doesn't
+strand anyone — you come back where you were, with the books as they are now.
+
 ## Controls
 
 | Key | Does |
