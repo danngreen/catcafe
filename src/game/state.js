@@ -227,6 +227,8 @@ export class GameState {
     this.inventory = data.inventory || {};
     this.stock = data.stock || {};
     this.cafe = data.cafe || startingCafe();
+    // Saves made before awnings were choosable.
+    if (!this.cafe.awning) this.cafe.awning = '#c05a7a';
     this.flags = data.flags || {};
     this.quests = data.quests || {};
     this.friends = data.friends || {};

@@ -209,6 +209,7 @@ export function startingCafe(style = {}) {
     ],
     floor: style.floor ?? T.FLOOR_WOOD,
     wall: style.wall ?? '#efe2c8',
+    awning: style.awning ?? '#c05a7a',
     roof: style.roof ?? '#c86a4a',
     doorX: 5,
     name: style.name || 'The Contented Cat',

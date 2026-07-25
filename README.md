@@ -59,7 +59,8 @@ are worth it.
 the first page to get a plan of your cafe. Furniture you've bought sits in your
 bag until you place it here — Space to put a piece down, X to pick it back up,
 M/I or Shift to change which piece, Esc when you're done. The Style tab changes
-floor, walls and roof.
+the floor, and the roof, awning and wall colour of the shopfront — it shows a
+live preview of the exterior, since you can't see it from inside.
 
 Adding *rooms* needs a hired crew: Trowel & Sons in Hollowdown (weekdays,
 7am–4pm) sell builders and timber, and your crew size caps how much floor you're
@@ -122,7 +123,7 @@ There's a headless smoke test that drives the game through scenarios in a real
 browser and reports console errors:
 
 ```bash
-node tools/check.js walk cafe shop build furnish map night door systems1 systems2 --clean
+node tools/check.js walk cafe shop build furnish exterior map night door title systems1 systems2 --clean
 node tools/check.js town --shotdir /tmp/shots      # also writes screenshots
 ```
 

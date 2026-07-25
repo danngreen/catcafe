@@ -12,7 +12,7 @@ import { buildCafeMap } from '../world/interiors.js';
 import { Renderer, Camera } from '../world/render.js';
 import { audio } from '../engine/audio.js';
 import { clamp, money } from '../engine/util.js';
-import { objSprite } from '../art/objects.js';
+import { objSprite, buildingSprite } from '../art/objects.js';
 
 // Laying out rooms needs a hired crew; moving your own furniture about does
 // not, so the Rooms tab simply isn't offered until you have builders.
@@ -28,6 +28,7 @@ const FLOORS = [
 
 const WALLS = ['#efe2c8', '#e6dcc2', '#dfe6e8', '#f0e4cc', '#e8d9c0', '#d9e2d2', '#f2e0e0'];
 const ROOFS = ['#c86a4a', '#5a6472', '#d0a659', '#b2624b', '#7d8794', '#6b7d54'];
+const AWNINGS = ['#c05a7a', '#5b8fd6', '#7fbe57', '#eec453', '#8a72d6', '#e0894a', '#6b9e8f', '#d95f5f'];
 
 let draftSerial = 0;
 
@@ -260,22 +261,20 @@ export class BuildScreen extends Screen {
   countType(type) { return this.draft.furniture.filter((f) => f.type === type).length; }
 
   updateStyle(dt, input) {
-    if (input.repeat('up', dt)) { this.styleRow = (this.styleRow + 2) % 3; audio.sfx('ui_move'); }
-    if (input.repeat('down', dt)) { this.styleRow = (this.styleRow + 1) % 3; audio.sfx('ui_move'); }
+    const rows = 4;
+    if (input.repeat('up', dt)) { this.styleRow = (this.styleRow + rows - 1) % rows; audio.sfx('ui_move'); }
+    if (input.repeat('down', dt)) { this.styleRow = (this.styleRow + 1) % rows; audio.sfx('ui_move'); }
     const step = (n, len) => ((n % len) + len) % len;
     if (input.repeat('left', dt) || input.repeat('right', dt)) {
       const d = input.repeat('right', dt) ? 1 : -1;
+      const cycle = (list, cur) => list[step(Math.max(0, list.indexOf(cur)) + d, list.length)];
       if (this.styleRow === 0) {
         const i = FLOORS.findIndex((f) => f.id === this.draft.floor);
         this.draft.floor = FLOORS[step(i + d, FLOORS.length)].id;
-        this.rebuild();
-      } else if (this.styleRow === 1) {
-        const i = WALLS.indexOf(this.draft.wall);
-        this.draft.wall = WALLS[step((i < 0 ? 0 : i) + d, WALLS.length)];
-      } else {
-        const i = ROOFS.indexOf(this.draft.roof);
-        this.draft.roof = ROOFS[step((i < 0 ? 0 : i) + d, ROOFS.length)];
-      }
+        this.rebuild();                                   // the floor is the only one you see from in here
+      } else if (this.styleRow === 1) this.draft.roof = cycle(ROOFS, this.draft.roof);
+      else if (this.styleRow === 2) this.draft.awning = cycle(AWNINGS, this.draft.awning);
+      else this.draft.wall = cycle(WALLS, this.draft.wall);
       audio.sfx('ui_move');
     }
     if (input.hit('cancel')) this.finish();
@@ -442,30 +441,51 @@ export class BuildScreen extends Screen {
   }
 
   drawStylePanel(ctx) {
-    const w = 220, h = 96;
-    const x = (VIEW_W - w) / 2, y = (VIEW_H - h) / 2;
+    const w = 244, h = 190;
+    const x = Math.round((VIEW_W - w) / 2), y = Math.round((VIEW_H - h) / 2);
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, 'Style');
+
+    // Roof and awning are outside the building, so they'd be invisible from in
+    // here without a shopfront preview.
+    const shop = buildingSprite({
+      tw: 5, wall: this.draft.wall, roof: this.draft.roof, roofStyle: 'tile',
+      timbered: false, wallH: 28, roofH: 24, windows: 2,
+      signKey: 'cafe', signBg: '#f3e3c6', awning: this.draft.awning, v: 0,
+    });
+    const px = Math.round(x + (w - shop.width) / 2), py = y + 14;
+    ctx.fillStyle = '#5da845';
+    ctx.fillRect(px - 8, py + shop.height - 14, shop.width + 16, 16);
+    ctx.fillStyle = '#4b8f39';
+    ctx.fillRect(px - 8, py + shop.height + 1, shop.width + 16, 2);
+    ctx.drawImage(shop, px, py);
+
     const floorName = (FLOORS.find((f) => f.id === this.draft.floor) || FLOORS[0]).name;
     const rows = [
       ['Floor', floorName, null],
-      ['Walls', '', this.draft.wall],
       ['Roof', '', this.draft.roof],
+      ['Awning', '', this.draft.awning],
+      ['Walls', '', this.draft.wall],
     ];
+    const top = py + shop.height + 10;
     rows.forEach(([label, val, swatch], i) => {
-      const ry = y + 18 + i * 22;
+      const ry = top + i * 18;
       const sel = i === this.styleRow;
-      if (sel) { ctx.fillStyle = 'rgba(255,207,107,0.14)'; ctx.fillRect(x + 6, ry - 3, w - 12, 20); }
-      drawText(ctx, label, x + 14, ry + 2, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
+      if (sel) { ctx.fillStyle = 'rgba(255,207,107,0.14)'; ctx.fillRect(x + 6, ry - 3, w - 12, 17); }
+      drawText(ctx, label, x + 14, ry + 1, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
       if (swatch) {
         ctx.fillStyle = swatch;
-        ctx.fillRect(x + 90, ry, 44, 12);
+        ctx.fillRect(x + w - 74, ry, 50, 11);
         ctx.strokeStyle = P.uiEdgeDk;
-        ctx.strokeRect(x + 89.5, ry - 0.5, 45, 13);
+        ctx.strokeRect(x + w - 74.5, ry - 0.5, 51, 12);
+        if (sel) {
+          drawText(ctx, '<', x + w - 86, ry + 1, { color: P.uiGold, shadow: P.uiShadow });
+          drawText(ctx, '>', x + w - 18, ry + 1, { color: P.uiGold, shadow: P.uiShadow });
+        }
       } else {
-        drawText(ctx, `< ${val} >`, x + 90, ry + 2, { color: sel ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
+        drawTextRight(ctx, `< ${val} >`, x + w - 16, ry + 1, { color: sel ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
       }
     });
-    drawTextCentered(ctx, 'Left/Right to change    Esc done', x + w / 2, y + h - 14, { color: P.uiTextDim, shadow: P.uiShadow });
+    drawTextCentered(ctx, 'Left/Right to change    Esc done', x + w / 2, y + h - 13, { color: P.uiTextDim, shadow: P.uiShadow });
   }
 }

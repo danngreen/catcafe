@@ -51,6 +51,7 @@ class Game {
       playerPos: () => (this.player ? { x: this.player.x, y: this.player.y, map: this.state.mapId } : null),
       onCafeRebuilt: (map) => {
         this.maps.set('cafe', map);
+        this.refreshCafeExterior();
         // If we're standing in it, swap the live map too — otherwise we keep
         // walking around the version from before the rebuild and everything
         // just built appears to vanish.
@@ -85,6 +86,9 @@ class Game {
     this.doorByShop = new Map();
     for (const d of this.doors) this.doorByShop.set(d.shop, d);
     for (const l of this.landmarks) this.doorByShop.set(l.id, { shop: l.id, x: l.x, y: l.y, name: l.name });
+
+    // The one building whose look the player controls.
+    this.cafeBuilding = this.overworld.objects.find((o) => o.data && o.data.shop === 'cafe');
 
     this.placeVillagers();
     this.buildMinimap();
@@ -193,6 +197,7 @@ class Game {
     st.playerLook = look;
     st.cafe.wall = cafeStyle.wall;
     st.cafe.roof = cafeStyle.roof;
+    st.cafe.awning = cafeStyle.awning;
     st.cafe.floor = cafeStyle.floor;
     st.cafe.name = cafeStyle.name;
     st.rebuildCafe();
@@ -214,7 +219,12 @@ class Game {
 
   continueGame() {
     const st = this.state;
-    if (!st.load()) return this.startNewGame(st.playerLook, { wall: '#efe2c8', roof: '#c86a4a', floor: T.FLOOR_WOOD, name: 'The Contented Cat' });
+    if (!st.load()) {
+      return this.startNewGame(st.playerLook, {
+        wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], awning: AWNING_CHOICES[0],
+        floor: T.FLOOR_WOOD, name: CAFE_NAMES[0],
+      });
+    }
     st.rebuildCafe();
     this.maps.set('cafe', st.cafeMap);
     this.player.look = st.playerLook;
@@ -452,6 +462,26 @@ class Game {
       this.hud.showLocation(map.name);
       if (mapId === 'cafe') this.nudgeFurniture();
     });
+  }
+
+  /**
+   * Re-skin the cafe on the overworld with the colours the player chose.
+   * Buildings are y-sorted sprites rather than baked into the ground chunks,
+   * so swapping the image is all it takes.
+   */
+  refreshCafeExterior() {
+    const o = this.cafeBuilding;
+    if (!o || !o.cfg) return;
+    const c = this.state.cafe;
+    o.cfg = {
+      ...o.cfg,
+      wall: c.wall || o.cfg.wall,
+      roof: c.roof || o.cfg.roof,
+      awning: c.awning || o.cfg.awning,
+    };
+    o.sprite = buildingSprite(o.cfg);
+    o.w = o.sprite.width;
+    o.h = o.sprite.height;
   }
 
   /** Point out, once, that unplaced furniture is arranged from the cafe book. */
@@ -995,6 +1025,9 @@ function replyText(name) {
 
 const ROOF_CHOICES = ['#c86a4a', '#5a6472', '#d0a659', '#b2624b', '#6b7d54'];
 const WALL_CHOICES = ['#efe2c8', '#e6dcc2', '#dfe6e8', '#f0e4cc', '#f2e0e0'];
+// The awning is the boldest thing on the shopfront, so it's the choice that
+// actually shows from across the lane.
+const AWNING_CHOICES = ['#c05a7a', '#5b8fd6', '#7fbe57', '#eec453', '#8a72d6', '#e0894a', '#6b9e8f', '#d95f5f'];
 const CAFE_NAMES = ['The Contented Cat', 'Paws & Provisions', 'The Warm Windowsill', 'Bramble & Whisker', 'The Sleepy Saucer'];
 
 class TitleScreen extends Screen {
@@ -1005,7 +1038,10 @@ class TitleScreen extends Screen {
     this.index = 0;
     this.options = GameState.hasSave() ? ['Continue', 'New game'] : ['New game'];
     this.look = { species: 'cat', coat: 'ginger', cloth: CLOTHES[5] };
-    this.style = { wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], floor: T.FLOOR_WOOD, name: CAFE_NAMES[0] };
+    this.style = {
+      wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], awning: AWNING_CHOICES[0],
+      floor: T.FLOOR_WOOD, name: CAFE_NAMES[0],
+    };
     this.row = 0;
   }
 
@@ -1033,7 +1069,7 @@ class TitleScreen extends Screen {
       if (this.row === 0) this.look.coat = step(COAT_LIST, this.look.coat);
       else if (this.row === 1) this.look.cloth = step(CLOTHES, this.look.cloth);
       else if (this.row === 2) this.style.roof = step(ROOF_CHOICES, this.style.roof);
-      else if (this.row === 3) this.style.wall = step(WALL_CHOICES, this.style.wall);
+      else if (this.row === 3) this.style.awning = step(AWNING_CHOICES, this.style.awning);
       else this.style.name = step(CAFE_NAMES, this.style.name);
     }
     if (input.hit('use')) {
@@ -1104,7 +1140,7 @@ class TitleScreen extends Screen {
     const shop = buildingSprite({
       tw: 3, wall: this.style.wall, roof: this.style.roof, roofStyle: 'tile',
       timbered: false, wallH: 24, roofH: 20, windows: 1,
-      signKey: 'cafe', signBg: '#f3e3c6', awning: '#c05a7a', v: 0,
+      signKey: 'cafe', signBg: '#f3e3c6', awning: this.style.awning, v: 0,
     });
     const sw = shop.width * Z, sh = shop.height * Z;
     const bx = x + 14, by = y + 22;
@@ -1127,7 +1163,7 @@ class TitleScreen extends Screen {
       ['Your coat', COATS[this.look.coat]?.fur],
       ['Your clothes', this.look.cloth],
       ['Cafe roof', this.style.roof],
-      ['Cafe walls', this.style.wall],
+      ['Cafe awning', this.style.awning],
     ];
     swatchRows.forEach(([label, swatch], i) => {
       const ry = y + 32 + i * 26;
@@ -1176,6 +1212,7 @@ if (location.search.includes('autostart')) {
   const g = window.game;
   g.screens.length = 0;
   g.startNewGame({ species: 'cat', coat: 'ginger', cloth: CLOTHES[5] },
-    { wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], floor: T.FLOOR_WOOD, name: CAFE_NAMES[0] });
+    { wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], awning: AWNING_CHOICES[0],
+      floor: T.FLOOR_WOOD, name: CAFE_NAMES[0] });
   g.dialogue.active = false;
 }

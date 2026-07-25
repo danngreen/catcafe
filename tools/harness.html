@@ -157,6 +157,29 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
         window.__step = 'done';
         await wait(300);
+      } else if (SCRIPT === 'exterior') {
+        // Picking colours must actually change the building you walk past.
+        const st = g.state;
+        const before = g.cafeBuilding && g.cafeBuilding.sprite;
+        const beforeCfg = g.cafeBuilding && { ...g.cafeBuilding.cfg };
+        st.cafe.roof = '#5a6472';
+        st.cafe.awning = '#7fbe57';
+        g.refreshCafeExterior();
+        await wait(300);
+        const after = g.cafeBuilding && g.cafeBuilding.sprite;
+        window.__ext = `cfg=${beforeCfg && beforeCfg.roof}/${beforeCfg && beforeCfg.awning}`
+          + ` -> ${g.cafeBuilding && g.cafeBuilding.cfg.roof}/${g.cafeBuilding && g.cafeBuilding.cfg.awning}`
+          + ` spriteChanged=${before !== after}`;
+        if (!g.cafeBuilding) window.__errors.push('cafe building not found on the overworld');
+        else if (before === after) window.__errors.push('cafe sprite did not change with the colours');
+        else if (g.cafeBuilding.cfg.roof !== '#5a6472' || g.cafeBuilding.cfg.awning !== '#7fbe57') {
+          window.__errors.push('cafe config did not take the chosen colours');
+        }
+        // Stand outside so the screenshot shows it.
+        g.player.x = g.homeDoor.x * 16 + 8;
+        g.player.y = (g.homeDoor.y + 3) * 16;
+        g.cam.follow(g.overworld, g.player.x, g.player.y, true);
+        await wait(600);
       } else if (SCRIPT === 'furnish') {
         // The whole "I bought a chair, now what" path, with no builders hired.
         const st = g.state;
@@ -258,7 +281,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
       const extra = (window.__step ? ` step=${window.__step} customers=${window.__customers} revenue=${window.__revenue} summary=${window.__summaryShown} save=${window.__saveOk}` : '')
         + (window.__door ? ` door=[${window.__door}]` : '')
         + (window.__build ? ` book=${window.__book} build=${window.__build} mode=${window.__buildMode} tabs=${window.__tabs} placed=${window.__placed} seats=${window.__seats} liveMap=${window.__liveMap} chairs=${window.__chairs}` : '')
-        + (window.__stage ? ` stage=${window.__stage}` : '');
+        + (window.__stage ? ` stage=${window.__stage}` : '')
+        + (window.__ext ? ` ${window.__ext}` : '');
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';
       out.textContent = `RESULT ${errs.length ? 'FAIL' : 'OK'} (${errs.length} issues)\n${info}\n` + errs.slice(0, 25).join('\n');
       document.title = errs.length ? `FAIL ${errs.length}` : 'OK';

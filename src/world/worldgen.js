@@ -562,7 +562,9 @@ function paveTile(map, reserved, x, y) {
 function placeShop(map, shop, x, y, townSpec, doors, rng) {
   const tw = shop.tw || 4;
   const roofStyle = shop.roofStyle || 'tile';
-  const spr = buildingSprite({
+  // Keep the config on the object: the player's own cafe gets re-skinned when
+  // they pick colours, and rebuilding needs everything but the colours held fixed.
+  const cfg = {
     tw,
     wall: shop.wall || townSpec.style.wall,
     roof: shop.roof || townSpec.style.roofs[0],
@@ -572,8 +574,9 @@ function placeShop(map, shop, x, y, townSpec, doors, rng) {
     signKey: shop.sign, signBg: '#f3e3c6',
     awning: shop.awning || null,
     v: rng.int(4),
-  });
-  map.addBuilding(spr, x, y, tw, 2, {});
+  };
+  const building = map.addBuilding(buildingSprite(cfg), x, y, tw, 2, { data: { shop: shop.id } });
+  if (building) building.cfg = cfg;
   // The door sits on the middle column, on the tile in front of the wall.
   const dx = x + Math.floor(tw / 2);
   const dy = y + 1;
