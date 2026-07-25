@@ -527,14 +527,93 @@ class Game {
 
     // Cats respond to being greeted.
     if (st.inCafe) {
+      let near = null, nearD = 24;
       for (const cat of st.catActors) {
-        if (Math.hypot(cat.x - this.player.x, cat.y - this.player.y) < 22) {
-          cat.happiness = clamp(cat.happiness + 0.03, 0, 1);
-          cat.showEmote(cat.happiness > 0.6 ? 'heart' : 'talk', 1.6);
-          audio.sfx(cat.happiness > 0.7 ? 'purr' : 'meow_happy', { gain: 0.7 });
-          this.dialogue.say(`${cat.name} the ${cat.breedName} headbutts your ankle.\n\n${catMood(cat)}`, { speaker: cat.name });
-          return;
+        const d = Math.hypot(cat.x - this.player.x, cat.y - this.player.y);
+        if (d < nearD) { nearD = d; near = cat; }
+      }
+      if (near) { this.greetCat(near); return; }
+    }
+  }
+
+  /** Walk up to a cat and you get offered whatever you're carrying for them. */
+  greetCat(cat) {
+    const st = this.state;
+    const choices = [];
+    if (st.has('treats')) choices.push({ label: `Give a treat (${st.inventory.treats})`, value: 'treat' });
+    if (cat.sick && st.has('medicine')) choices.push({ label: 'Give medicine', value: 'medicine' });
+    if (st.has('brush') && cat.groomed <= 0) choices.push({ label: 'Brush them', value: 'brush' });
+    if (st.has('catnip')) choices.push({ label: 'Sprinkle catnip', value: 'catnip' });
+    choices.push({ label: 'Just say hello', value: 'hello' });
+
+    const opener = `${cat.name} the ${cat.breedName} winds around your ankles.\n\n${catMood(cat)}`;
+    // One option isn't a choice; skip the menu and just say hello.
+    if (choices.length === 1) {
+      this.useOnCat(cat, 'hello');
+      this.dialogue.say(opener, { speaker: cat.name });
+      return;
+    }
+    this.dialogue.say(opener, {
+      speaker: cat.name,
+      choices,
+      onDone: (what) => this.useOnCat(cat, what),
+    });
+  }
+
+  useOnCat(cat, what) {
+    const st = this.state;
+    switch (what) {
+      case 'treat': {
+        if (!st.take('treats')) return;
+        cat.happiness = clamp(cat.happiness + 0.2, 0, 1);
+        cat.showEmote('heart', 2.2);
+        audio.sfx('eat', { gain: 0.9 });
+        setTimeout(() => audio.sfx('purr', { gain: 0.6 }), 420);
+        this.hud.toast(`${cat.name} accepts the treat as their due.`, 'good');
+        break;
+      }
+      case 'medicine': {
+        // The label on the jar is honest: it only helps if you catch it early.
+        if (cat.sickDays > 2) {
+          audio.sfx('error');
+          this.hud.toast(`${cat.name} is too far gone for that. See Dr. Bramble.`, 'bad');
+          break;
         }
+        if (!st.take('medicine')) return;
+        cat.sick = false;
+        cat.sickDays = 0;
+        cat.happiness = clamp(cat.happiness + 0.25, 0, 1);
+        cat.showEmote('happy', 2.2);
+        audio.sfx('levelup', { gain: 0.6 });
+        this.hud.toast(`${cat.name} is on the mend.`, 'good');
+        break;
+      }
+      case 'brush': {
+        cat.groomed = Math.max(cat.groomed, 3);
+        cat.happiness = clamp(cat.happiness + 0.1, 0, 1);
+        cat.showEmote('happy', 2);
+        audio.sfx('brush', { gain: 0.9 });
+        this.hud.toast(`You brush ${cat.name}. Not a professional job, but nice.`, 'good');
+        break;
+      }
+      case 'catnip': {
+        if (!st.take('catnip')) return;
+        for (const c of st.cats) c.happiness = clamp(c.happiness + 0.15, 0, 1);
+        for (const c of st.catActors) {
+          c.showEmote('music', 3.5);
+          c.state = 'idle';
+          c.pose = 'play';
+          c.stateT = 8 + Math.random() * 8;
+        }
+        audio.sfx('meow_happy', { gain: 0.85 });
+        this.hud.toast('Chaos. Delightful, unproductive chaos.', 'good');
+        break;
+      }
+      default: {
+        cat.happiness = clamp(cat.happiness + 0.03, 0, 1);
+        cat.showEmote(cat.happiness > 0.6 ? 'heart' : 'talk', 1.6);
+        audio.sfx(cat.happiness > 0.7 ? 'purr' : 'meow_happy', { gain: 0.7 });
+        break;
       }
     }
   }

@@ -519,19 +519,26 @@ export class CafeScreen extends Screen {
     } else if (this.tab === 2 && input.hit('use')) {
       const cat = st.cats[this.index];
       if (cat) {
-        if (st.inventory.brush > 0 && cat.groomed <= 0) {
-          cat.groomed = 3;
+        const act = this.catAction(cat);
+        // Supplies live in the bag, not the pantry — this used to look in the
+        // wrong place, so treats silently did nothing.
+        if (act === 'medicine' && st.take('medicine')) {
+          cat.sick = false; cat.sickDays = 0;
+          cat.happiness = clamp(cat.happiness + 0.25, 0, 1);
+          audio.sfx('levelup', { gain: 0.6 });
+          this.flash(`${cat.name} is on the mend.`);
+        } else if (act === 'brush') {
+          cat.groomed = Math.max(cat.groomed, 3);
           cat.happiness = clamp(cat.happiness + 0.08, 0, 1);
           audio.sfx('brush', { gain: 0.8 });
           this.flash(`You brush ${cat.name}. Not a professional job, but nice.`);
-        } else if (st.cafeSim.stockCount('treats') > 0) {
-          st.cafeSim.takeStock('treats', 1);
+        } else if (act === 'treat' && st.take('treats')) {
           cat.happiness = clamp(cat.happiness + 0.2, 0, 1);
           audio.sfx('eat', { gain: 0.8 });
           this.flash(`${cat.name} accepts the treat as their due.`);
         } else {
           audio.sfx('meow', { gain: 0.7 });
-          this.flash(`${cat.name} looks at you expectantly.`);
+          this.flash(`${cat.name} looks at you expectantly. Buy treats at the pet shop.`);
         }
       }
     }
@@ -559,6 +566,15 @@ export class CafeScreen extends Screen {
   }
 
   flash(m) { this.msg = m; this.msgT = 3; }
+
+  /** What Space will do to this cat, given what's in the bag. */
+  catAction(cat) {
+    const st = this.game.state;
+    if (cat.sick && st.has('medicine') && cat.sickDays <= 2) return 'medicine';
+    if (st.has('brush') && cat.groomed <= 0) return 'brush';
+    if (st.has('treats')) return 'treat';
+    return 'none';
+  }
 
   currentList() {
     const st = this.game.state;
@@ -740,7 +756,17 @@ export class CafeScreen extends Screen {
       drawText(ctx, 'joy', x + 366, ry + 3, { color: P.uiTextDim, shadow: P.uiShadow });
       bar(ctx, x + 386, ry + 4, 50, 6, cat.happiness, P.uiGreen);
     }
-    drawText(ctx, 'Space: brush or offer a treat', x + 12, y + 16, { color: P.uiTextDim, shadow: P.uiShadow });
+    // Say exactly what Space will do to the selected cat, and with what.
+    const sel = st.cats[this.index];
+    const labels = {
+      medicine: () => `Space: give ${sel.name} medicine (${st.inventory.medicine} left)`,
+      brush: () => `Space: brush ${sel.name} (you have a brush)`,
+      treat: () => `Space: give ${sel.name} a treat (${st.inventory.treats} left)`,
+      none: () => 'Nothing to give — treats at the pet shop, medicine at the herbalist',
+    };
+    const act = sel ? this.catAction(sel) : 'none';
+    drawText(ctx, sel ? labels[act]() : '', x + 12, y + 16,
+      { color: act === 'none' ? P.uiTextDim : P.uiGold, shadow: P.uiShadow });
   }
 
   drawStaff(ctx, x, y, w, h) {

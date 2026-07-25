@@ -157,6 +157,49 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
         window.__step = 'done';
         await wait(300);
+      } else if (SCRIPT === 'treats') {
+        const st = g.state;
+        st.give('treats', 3);
+        st.give('catnip', 1);
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        await wait(1200);
+        const cat = st.cats[0];
+        cat.happiness = 0.4;
+
+        // 1. Through the cafe book's Cats tab.
+        const t0 = st.inventory.treats, j0 = cat.happiness;
+        key('KeyC', true); await wait(160); key('KeyC', false);
+        await wait(400);
+        for (let i = 0; i < 2; i++) { key('ArrowRight', true); await wait(200); key('ArrowRight', false); }
+        await wait(300);
+        key('Space', true); await wait(220); key('Space', false);
+        await wait(500);
+        window.__bookTreat = `treats ${t0}->${st.inventory.treats || 0} joy ${j0.toFixed(2)}->${cat.happiness.toFixed(2)}`;
+        if ((st.inventory.treats || 0) >= t0) window.__errors.push('cats tab did not consume a treat');
+        if (cat.happiness <= j0) window.__errors.push('cats tab did not raise joy');
+        key('Escape', true); await wait(200); key('Escape', false);
+        await wait(600);
+
+        // 2. By walking up to a cat in the room.
+        const live = st.catActors[0];
+        g.player.x = live.x; g.player.y = live.y + 6;
+        const t1 = st.inventory.treats || 0, j1 = live.happiness;
+        g.interact();
+        await wait(700);
+        window.__choices = g.dialogue.choices ? g.dialogue.choices.map((c) => c.value).join(',') : 'none';
+        key('Space', true); await wait(250); key('Space', false);   // finish typing
+        await wait(300);
+        key('Space', true); await wait(250); key('Space', false);   // take first choice
+        await wait(700);
+        window.__petTreat = `treats ${t1}->${st.inventory.treats || 0} joy ${j1.toFixed(2)}->${live.happiness.toFixed(2)}`;
+        if (!window.__choices.includes('treat')) window.__errors.push('no treat option offered near a cat: ' + window.__choices);
+        if ((st.inventory.treats || 0) >= t1) window.__errors.push('petting did not consume a treat');
+        if (live.happiness <= j1) window.__errors.push('petting did not raise joy');
+        // Leave a choice menu open so the screenshot shows it.
+        g.player.x = live.x; g.player.y = live.y + 6;
+        g.interact();
+        await wait(900);
+        key('Space', true); await wait(200); key('Space', false);
       } else if (SCRIPT === 'exterior') {
         // Picking colours must actually change the building you walk past.
         const st = g.state;
@@ -282,7 +325,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__door ? ` door=[${window.__door}]` : '')
         + (window.__build ? ` book=${window.__book} build=${window.__build} mode=${window.__buildMode} tabs=${window.__tabs} placed=${window.__placed} seats=${window.__seats} liveMap=${window.__liveMap} chairs=${window.__chairs}` : '')
         + (window.__stage ? ` stage=${window.__stage}` : '')
-        + (window.__ext ? ` ${window.__ext}` : '');
+        + (window.__ext ? ` ${window.__ext}` : '')
+        + (window.__bookTreat ? ` book[${window.__bookTreat}] pet[${window.__petTreat}] choices=${window.__choices}` : '');
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';
       out.textContent = `RESULT ${errs.length ? 'FAIL' : 'OK'} (${errs.length} issues)\n${info}\n` + errs.slice(0, 25).join('\n');
       document.title = errs.length ? `FAIL ${errs.length}` : 'OK';

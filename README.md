@@ -55,6 +55,11 @@ unhappy, and ill. Illness spreads between cats, so a sneeze means a trip to the
 vet in Saltmere. Grooming lasts about a week. Rare breeds cost a great deal and
 are worth it.
 
+Walk up to any cat and press Space to offer whatever you're carrying: a treat, a
+quick brush, medicine if they've only just fallen ill, or catnip — which sets the
+whole room off. Vitamins sitting in your bag quietly make illness less likely.
+The Cats tab of the cafe book does the same thing in one keypress.
+
 **Furnishing and building.** Open the cafe book with **C** and press Space on
 the first page to get a plan of your cafe. Furniture you've bought sits in your
 bag until you place it here — Space to put a piece down, X to pick it back up,
@@ -123,7 +128,7 @@ There's a headless smoke test that drives the game through scenarios in a real
 browser and reports console errors:
 
 ```bash
-node tools/check.js walk cafe shop build furnish exterior map night door title systems1 systems2 --clean
+node tools/check.js walk cafe shop build furnish exterior treats map night door title systems1 systems2 --clean
 node tools/check.js town --shotdir /tmp/shots      # also writes screenshots
 ```
 

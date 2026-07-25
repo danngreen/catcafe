@@ -557,14 +557,17 @@ export class Cafe {
       let risk = 0.012 + (1 - clamp(cat.coatQuality, 0, 1.4)) * 0.05;
       risk += sickBefore * 0.05;                                   // it spreads
       risk += Math.max(0, catCount - this.seats().length * 0.8) * 0.01; // crowding
-      if (this.stockCount('vitamins') > 0) risk *= 0.45;
+      // Supplies live in the bag, not the pantry.
+      if (st.has('vitamins')) risk *= 0.45;
       if (cat.hunger > 0) risk += 0.08 * cat.hunger;
       if (rng() < risk) {
         cat.sick = true;
         summary.lines.push({ text: `${cat.name} is sneezing. Take them to the vet.`, tone: 'bad' });
       }
     }
-    if (this.stockCount('vitamins') > 0 && catCount > 0) this.takeStock('vitamins', 1);
+    if (catCount > 0 && st.take('vitamins')) {
+      summary.lines.push({ text: 'Vitamins all round.', tone: 'good' });
+    }
 
     // --- daily costs ---
     const upkeep = catCount * 4;
