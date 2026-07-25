@@ -219,6 +219,12 @@ export class Renderer {
       ctx.drawImage(spr, dx, dy);
     }
 
+    // Speech bubbles and emotes go on last. Drawn inline with their owner they
+    // get covered by whoever is standing in front — which in a queue is always.
+    for (const d of drawables) {
+      if (d.drawEmote) d.drawEmote(ctx, ox, oy, d.emoteTop());
+    }
+
     // --- lighting ---
     if (light && light.night > 0.02) this.drawLight(ctx, map, cam, light);
   }

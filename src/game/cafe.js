@@ -292,7 +292,9 @@ export class Cafe {
           c.stateT = 0;
           c.order = this.pickOrder();
           c.dir = 'up';
-          c.showEmote(c.order ? 'talk' : 'alert', 999);
+          // Show what they're waiting for, so you can see the room's orders at a glance.
+          if (c.order) c.showItemEmote(ITEMS[c.order].icon, 999);
+          else c.showEmote('alert', 999);
         }
         break;
       }
@@ -444,7 +446,7 @@ export class Cafe {
     c.satisfaction = clamp(c.satisfaction * 0.4 + sat, 0, 1.6);
     c.spend += pay;
     c.orders++;
-    c.emote = null;
+    c.clearEmote();
     c.served = false;
     c.servedByPlayer = false;
     c.queueSlot = undefined;   // free our place in the queue

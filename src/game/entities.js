@@ -2,7 +2,7 @@
 // the y coordinate doubles as the sort key for overlapping.
 
 import { TILE, T } from '../art/tiles.js';
-import { charSprite, catSprite, emoteSprite, CHAR_W, CHAR_H, CAT_W, CAT_H, villagerLook, CAT_BREEDS } from '../art/chars.js';
+import { charSprite, catSprite, emoteSprite, orderBubble, CHAR_W, CHAR_H, CAT_W, CAT_H, villagerLook, CAT_BREEDS } from '../art/chars.js';
 import { makeRng, clamp } from '../engine/util.js';
 import { audio } from '../engine/audio.js';
 
@@ -121,7 +121,15 @@ export class Actor {
     else this.dir = dy > 0 ? 'down' : 'up';
   }
 
-  showEmote(kind, seconds = 1.8) { this.emote = kind; this.emoteT = seconds; }
+  showEmote(kind, seconds = 1.8) { this.emote = kind; this.emoteIcon = null; this.emoteT = seconds; }
+
+  /** Show an item in a speech bubble instead of a symbol. */
+  showItemEmote(icon, seconds = 1.8) { this.emoteIcon = icon; this.emote = null; this.emoteT = seconds; }
+
+  clearEmote() { this.emote = null; this.emoteIcon = null; this.emoteT = 0; }
+
+  /** Where a bubble should sit: just above the head. */
+  emoteTop() { return this.y - CHAR_H; }
 
   animate(dt) {
     if (this.moving) {
@@ -133,16 +141,18 @@ export class Actor {
     }
     if (this.emoteT > 0) {
       this.emoteT -= dt;
-      if (this.emoteT <= 0) this.emote = null;
+      if (this.emoteT <= 0) this.clearEmote();
     }
     this.bobT += dt;
   }
 
   drawEmote(ctx, ox, oy, topY) {
-    if (!this.emote) return;
-    const spr = emoteSprite(this.emote);
+    if (!this.emote && !this.emoteIcon) return;
+    const spr = this.emoteIcon ? orderBubble(this.emoteIcon) : emoteSprite(this.emote);
     const bob = Math.sin(this.bobT * 4) * 1.2;
-    ctx.drawImage(spr, Math.round(this.x - 8 - ox), Math.round(topY - 16 + bob - oy));
+    ctx.drawImage(spr,
+      Math.round(this.x - spr.width / 2 - ox),
+      Math.round(topY - spr.height - 2 + bob - oy));
   }
 }
 
@@ -203,7 +213,6 @@ export class Player extends Actor {
     const dx = Math.round(this.x - CHAR_W / 2 - ox);
     const dy = Math.round(this.y - CHAR_H - oy);
     ctx.drawImage(spr, dx, dy);
-    this.drawEmote(ctx, ox, oy, this.y - CHAR_H);
   }
 }
 
@@ -264,12 +273,16 @@ export class Villager extends Actor {
   draw(ctx, ox, oy) {
     const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, this.dir, this.frame);
     ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - CHAR_H - oy));
-    if (this.hasQuestMark && !this.emote) {
+  }
+
+  drawEmote(ctx, ox, oy, topY) {
+    if (this.hasQuestMark && !this.emote && !this.emoteIcon) {
       const q = emoteSprite('quest');
       const bob = Math.sin(this.bobT * 3) * 1.5;
-      ctx.drawImage(q, Math.round(this.x - 8 - ox), Math.round(this.y - CHAR_H - 16 + bob - oy));
+      ctx.drawImage(q, Math.round(this.x - 8 - ox), Math.round(topY - 16 + bob - oy));
+      return;
     }
-    this.drawEmote(ctx, ox, oy, this.y - CHAR_H);
+    super.drawEmote(ctx, ox, oy, topY);
   }
 }
 
@@ -402,8 +415,9 @@ export class Cat extends Actor {
   draw(ctx, ox, oy) {
     const spr = catSprite(this.breed, this.dir, this.frame, this.moving ? 'walk' : this.pose, this.groomed > 0);
     ctx.drawImage(spr, Math.round(this.x - CAT_W / 2 - ox), Math.round(this.y - CAT_H - oy));
-    this.drawEmote(ctx, ox, oy, this.y - CAT_H);
   }
+
+  emoteTop() { return this.y - CAT_H; }
 
   save() {
     return {
@@ -483,7 +497,6 @@ export class Customer extends Actor {
   draw(ctx, ox, oy) {
     const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, this.dir, this.frame);
     ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - CHAR_H - oy));
-    this.drawEmote(ctx, ox, oy, this.y - CHAR_H);
   }
 }
 

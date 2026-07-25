@@ -65,6 +65,12 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // Force a few customers through the door.
         for (let i = 0; i < 4; i++) { g.state.cafeSim.trySpawn(g.state.cafeMap); await wait(300); }
         await wait(2500);
+        // Everyone still queueing should be showing what they want to order.
+        const waiting = g.state.cafeSim.customers.filter((c) => c.state === 'waiting');
+        window.__bubbles = `${waiting.filter((c) => c.emoteIcon).length}/${waiting.length}`;
+        if (waiting.length && waiting.some((c) => !c.emoteIcon)) {
+          window.__errors.push('a waiting customer had no order bubble: ' + window.__bubbles);
+        }
       } else if (SCRIPT === 'build') {
         // Go in the way a player does: through Trowel & Sons.
         g.state.workers = 2; g.state.materials = 3; g.state.money = 5000;
@@ -311,6 +317,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.state.visit('d', 'Thistlewick', 270, 200);
         await wait(200);
         key('KeyM', true); await wait(150); key('KeyM', false);
+        await wait(500);
+        // Move the selection so the screenshot shows the highlighted label.
+        for (let i = 0; i < 4; i++) { key('ArrowDown', true); await wait(200); key('ArrowDown', false); }
+        const ms = g.screens[g.screens.length - 1];
+        window.__mapSel = ms && ms.places ? `${ms.index + 1}/${ms.places.length}` : 'none';
         await wait(600);
       }
 
@@ -326,7 +337,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__build ? ` book=${window.__book} build=${window.__build} mode=${window.__buildMode} tabs=${window.__tabs} placed=${window.__placed} seats=${window.__seats} liveMap=${window.__liveMap} chairs=${window.__chairs}` : '')
         + (window.__stage ? ` stage=${window.__stage}` : '')
         + (window.__ext ? ` ${window.__ext}` : '')
-        + (window.__bookTreat ? ` book[${window.__bookTreat}] pet[${window.__petTreat}] choices=${window.__choices}` : '');
+        + (window.__bookTreat ? ` book[${window.__bookTreat}] pet[${window.__petTreat}] choices=${window.__choices}` : '')
+        + (window.__mapSel ? ` mapSel=${window.__mapSel}` : '')
+        + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';
       out.textContent = `RESULT ${errs.length ? 'FAIL' : 'OK'} (${errs.length} issues)\n${info}\n` + errs.slice(0, 25).join('\n');
       document.title = errs.length ? `FAIL ${errs.length}` : 'OK';

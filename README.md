@@ -1,4 +1,4 @@
-# Cat Cafe
+| M | Map — arrows browse the places you've found |# Cat Cafe
 
 A whimsical 16-bit-style browser game. You are a cat who walks on two legs and
 runs a cat cafe in a rural valley. Serve coffee, keep cats, explore five
@@ -24,7 +24,7 @@ It does need to be served over HTTP (modules don't load from `file://`).
 | Esc | Menu (and closes screens) |
 | X / Backspace | Back / cancel |
 | C | Cafe book — arrange & build, pantry, cats, staff, opening hours |
-| M | Map |
+| M | Map — arrows browse the places you've found |
 | I | Bag |
 | Tab | Switch tabs, and switch mode in the build screen |
 
@@ -36,9 +36,11 @@ On a touch device an on-screen d-pad appears alongside **ACT**, **BACK** and
 ## The loop
 
 **Earning.** Customers come in, queue at the counter, order, take a seat and
-stay a while. Press Space at a waiting customer to serve them yourself — it's
-faster and they tip. If you ignore them they get served anyway, but more slowly
-and less happily, and if nobody is minding the counter at all they leave.
+stay a while. Each one waiting holds a speech bubble showing the item they want,
+so you can read the room at a glance. Press Space at them to serve them
+yourself — it's faster and they tip. If you ignore them they get served anyway,
+but more slowly and less happily, and if nobody is minding the counter at all
+they leave.
 
 Money comes from the difference between what you pay a supplier for a portion
 and what a customer pays you. Cake has a better margin than coffee. Everything

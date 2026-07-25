@@ -962,15 +962,20 @@ export class MapScreen extends Screen {
 
   update(dt, input) {
     this.t += dt;
-    if (this.pickMode && this.places.length) {
-      if (input.repeat('up', dt) || input.repeat('left', dt)) { this.index = (this.index - 1 + this.places.length) % this.places.length; audio.sfx('ui_move'); }
-      if (input.repeat('down', dt) || input.repeat('right', dt)) { this.index = (this.index + 1) % this.places.length; audio.sfx('ui_move'); }
-      if (input.hit('use')) {
+    // Both maps browse the same way; only the taxi one does anything on Space.
+    const n = this.places.length;
+    if (n) {
+      if (input.repeat('up', dt) || input.repeat('left', dt)) { this.index = (this.index - 1 + n) % n; audio.sfx('ui_move', { gain: 0.6 }); }
+      if (input.repeat('down', dt) || input.repeat('right', dt)) { this.index = (this.index + 1) % n; audio.sfx('ui_move', { gain: 0.6 }); }
+    }
+    if (input.hit('use')) {
+      if (this.pickMode && n) {
         const p = this.places[this.index];
         this.done = true;
         if (this.onPick) this.onPick(p);
         return;
       }
+      this.close();
     }
     if (input.hit('cancel') || input.hit('menu')) this.close();
   }
@@ -984,7 +989,8 @@ export class MapScreen extends Screen {
     const mini = this.game.minimap;
     if (mini) {
       const mw = mini.width, mh = mini.height;
-      const scale = Math.min((w - 130) / mw, (h - 34) / mh);
+      // Leave room under the map for the hint line.
+      const scale = Math.min((w - 130) / mw, (h - 50) / mh);
       const mx = Math.round(x + 8), my = Math.round(y + 22);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(mini, mx, my, Math.round(mw * scale), Math.round(mh * scale));
@@ -1002,44 +1008,42 @@ export class MapScreen extends Screen {
 
       for (let i = 0; i < this.places.length; i++) {
         const p = at(this.places[i]);
-        const sel = this.pickMode && i === this.index;
+        const sel = i === this.index;
         const bob = sel ? (Math.sin(this.t * 7) > 0 ? -1 : 0) : 0;
         ctx.fillStyle = '#000000';
         ctx.fillRect(p.x - 2, p.y - 5 + bob, 5, 7);
         ctx.fillStyle = sel ? P.uiGold : P.uiRed;
         ctx.fillRect(p.x - 2, p.y - 4 + bob, 4, 4);
         ctx.fillRect(p.x - 1, p.y + bob, 2, 2);
+        // A ring around the one you're looking at, so it reads at a glance.
+        if (sel) {
+          ctx.strokeStyle = P.uiGold;
+          ctx.lineWidth = 1;
+          const r = 5 + (Math.sin(this.t * 4) > 0 ? 0 : 1);
+          ctx.strokeRect(p.x - r + 0.5, p.y - r + 0.5, r * 2, r * 2);
+        }
       }
 
-      const taken = [];
-      const clashes = (r) => taken.some((q) =>
-        r.x < q.x + q.w + 2 && r.x + r.w + 2 > q.x && r.y < q.y + q.h + 1 && r.y + r.h + 1 > q.y);
-
-      // Selected pin first so it always wins a slot.
-      const order = this.places.map((_, i) => i)
-        .sort((a, b) => (b === this.index && this.pickMode ? 1 : 0) - (a === this.index && this.pickMode ? 1 : 0));
-
-      for (const i of order) {
-        const sel = this.pickMode && i === this.index;
-        if (this.pickMode && !sel) continue;
-        const place = this.places[i];
+      // Only the highlighted place is named. Labelling all of them turned any
+      // town with shops in it into an unreadable stack; the list has the rest.
+      const place = this.places[this.index];
+      if (place) {
         const p = at(place);
         const lw = textWidth(place.name), lh = 8;
         const slots = [
-          { x: p.x + 5, y: p.y - 5 },
-          { x: p.x - lw - 5, y: p.y - 5 },
-          { x: p.x - Math.round(lw / 2), y: p.y - 15 },
-          { x: p.x - Math.round(lw / 2), y: p.y + 4 },
-          { x: p.x + 5, y: p.y + 4 },
-          { x: p.x - lw - 5, y: p.y + 4 },
+          { x: p.x + 8, y: p.y - 5 },
+          { x: p.x - lw - 8, y: p.y - 5 },
+          { x: p.x - Math.round(lw / 2), y: p.y - 17 },
+          { x: p.x - Math.round(lw / 2), y: p.y + 8 },
         ];
-        const spot = slots.find((s) => s.x > mx - 2 && s.x + lw < mx + mw * scale + 60
-          && s.y > my && s.y + lh < my + mh * scale && !clashes({ ...s, w: lw, h: lh }));
-        if (!spot) continue;
-        taken.push({ ...spot, w: lw, h: lh });
-        ctx.fillStyle = 'rgba(12,10,20,0.72)';
-        ctx.fillRect(spot.x - 2, spot.y - 1, lw + 3, lh + 2);
-        drawText(ctx, place.name, spot.x, spot.y, { color: sel ? P.uiGold : P.uiText, shadow: '#000000' });
+        const right = mx + mw * scale;
+        const spot = slots.find((s) => s.x > mx + 1 && s.x + lw < right - 1
+          && s.y > my + 1 && s.y + lh < my + mh * scale - 1) || slots[0];
+        ctx.fillStyle = 'rgba(12,10,20,0.82)';
+        ctx.fillRect(spot.x - 3, spot.y - 2, lw + 5, lh + 3);
+        ctx.strokeStyle = P.uiGoldDk;
+        ctx.strokeRect(spot.x - 3.5, spot.y - 2.5, lw + 6, lh + 4);
+        drawText(ctx, place.name, spot.x, spot.y, { color: P.uiGold, shadow: '#000000' });
       }
 
       // Where you are now.
@@ -1053,23 +1057,31 @@ export class MapScreen extends Screen {
       }
     }
 
-    // Side list.
+    // Side list, scrolled to keep the selection in view.
     const lx = x + w - 116;
     drawText(ctx, this.pickMode ? 'Destinations' : 'Places found', lx, y + 22, { color: P.uiGold, shadow: P.uiShadow });
-    this.places.slice(0, 12).forEach((p, i) => {
-      const ry = y + 36 + i * 12;
-      const sel = this.pickMode && i === this.index;
+    const VIS = 12;
+    const start = clamp(this.index - Math.floor(VIS / 2), 0, Math.max(0, this.places.length - VIS));
+    for (let i = start; i < Math.min(this.places.length, start + VIS); i++) {
+      const p = this.places[i];
+      const ry = y + 36 + (i - start) * 12;
+      const sel = i === this.index;
       if (sel) cursor(ctx, lx - 8, ry, this.t);
       drawText(ctx, p.name, lx, ry, { color: sel ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
-    });
+    }
+    if (this.places.length > VIS) {
+      drawText(ctx, `${this.index + 1}/${this.places.length}`, lx, y + 36 + VIS * 12 + 2,
+        { color: P.uiTextDim, shadow: P.uiShadow });
+    }
 
     if (this.pickMode) {
       const p = this.places[this.index];
-      const fare = this.game.state.taxiFare(p);
+      const fare = p ? this.game.state.taxiFare(p) : 0;
       drawTextCentered(ctx, `Fare: ${fare}    Space to fly    X to stay`, VIEW_W / 2, y + h - 14,
         { color: this.game.state.money >= fare ? P.uiGold : P.uiRed, shadow: P.uiShadow });
     } else {
-      drawTextCentered(ctx, 'X to close', VIEW_W / 2, y + h - 14, { color: P.uiTextDim, shadow: P.uiShadow });
+      drawTextCentered(ctx, 'Arrows to look around    Space or X to close', VIEW_W / 2, y + h - 14,
+        { color: P.uiTextDim, shadow: P.uiShadow });
     }
   }
 }

@@ -10,6 +10,7 @@
 import { PixBuf, SpriteCache, shade, mixHex } from '../engine/pixel.js';
 import { P } from './palette.js';
 import { hash2 } from '../engine/util.js';
+import { iconSprite } from './icons.js';
 
 export const CHAR_W = 16;
 export const CHAR_H = 24;
@@ -717,6 +718,31 @@ export function emoteSprite(kind) {
       default: break;
     }
     return buf.toCanvas();
+  });
+}
+
+/**
+ * A speech bubble holding an item icon — what a customer is waiting to order.
+ * Wider and squarer than the emote bubbles so a full 16x16 icon fits inside.
+ */
+export function orderBubble(iconName) {
+  return cache.get(`ob|${iconName}`, () => {
+    const buf = new PixBuf(22, 21);
+    const bg = rgb('#fdf6e6');
+    // Rounded-rectangle body: two overlapping rects nip the corners off.
+    buf.rect(1, 0, 20, 18, bg);
+    buf.rect(0, 2, 22, 14, bg);
+    outline(buf, '#5b5170');
+    const ed = rgb('#5b5170');
+    // Tail, pointing down at whoever is thinking it.
+    buf.set(8, 18, ed); buf.set(9, 18, bg); buf.set(10, 18, bg); buf.set(11, 18, ed);
+    buf.set(9, 19, ed); buf.set(10, 19, ed);
+
+    const canvas = buf.toCanvas();
+    const g = canvas.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.drawImage(iconSprite(iconName), 3, 1);
+    return canvas;
   });
 }
 
