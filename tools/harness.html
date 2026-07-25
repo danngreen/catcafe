@@ -35,6 +35,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
       <button data-key="ArrowLeft" class="tb left">&#9664;</button>
       <button data-key="ArrowRight" class="tb right">&#9654;</button>
       <button data-key="ArrowDown" class="tb down">&#9660;</button>
+      <button data-toggle="run" class="tb run" aria-label="Toggle run">RUN</button>
     </div>
     <div class="abtns">
       <button data-key="Escape" class="tb menu">MENU</button>
@@ -179,6 +180,38 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
         window.__step = 'done';
         await wait(300);
+      } else if (SCRIPT === 'runmobile') {
+        // Three ways to run: Shift, the RUN toggle, and double-tap-and-hold.
+        const tap = (sel, type) => {
+          const el = document.querySelector(sel);
+          el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true }));
+        };
+        const measure = async (before, after) => {
+          const x0 = g.player.x, y0 = g.player.y;
+          before();
+          tap('.tb.right', 'pointerdown');
+          await wait(900);
+          tap('.tb.right', 'pointerup');
+          const d = Math.hypot(g.player.x - x0, g.player.y - y0);
+          after();
+          await wait(200);
+          return d;
+        };
+        const walk = await measure(() => {}, () => {});
+        const latched = await measure(() => tap('.tb.run', 'pointerdown'), () => tap('.tb.run', 'pointerdown'));
+        // Double-tap: a quick tap, then press and hold.
+        const dbl = await measure(() => {
+          tap('.tb.right', 'pointerdown');
+          tap('.tb.right', 'pointerup');
+        }, () => {});
+        window.__run = `walk=${walk.toFixed(0)} latch=${latched.toFixed(0)} dbl=${dbl.toFixed(0)}`;
+        if (latched < walk * 1.3) window.__errors.push('RUN toggle did not speed you up: ' + window.__run);
+        if (dbl < walk * 1.3) window.__errors.push('double-tap did not speed you up: ' + window.__run);
+        if (g.input.runLatch) window.__errors.push('RUN toggle did not turn back off');
+        // Leave it lit for the screenshot.
+        tap('.tb.run', 'pointerdown');
+        tap('.tb.right', 'pointerdown');
+        await wait(700);
       } else if (SCRIPT === 'pausemobile') {
         // Pause menu with the touch pads overlaid: the info card must clear them.
         await wait(400);
@@ -450,6 +483,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__build ? ` book=${window.__book} build=${window.__build} mode=${window.__buildMode} tabs=${window.__tabs} placed=${window.__placed} seats=${window.__seats} liveMap=${window.__liveMap} chairs=${window.__chairs}` : '')
         + (window.__stage ? ` stage=${window.__stage}` : '')
         + (window.__paused ? ` paused=${window.__paused} safe=${window.__safe}` : '')
+        + (window.__run ? ` ${window.__run}` : '')
         + (window.__ext ? ` ${window.__ext}` : '')
         + (window.__bookTreat ? ` book[${window.__bookTreat}] pet[${window.__petTreat}] choices=${window.__choices}` : '')
         + (window.__mapSel ? ` mapSel=${window.__mapSel}` : '')

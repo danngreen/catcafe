@@ -15,9 +15,18 @@ const TOUCHMAP = {
   ' ': 'use', x: 'cancel', Escape: 'menu',
 };
 
+const DIRS = new Set(['up', 'down', 'left', 'right']);
+const DOUBLE_TAP_MS = 320;
+
 export class Input {
   constructor() {
     this.held = new Set();
+    // Running without a Shift key: a latching RUN toggle in the middle of the
+    // d-pad, and double-tap-and-hold on any direction for a quick burst.
+    this.runLatch = false;
+    this.tapRun = false;
+    this.lastTapBtn = null;
+    this.lastTapAt = 0;
     this.pressed = new Set();
     this.released = new Set();
     this.repeatTimers = new Map();
@@ -43,7 +52,11 @@ export class Input {
     });
 
     // Losing focus mid-walk would otherwise leave the player sliding forever.
-    window.addEventListener('blur', () => { this.held.clear(); this.repeatTimers.clear(); });
+    window.addEventListener('blur', () => {
+      this.held.clear();
+      this.repeatTimers.clear();
+      this.tapRun = false;
+    });
 
     const touch = document.getElementById('touch');
     if (touch) {
@@ -54,20 +67,49 @@ export class Input {
         if (!b) continue;
         const down = (e) => {
           e.preventDefault();
+          if (DIRS.has(b)) {
+            // Second tap of the same arrow, quickly: hold it to run.
+            const now = performance.now();
+            if (this.lastTapBtn === b && now - this.lastTapAt < DOUBLE_TAP_MS) this.tapRun = true;
+            this.lastTapBtn = b;
+            this.lastTapAt = now;
+          }
           if (!this.held.has(b)) { this.pressed.add(b); this.repeatTimers.set(b, 0); }
           this.held.add(b);
           this.anyKeyPressed = true;
         };
-        const up = (e) => { e.preventDefault(); this.held.delete(b); this.repeatTimers.delete(b); };
+        const up = (e) => {
+          e.preventDefault();
+          this.held.delete(b);
+          this.repeatTimers.delete(b);
+          // The burst lasts as long as you keep walking.
+          if (DIRS.has(b) && ![...this.held].some((h) => DIRS.has(h))) this.tapRun = false;
+        };
         btn.addEventListener('pointerdown', down);
         btn.addEventListener('pointerup', up);
         btn.addEventListener('pointercancel', up);
         btn.addEventListener('pointerleave', up);
       }
+
+      for (const btn of touch.querySelectorAll('[data-toggle]')) {
+        if (btn.dataset.toggle !== 'run') continue;
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          this.runLatch = !this.runLatch;
+          btn.classList.toggle('on', this.runLatch);
+          // Also emit a press, so build mode's Shift-to-cycle has a touch
+          // equivalent — cycling furniture was keyboard-only otherwise.
+          this.pressed.add('run');
+          this.anyKeyPressed = true;
+        });
+      }
     }
   }
 
-  down(b) { return this.held.has(b); }
+  /** Run is held (Shift), latched (the toggle), or burst (double-tap). */
+  isRunning() { return this.held.has('run') || this.runLatch || this.tapRun; }
+
+  down(b) { return b === 'run' ? this.isRunning() : this.held.has(b); }
   hit(b) { return this.pressed.has(b); }
 
   /**

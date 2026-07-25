@@ -424,7 +424,7 @@ export class BuildScreen extends Screen {
           drawText(ctx, String(st.inventory[key] || 0), px + 12, VIEW_H - 37, { color: P.uiText, shadow: '#000000' });
         }
         const cur = stock[this.palette];
-        drawText(ctx, `${ITEMS[baseId(cur)].name}  [M]/[I] to cycle`, 8 + SAFE.left + Math.min(stock.length, 12) * 22 + 8, VIEW_H - 34,
+        drawText(ctx, `${ITEMS[baseId(cur)].name}  [Shift]/[M]/[I] or RUN to cycle`, 8 + SAFE.left + Math.min(stock.length, 12) * 22 + 8, VIEW_H - 34,
           { color: P.uiGold, shadow: P.uiShadow });
       }
       drawText(ctx, 'Space place   X pick up   Esc done', 10 + SAFE.left, VIEW_H - 14, { color: P.uiTextDim, shadow: P.uiShadow });

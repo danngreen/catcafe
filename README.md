@@ -19,7 +19,7 @@ It does need to be served over HTTP (modules don't load from `file://`).
 | Key | Does |
 | --- | --- |
 | Arrows / WASD | Walk |
-| Shift | Run |
+| Shift | Run (on touch: the RUN pad, or double-tap an arrow and hold) |
 | Space / Enter | Talk, enter doors, read signs, serve customers |
 | Esc | Menu (and closes screens) |
 | X / Backspace | Back / cancel |
@@ -35,6 +35,11 @@ On a touch device an on-screen d-pad appears alongside **ACT**, **BACK** and
 float over the edges of the view — the game measures how far they reach in and
 keeps dialogue, toasts and menu panels clear of them — and in portrait they
 take a band under it.
+
+**Running on a phone.** There's a **RUN** toggle in the middle of the d-pad —
+tap it and it stays on until you tap it off. Or double-tap an arrow and keep
+holding it for a burst, which ends when you stop walking. (RUN also stands in
+for Shift in build mode, where it cycles the furniture you're placing.)
 
 **Fullscreen on mobile.** The ⛶ button (and Menu -> Sound -> Fullscreen) calls
 the Fullscreen API, which works on Android and iPadOS. iPhone Safari has no
@@ -144,6 +149,7 @@ browser and reports console errors:
 
 ```bash
 node tools/check.js walk cafe shop furnshop build furnish exterior treats taxi sleep map night door title systems1 systems2 --clean
+node tools/check.js runmobile pausemobile dialogmobile --mobile 844x390 --clean   # touch layout
 node tools/check.js town --shotdir /tmp/shots      # also writes screenshots
 ```
 
