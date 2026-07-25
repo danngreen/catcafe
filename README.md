@@ -11,8 +11,26 @@ their way for.
 npm start          # serves on http://localhost:8080
 ```
 
-Any static file server works — the game is plain ES modules with no build step.
-It does need to be served over HTTP (modules don't load from `file://`).
+It prints every address it's reachable on. The game is plain ES modules with no
+build step, but it does need to be served over HTTP (modules don't load from
+`file://`).
+
+## Playing together on a LAN
+
+`npm start` also opens a shared session. Everyone on the same Wi-Fi points their
+browser at the host — `http://192.168.x.x:8080`, printed on startup — picks a
+name, a coat and an apron, and walks around the same valley. Up to eight; two or
+three is the sweet spot. It runs happily on a small box like an Orange Pi: the
+server only keeps state and relays messages, and each player's browser does all
+the drawing.
+
+The host owns the world seed, so every client generates a byte-identical valley
+from one number — no map is ever sent. Add `?solo` to the URL to play alone even
+when a session is running.
+
+*Phase 1 is what's built today: you share a world and can see each other walking
+about. Money, pantry, cats and quests are still per-player — those move to the
+server next.*
 
 ## Controls
 
@@ -130,6 +148,8 @@ src/
              stamping, A* roads with bridges, interiors, chunked renderer
   game/      clock, items, economy, cafe simulation, cats, quests, save/load
   ui/        panels, dialogue, HUD, shop and management screens, build mode
+  net/       the client half of the shared session
+server/      dependency-free WebSocket server and the shared room
 ```
 
 **Art** is painted procedurally into small pixel buffers and baked once into
@@ -154,6 +174,7 @@ browser and reports console errors:
 ```bash
 node tools/check.js walk cafe shop furnshop build furnish exterior treats taxi sleep map night door title systems1 systems2 --clean
 node tools/check.js runmobile tabmobile pausemobile dialogmobile --mobile 844x390 --clean   # touch
+node tools/check.js net solo --clean                                    # multiplayer
 node tools/check.js town --shotdir /tmp/shots      # also writes screenshots
 ```
 

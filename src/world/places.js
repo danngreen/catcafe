@@ -406,6 +406,13 @@ export const VILLAGERS = [
       "You should light your cafe properly. It shows from the hill."] },
 ];
 
+/** Names a player can pick when joining a shared valley. */
+export const PLAYER_NAMES = [
+  'Tuppence', 'Marlow', 'Wren', 'Fennel', 'Pippin', 'Bramble', 'Sorrel', 'Dill',
+  'Juniper', 'Mabel', 'Rook', 'Clementine', 'Barnaby', 'Ivy', 'Otto', 'Plum',
+  'Quill', 'Saffron', 'Tobias', 'Winnie', 'Hazel', 'Figgy', 'Nesbit', 'Olive',
+];
+
 /** Generic chatter mixed into conversations to keep repeat visits alive. */
 export const GOSSIP = [
   "Did you hear? The postmaster's learning the fiddle. Badly.",

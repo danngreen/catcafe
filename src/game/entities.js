@@ -5,6 +5,7 @@ import { TILE, T } from '../art/tiles.js';
 import { charSprite, catSprite, emoteSprite, orderBubble, CHAR_W, CHAR_H, CAT_W, CAT_H, villagerLook, CAT_BREEDS } from '../art/chars.js';
 import { makeRng, clamp } from '../engine/util.js';
 import { audio } from '../engine/audio.js';
+import { drawTextCentered } from '../engine/font.js';
 
 const rng = makeRng(0x51a7);
 
@@ -505,6 +506,67 @@ export class Customer extends Actor {
   draw(ctx, ox, oy) {
     const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, this.dir, this.frame);
     ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - CHAR_H - oy));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Other players
+// ---------------------------------------------------------------------------
+
+/**
+ * Somebody else, drawn from the positions the server relays. We ease toward
+ * the last reported position rather than snapping to it: updates arrive 15
+ * times a second and the screen redraws 60, so without this they'd stutter.
+ */
+export class RemotePlayer extends Actor {
+  constructor(info) {
+    super(info.x, info.y);
+    this.id = info.id;
+    this.name = info.n || info.name || 'Someone';
+    this.look = info.look || { species: 'cat', coat: 'grey', cloth: '#8a72d6' };
+    this.mapId = info.map || 'overworld';
+    this.goalX = info.x;
+    this.goalY = info.y;
+  }
+
+  setFrom(info) {
+    this.goalX = info.x;
+    this.goalY = info.y;
+    this.dir = info.dir || this.dir;
+    this.mapId = info.map || this.mapId;
+    if (info.n) this.name = info.n;
+    if (info.look) this.look = info.look;
+  }
+
+  update(dt) {
+    const dx = this.goalX - this.x, dy = this.goalY - this.y;
+    const d = Math.hypot(dx, dy);
+    this.moving = d > 0.7;
+    if (d > 96) {
+      // Too far to be walking — they warped, so cut rather than slide.
+      this.x = this.goalX; this.y = this.goalY;
+    } else {
+      const k = Math.min(1, dt * 14);
+      this.x += dx * k;
+      this.y += dy * k;
+    }
+    this.animate(dt);
+  }
+
+  draw(ctx, ox, oy) {
+    const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, this.dir, this.frame);
+    ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - CHAR_H - oy));
+  }
+
+  /** The name tag rides in the emote pass, above everything else. */
+  drawEmote(ctx, ox, oy, topY) {
+    const x = Math.round(this.x - ox);
+    const y = Math.round(topY - 11 - oy);
+    const w = this.name.length * 6 + 6;
+    ctx.fillStyle = 'rgba(20,17,32,0.66)';
+    ctx.fillRect(x - w / 2, y - 1, w, 10);
+    drawTextCentered(ctx, this.name, x, y, { color: '#dfe6f2', shadow: '#000000' });
+    super.drawEmote(ctx, ox, oy, topY - 12);
   }
 }
 

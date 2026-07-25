@@ -180,6 +180,81 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
         window.__step = 'done';
         await wait(300);
+      } else if (SCRIPT === 'netmobile' || SCRIPT === 'net') {
+        // Join a second player over a raw socket and check the real client
+        // picks them up, places them, and drops them when they leave.
+        const st = g.state;
+        window.__netConnected = g.net.connected;
+        if (!g.net.connected) {
+          window.__errors.push('client never connected to the session');
+        } else {
+          const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const ws = new WebSocket(`${proto}//${location.host}/ws`);
+          let ready = false;
+          ws.onmessage = (ev) => {
+            const m = JSON.parse(ev.data);
+            if (m.t === 'welcome' && !ready) {
+              ready = true;
+              ws.send(JSON.stringify({
+                t: 'join', name: 'Testbot',
+                look: { species: 'rabbit', coat: 'white', cloth: '#7fbe57' },
+                x: g.player.x + 40, y: g.player.y, map: st.mapId,
+              }));
+            }
+          };
+          await wait(1200);
+          window.__sawJoin = g.net.remotes.size;
+          // Walk the bot a little and confirm the local copy follows.
+          for (let i = 0; i < 6; i++) {
+            ws.send(JSON.stringify({
+              t: 'move', x: g.player.x + 40 + i * 8, y: g.player.y, dir: 'right', frame: i % 4, map: st.mapId,
+            }));
+            await wait(160);
+          }
+          await wait(500);
+          const r = [...g.remotes.values()][0];
+          window.__remote = r ? `${r.name}@${Math.round(r.x)},${Math.round(r.y)}` : 'none';
+          window.__drawn = r ? r.mapId === st.mapId : false;
+          if (!window.__sawJoin) window.__errors.push('the joining player never appeared');
+          if (!r) window.__errors.push('no RemotePlayer actor was created');
+          else if (Math.abs(r.x - (g.player.x + 40 + 5 * 8)) > 24) {
+            window.__errors.push('remote player did not follow its updates: ' + window.__remote);
+          }
+          ws.close();
+          await wait(900);
+          window.__afterLeave = g.net.remotes.size;
+          if (window.__afterLeave !== 0) window.__errors.push('player was not removed on disconnect');
+
+          // Leave two standing beside us for the screenshot.
+          const proto2 = location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const extras = [
+            { name: 'Marlow', look: { species: 'rabbit', coat: 'white', cloth: '#7fbe57' }, dx: 30 },
+            { name: 'Figgy', look: { species: 'fox', coat: 'fox', cloth: '#5b8fd6' }, dx: -34 },
+          ];
+          for (const e of extras) {
+            const w2 = new WebSocket(`${proto2}//${location.host}/ws`);
+            let up = false;
+            w2.onmessage = (ev) => {
+              const m = JSON.parse(ev.data);
+              if (m.t === 'welcome' && !up) {
+                up = true;
+                w2.send(JSON.stringify({
+                  t: 'join', name: e.name, look: e.look,
+                  x: g.player.x + e.dx, y: g.player.y - 6, map: st.mapId,
+                }));
+              }
+            };
+            await wait(400);
+          }
+          await wait(1200);
+          window.__standing = g.remotes.size;
+        }
+      } else if (SCRIPT === 'solo') {
+        // With ?solo the game must run exactly as it always did.
+        window.__netConnected = g.net.connected;
+        if (g.net.connected) window.__errors.push('?solo still connected to a session');
+        for (const code of ['ArrowDown', 'ArrowRight']) { key(code, true); await wait(400); key(code, false); }
+        if (g.mode !== 'play') window.__errors.push('solo game did not start');
       } else if (SCRIPT === 'shore') {
         // Find a beach with open sea beyond it, so the depth ramp is in frame.
         const m = g.overworld;
@@ -541,6 +616,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__run ? ` ${window.__run}` : '')
         + (window.__tabs2 ? ` modes=${window.__tabs2}` : '')
         + (window.__shore ? ` shore=${window.__shore}` : '')
+        + (window.__netConnected !== undefined ? ` net=${window.__netConnected} sawJoin=${window.__sawJoin} remote=${window.__remote} afterLeave=${window.__afterLeave} standing=${window.__standing}` : '')
         + (window.__ext ? ` ${window.__ext}` : '')
         + (window.__bookTreat ? ` book[${window.__bookTreat}] pet[${window.__petTreat}] choices=${window.__choices}` : '')
         + (window.__mapSel ? ` mapSel=${window.__mapSel}` : '')

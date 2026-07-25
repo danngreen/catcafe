@@ -1,21 +1,33 @@
-// Zero-dependency static file server for local development.
+// Static file server for the game, plus the multiplayer session on /ws.
+// Zero dependencies: run it on the laptop or a small box on the same LAN and
+// point every player's browser at it.
+
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
+import { networkInterfaces } from 'node:os';
+import { upgrade } from './server/ws.js';
+import { Room } from './server/room.js';
 
 const ROOT = new URL('.', import.meta.url).pathname;
 const PORT = Number(process.env.PORT || 8080);
+// One shared valley. Change it (or set WORLD_SEED) for a different countryside.
+const SEED = Number(process.env.WORLD_SEED || 20260724);
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.png': 'image/png',
+  '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
 };
 
-createServer(async (req, res) => {
+const room = new Room(SEED);
+
+const server = createServer(async (req, res) => {
   let path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   if (path === '/') path = '/index.html';
   const file = join(ROOT, normalize(path).replace(/^(\.\.[/\\])+/, ''));
@@ -30,4 +42,28 @@ createServer(async (req, res) => {
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('404');
   }
-}).listen(PORT, () => console.log(`Cat Cafe running at http://localhost:${PORT}`));
+});
+
+server.on('upgrade', (req, socket, head) => {
+  const path = new URL(req.url, 'http://x').pathname;
+  if (path !== '/ws') { socket.destroy(); return; }
+  const ws = upgrade(req, socket, head);
+  if (ws) room.attach(ws);
+});
+
+/** Every address a player on the LAN could type in. */
+function lanAddresses() {
+  const out = [];
+  for (const list of Object.values(networkInterfaces())) {
+    for (const ni of list || []) {
+      if (ni.family === 'IPv4' && !ni.internal) out.push(ni.address);
+    }
+  }
+  return out;
+}
+
+server.listen(PORT, () => {
+  console.log(`Cat Cafe — http://localhost:${PORT}`);
+  for (const addr of lanAddresses()) console.log(`  on this network: http://${addr}:${PORT}`);
+  console.log(`  world seed ${SEED}`);
+});

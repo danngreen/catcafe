@@ -18,10 +18,10 @@ import { buildingSprite } from './art/objects.js';
 import { generateWorld, WORLD_W, WORLD_H } from './world/worldgen.js';
 import { Renderer, Camera } from './world/render.js';
 import { buildShopInterior, buildSpecialInterior } from './world/interiors.js';
-import { SHOPS, VILLAGERS, TOWNS, GOSSIP } from './world/places.js';
+import { SHOPS, VILLAGERS, TOWNS, GOSSIP, PLAYER_NAMES } from './world/places.js';
 
 import { GameState, seedStartingInventory } from './game/state.js';
-import { Player, Villager, canStand } from './game/entities.js';
+import { Player, Villager, RemotePlayer, canStand } from './game/entities.js';
 import { ITEMS, STOCK, FLEA_POOL, baseId } from './game/items.js';
 import { shopOpen, hoursText } from './game/time.js';
 import { QUESTS, QUESTS_BY_GIVER, objectiveMet } from './game/quests.js';
@@ -34,6 +34,7 @@ import {
 } from './ui/menus.js';
 import { BuildScreen } from './ui/build.js';
 import { TaxiFlight, StairWalk } from './ui/cutscene.js';
+import { net } from './net/client.js';
 
 const WORLD_SEED = 20260724;
 
@@ -72,17 +73,58 @@ class Game {
     });
 
     this.safe = SAFE;   // measured control insets, handy when debugging layout
-    this.boot();
+    this.net = net;
+    this.remotes = new Map();
+    // Boot is async now (it waits for the session's seed), so anything that
+    // wants a built world has something to await.
+    this.ready = new Promise((resolve) => { this.markReady = resolve; });
+    this.start();
+  }
+
+  /**
+   * Look for a session on the host that served the page before generating the
+   * world, because the server owns the seed. No server, or no answer inside a
+   * second and a half, and we simply play alone.
+   */
+  async start() {
+    let seed = WORLD_SEED;
+    try {
+      const ok = await net.connect(1500);
+      if (ok && Number.isFinite(net.seed)) seed = net.seed;
+    } catch { /* solo */ }
+    this.wireNet();
+    this.boot(seed);
+  }
+
+  wireNet() {
+    net.on('joined', (p) => this.hud.toast(`${p.n} joined the valley.`, 'good'));
+    net.on('left', (p) => this.hud.toast(`${p.n} left.`, 'info'));
+    net.on('disconnected', () => this.hud.toast('Lost the connection to the cafe.', 'bad'));
+  }
+
+  /** Keep our RemotePlayer actors in step with the roster the server sends. */
+  syncRemotes(dt) {
+    if (!net.connected) return;
+    for (const info of net.remotes.values()) {
+      let r = this.remotes.get(info.id);
+      if (!r) { r = new RemotePlayer(info); this.remotes.set(info.id, r); }
+      else r.setFrom(info);
+    }
+    for (const id of [...this.remotes.keys()]) {
+      if (!net.remotes.has(id)) this.remotes.delete(id);
+    }
+    for (const r of this.remotes.values()) r.update(dt);
   }
 
   // ------------------------------------------------------------------ boot
 
-  boot() {
+  boot(seed = WORLD_SEED) {
+    this.worldSeed = seed;
     this.tileset = new Tileset();
     this.renderer = new Renderer(this.tileset);
     this.cam = new Camera();
 
-    const world = generateWorld(WORLD_SEED);
+    const world = generateWorld(seed);
     this.overworld = world.map;
     this.towns = world.towns;
     this.doors = world.doors;
@@ -112,6 +154,7 @@ class Game {
 
     this.titleScreen = new TitleScreen(this);
     this.screens.push(this.titleScreen);
+    this.markReady(this);
 
     this.last = performance.now();
     requestAnimationFrame((ts) => this.frame(ts));
@@ -244,6 +287,7 @@ class Game {
     this.player.look = look;
     this.enterOverworld();
     this.mode = 'play';
+    this.announce();
     st.visit('cafe', 'Your Cat Cafe', this.homeDoor.x, this.homeDoor.y, 'brambleford');
     st.visit('brambleford', 'Brambleford', this.towns.brambleford.hub.x, this.towns.brambleford.hub.y);
     this.hud.showLocation('Brambleford');
@@ -278,7 +322,20 @@ class Game {
     }
     this.mode = 'play';
     this.cam.follow(this.currentMap, this.player.x, this.player.y, true);
+    this.announce();
     this.hud.toast('Welcome back.', 'good');
+  }
+
+  /** Tell the session who we are and where we're standing. */
+  announce() {
+    const st = this.state;
+    if (!net.connected || net.joined) return;
+    if (!st.playerName) st.playerName = PLAYER_NAMES[Math.floor(Math.random() * PLAYER_NAMES.length)];
+    net.join(st.playerName, st.playerLook, this.player.x, this.player.y, st.mapId);
+    const others = net.remotes.size;
+    this.hud.toast(others
+      ? `Joined the valley — ${others} other${others > 1 ? 's' : ''} here.`
+      : 'Joined the valley. Nobody else here yet.', 'good', 6);
   }
 
   enterOverworld() {
@@ -370,6 +427,8 @@ class Game {
     }
 
     this.updateActors(dt);
+    this.syncRemotes(dt);
+    net.update(dt, this.player, st.mapId);
     st.cafeSim.update(dt, this.ambienceCtx || (this.ambienceCtx = {}));
     this.updateAudio(dt);
     this.hud.update(dt, st);
@@ -1064,6 +1123,9 @@ class Game {
       for (const c of st.catActors) actors.push(c);
       for (const c of st.cafeSim.customers) actors.push(c);
     }
+    for (const r of this.remotes.values()) {
+      if (r.mapId === st.mapId) actors.push(r);
+    }
 
     this.renderer.draw(ctx, map, this.cam, actors, { night: light.night, tint: light.tint, lights });
     if (this.cutscene) this.cutscene.draw(ctx, this.cam.ox, this.cam.oy);
@@ -1189,6 +1251,10 @@ class TitleScreen extends Screen {
     this.index = 0;
     this.options = GameState.hasSave() ? ['Continue', 'New game'] : ['New game'];
     this.look = { species: 'cat', coat: 'ginger', cloth: CLOTHES[5] };
+    // Only shown when there's a session: solo play needs no name.
+    this.multiplayer = !!game.net.connected;
+    this.name = game.state.playerName
+      || PLAYER_NAMES[Math.floor(Math.random() * PLAYER_NAMES.length)];
     this.style = {
       wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], awning: AWNING_CHOICES[0],
       floor: T.FLOOR_WOOD, name: CAFE_NAMES[0],
@@ -1210,22 +1276,27 @@ class TitleScreen extends Screen {
     }
 
     // Character & cafe creation.
-    const rows = 5;
+    const rows = this.multiplayer ? 6 : 5;
     if (input.repeat('up', dt)) { this.row = (this.row - 1 + rows) % rows; audio.sfx('ui_move'); }
     if (input.repeat('down', dt)) { this.row = (this.row + 1) % rows; audio.sfx('ui_move'); }
     const dir = input.repeat('right', dt) ? 1 : input.repeat('left', dt) ? -1 : 0;
     if (dir) {
       audio.sfx('ui_move');
       const step = (arr, cur) => arr[(arr.indexOf(cur) + dir + arr.length) % arr.length];
-      if (this.row === 0) this.look.coat = step(COAT_LIST, this.look.coat);
-      else if (this.row === 1) this.look.cloth = step(CLOTHES, this.look.cloth);
-      else if (this.row === 2) this.style.roof = step(ROOF_CHOICES, this.style.roof);
-      else if (this.row === 3) this.style.awning = step(AWNING_CHOICES, this.style.awning);
-      else this.style.name = step(CAFE_NAMES, this.style.name);
+      if (this.multiplayer && this.row === 0) this.name = step(PLAYER_NAMES, this.name);
+      else {
+        const r = this.row - (this.multiplayer ? 1 : 0);
+        if (r === 0) this.look.coat = step(COAT_LIST, this.look.coat);
+        else if (r === 1) this.look.cloth = step(CLOTHES, this.look.cloth);
+        else if (r === 2) this.style.roof = step(ROOF_CHOICES, this.style.roof);
+        else if (r === 3) this.style.awning = step(AWNING_CHOICES, this.style.awning);
+        else this.style.name = step(CAFE_NAMES, this.style.name);
+      }
     }
     if (input.hit('use')) {
       audio.sfx('levelup', { gain: 0.6 });
       this.done = true;
+      this.game.state.playerName = this.name;
       this.game.startNewGame({ ...this.look }, { ...this.style });
     }
     if (input.hit('cancel')) { this.stage = 'title'; audio.sfx('ui_back'); }
@@ -1272,15 +1343,18 @@ class TitleScreen extends Screen {
         if (i === this.index) cursor(ctx, x + 10, ry, this.t);
         drawTextCentered(ctx, o, x + w / 2 + 6, ry, { color: i === this.index ? P.uiGold : P.uiText, shadow: P.uiShadow });
       });
-      drawTextCentered(ctx, 'Arrows / WASD to move   Space to act   Esc for the menu',
+      const others = this.game.net.remotes.size;
+      drawTextCentered(ctx, this.game.net.connected
+        ? (others ? `${others} other${others > 1 ? 's' : ''} in the valley` : 'Shared valley — nobody else here yet')
+        : 'Arrows / WASD to move   Space to act   Esc for the menu',
         VIEW_W / 2, VIEW_H - 18, { color: '#2f3d22' });
       return;
     }
 
     // --- creation ---
     dim(ctx, 0.28);
-    const w = 340, h = 196;
-    const x = Math.round((VIEW_W - w) / 2), y = 26;
+    const w = 340, h = this.multiplayer ? 218 : 196;
+    const x = Math.round((VIEW_W - w) / 2), y = this.multiplayer ? 18 : 26;
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, 'Before you open');
 
@@ -1309,6 +1383,21 @@ class TitleScreen extends Screen {
       Math.round(bx + sw / 2 - cw / 2 + 9 * Z), Math.round(ground + 9 * Z - ch), cw, ch);
 
     const colX = x + 14 + sw + 18;
+    // Your name comes first when joining a shared valley.
+    const nameRow = this.multiplayer ? 1 : 0;
+    if (this.multiplayer) {
+      const ry = y + 32;
+      const sel = this.row === 0;
+      if (sel) {
+        ctx.fillStyle = 'rgba(255,207,107,0.14)';
+        ctx.fillRect(colX - 12, ry - 5, (x + w - 10) - (colX - 12), 22);
+        cursor(ctx, colX - 10, ry + 1, this.t);
+      }
+      drawText(ctx, 'You are', colX + 4, ry + 1, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
+      drawTextRight(ctx, `< ${this.name} >`, x + w - 16, ry + 1,
+        { color: sel ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
+    }
+
     // Four colour swatches in the right-hand column...
     const swatchRows = [
       ['Your coat', COATS[this.look.coat]?.fur],
@@ -1317,8 +1406,8 @@ class TitleScreen extends Screen {
       ['Cafe awning', this.style.awning],
     ];
     swatchRows.forEach(([label, swatch], i) => {
-      const ry = y + 32 + i * 26;
-      const sel = i === this.row;
+      const ry = y + 32 + (i + nameRow) * 26;
+      const sel = i + nameRow === this.row;
       if (sel) {
         ctx.fillStyle = 'rgba(255,207,107,0.14)';
         ctx.fillRect(colX - 12, ry - 5, (x + w - 10) - (colX - 12), 22);
@@ -1338,7 +1427,7 @@ class TitleScreen extends Screen {
     // ...and the name on its own line under the preview, where it has room.
     {
       const ry = y + h - 46;
-      const sel = this.row === 4;
+      const sel = this.row === 4 + nameRow;
       if (sel) {
         ctx.fillStyle = 'rgba(255,207,107,0.14)';
         ctx.fillRect(x + 10, ry - 5, w - 20, 22);
@@ -1361,6 +1450,7 @@ window.game = new Game();
 // headless smoke test in tools/ and handy when iterating on the world.
 if (location.search.includes('autostart')) {
   const g = window.game;
+  await g.ready;
   g.screens.length = 0;
   g.startNewGame({ species: 'cat', coat: 'ginger', cloth: CLOTHES[5] },
     { wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], awning: AWNING_CHOICES[0],

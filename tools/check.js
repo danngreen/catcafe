@@ -128,6 +128,8 @@ async function main() {
     const params = [];
     if (!sc.startsWith('title')) params.push('autostart');
     if (hideOut) params.push('hideout');
+    // Everything but the net scenarios plays alone, so runs can't see each other.
+    if (!sc.startsWith('net')) params.push('solo');
     const url = urlIdx >= 0 ? args[urlIdx + 1]
       : `${BASE}/tools/harness.html${params.length ? '?' + params.join('&') : ''}#${sc}`;
     // A hard reload guarantees a clean world for each scenario.

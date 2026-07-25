@@ -44,6 +44,7 @@ export class GameState {
     this.worldW = 352;
     this.worldH = 320;
     this.playerLook = { species: 'cat', coat: 'ginger', cloth: '#5b8fd6' };
+    this.playerName = null;   // chosen when joining a shared valley
     this.mail = [];             // letters waiting to be read
     this.pendingLetters = [];   // letters in flight, delivered on a later day
     this.cafeSim = new Cafe(this);
@@ -199,6 +200,7 @@ export class GameState {
       totalCustomers: this.totalCustomers,
       daysPlayed: this.daysPlayed,
       playerLook: this.playerLook,
+      playerName: this.playerName,
       mail: this.mail,
       pendingLetters: this.pendingLetters,
       player: this.hooks.playerPos?.() || null,
@@ -245,6 +247,7 @@ export class GameState {
     this.totalCustomers = data.totalCustomers || 0;
     this.daysPlayed = data.daysPlayed || 0;
     this.playerLook = data.playerLook || this.playerLook;
+    this.playerName = data.playerName || this.playerName;
     this.mail = data.mail || [];
     this.pendingLetters = data.pendingLetters || [];
     this.cats = (data.cats || []).map((c) => new Cat(c.breed, 0, 0, c));
