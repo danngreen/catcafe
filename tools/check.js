@@ -126,7 +126,7 @@ async function main() {
     problems.length = 0;
     // Title-screen scenarios need the real title, so they skip the autostart.
     const params = [];
-    if (!sc.startsWith('title')) params.push('autostart');
+    if (!sc.includes('title')) params.push('autostart');
     if (hideOut) params.push('hideout');
     // Everything but the net scenarios plays alone, so runs can't see each other.
     if (!sc.startsWith('net')) params.push('solo');

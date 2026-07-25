@@ -45,6 +45,7 @@ export class Room {
         this.broadcast({ t: 'left', id: player.id });
         console.log(`[room] ${player.name || player.id} left (${this.count} playing)`);
       }
+      this.announcePresence();
     });
 
     // Everything the client needs before it can build the world.
@@ -53,7 +54,19 @@ export class Room {
       id: player.id,
       seed: this.seed,
       players: this.roster(),
+      here: this.players.size,
     });
+    this.announcePresence();
+  }
+
+  /**
+   * How many browsers are attached, whether or not they've started playing.
+   * The title screen needs this: someone sitting on their title screen is
+   * connected but not yet in the roster, and reporting "nobody here" then is
+   * indistinguishable from being on the wrong server entirely.
+   */
+  announcePresence() {
+    this.broadcast({ t: 'presence', here: this.players.size, playing: this.count });
   }
 
   handle(player, msg) {
@@ -68,6 +81,7 @@ export class Room {
         this.broadcast({ t: 'joined', p: Room.describe(player) }, player.id);
         // Late joiners need the roster as it stands now, not as it was at connect.
         player.ws.sendJSON({ t: 'roster', players: this.roster(player.id) });
+        this.announcePresence();
         console.log(`[room] ${player.name} joined (${this.count} playing)`);
         break;
       }

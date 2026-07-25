@@ -124,8 +124,24 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         key('Space', true); await wait(150); key('Space', false);
         await wait(900);
       } else if (SCRIPT === 'menus') {
-        g.push(new (Object.getPrototypeOf(g.screens[0] || {}).constructor || Object)());
-        await wait(200);
+        // Every menu reachable from a key: it must open, scroll, and close
+        // again, leaving the player back in play mode each time.
+        const seen = [];
+        for (const [code, want] of [['Escape', 'PauseScreen'], ['KeyC', 'CafeScreen'],
+                                    ['KeyM', 'MapScreen'], ['KeyI', 'BagScreen']]) {
+          key(code, true); await wait(150); key(code, false);
+          await wait(400);
+          const s = g.screens[g.screens.length - 1];
+          const got = s ? s.constructor.name : 'none';
+          seen.push(got);
+          if (got !== want) { window.__errors.push(`${code} opened ${got}, wanted ${want}`); continue; }
+          // Scrolling is where a screen with an empty list tends to throw.
+          for (let i = 0; i < 3; i++) { key('ArrowDown', true); await wait(90); key('ArrowDown', false); }
+          key('KeyX', true); await wait(150); key('KeyX', false);
+          await wait(400);
+          if (g.screens.length) window.__errors.push(`${want} would not close with X`);
+        }
+        window.__menus = seen.join('>');
       } else if (SCRIPT === 'night') {
         g.state.clock.t = 22 * (1200 / 24);
         await wait(1200);
@@ -188,6 +204,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!g.net.connected) {
           window.__errors.push('client never connected to the session');
         } else {
+          // The session is shared, so another test run may already have players
+          // in it. Everything below counts the change we cause, not the total.
+          const before = g.net.remotes.size;
           const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
           const ws = new WebSocket(`${proto}//${location.host}/ws`);
           let ready = false;
@@ -203,7 +222,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             }
           };
           await wait(1200);
-          window.__sawJoin = g.net.remotes.size;
+          window.__sawJoin = g.net.remotes.size - before;
           // Walk the bot a little and confirm the local copy follows.
           for (let i = 0; i < 6; i++) {
             ws.send(JSON.stringify({
@@ -212,17 +231,17 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             await wait(160);
           }
           await wait(500);
-          const r = [...g.remotes.values()][0];
+          const r = [...g.remotes.values()].find((a) => a.name === 'Testbot');
           window.__remote = r ? `${r.name}@${Math.round(r.x)},${Math.round(r.y)}` : 'none';
           window.__drawn = r ? r.mapId === st.mapId : false;
-          if (!window.__sawJoin) window.__errors.push('the joining player never appeared');
+          if (window.__sawJoin < 1) window.__errors.push('the joining player never appeared');
           if (!r) window.__errors.push('no RemotePlayer actor was created');
           else if (Math.abs(r.x - (g.player.x + 40 + 5 * 8)) > 24) {
             window.__errors.push('remote player did not follow its updates: ' + window.__remote);
           }
           ws.close();
           await wait(900);
-          window.__afterLeave = g.net.remotes.size;
+          window.__afterLeave = g.net.remotes.size - before;
           if (window.__afterLeave !== 0) window.__errors.push('player was not removed on disconnect');
 
           // Leave two standing beside us for the screenshot.
@@ -247,8 +266,31 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             await wait(400);
           }
           await wait(1200);
-          window.__standing = g.remotes.size;
+          window.__standing = g.remotes.size - before;
+          if (window.__standing < extras.length) {
+            window.__errors.push('extra players did not appear: ' + window.__standing);
+          }
         }
+      } else if (SCRIPT === 'nettitle') {
+        // Park on the title screen so the session banner can be inspected.
+        await wait(4500);
+        window.__pair = `connected=${g.net.connected} here=${g.net.here} mode=${g.mode}`;
+        if (g.net.here < 2) window.__errors.push('title does not see the other client: ' + window.__pair);
+      } else if (SCRIPT === 'netpresence') {
+        // Sitting on the title screen still counts as being here.
+        await wait(4000);
+        window.__pair = `connected=${g.net.connected} here=${g.net.here} joined=${g.net.joined}`;
+        if (!g.net.connected) window.__errors.push('not connected');
+        if (g.net.here < 2) window.__errors.push('other connected client not counted: ' + window.__pair);
+      } else if (SCRIPT === 'netpair') {
+        // Two real clients, launched together, must see one another.
+        await wait(4000);
+        window.__pair = `connected=${g.net.connected} joined=${g.net.joined}`
+          + ` roster=${g.net.remotes.size} actors=${g.remotes.size}`
+          + ` names=[${[...g.net.remotes.values()].map((r) => r.n).join('|')}]`;
+        if (!g.net.connected) window.__errors.push('not connected');
+        if (!g.net.joined) window.__errors.push('never sent join');
+        if (g.net.remotes.size === 0) window.__errors.push('cannot see the other client: ' + window.__pair);
       } else if (SCRIPT === 'solo') {
         // With ?solo the game must run exactly as it always did.
         window.__netConnected = g.net.connected;
@@ -616,6 +658,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__run ? ` ${window.__run}` : '')
         + (window.__tabs2 ? ` modes=${window.__tabs2}` : '')
         + (window.__shore ? ` shore=${window.__shore}` : '')
+        + (window.__pair ? ` ${window.__pair}` : '')
+        + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__netConnected !== undefined ? ` net=${window.__netConnected} sawJoin=${window.__sawJoin} remote=${window.__remote} afterLeave=${window.__afterLeave} standing=${window.__standing}` : '')
         + (window.__ext ? ` ${window.__ext}` : '')
         + (window.__bookTreat ? ` book[${window.__bookTreat}] pet[${window.__petTreat}] choices=${window.__choices}` : '')

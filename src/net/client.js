@@ -16,6 +16,8 @@ export class NetClient {
     this.joined = false;
     this.remotes = new Map();     // id -> { id, name, look, x, y, dir, frame, map }
     this.handlers = {};
+    this.here = 0;        // browsers attached, including any still on the title
+    this.host = null;
     this.sendTimer = 0;
     this.lastSent = { x: -1, y: -1, dir: '', map: '' };
   }
@@ -69,9 +71,16 @@ export class NetClient {
       case 'welcome':
         this.id = msg.id;
         this.seed = msg.seed;
+        this.here = msg.here || 1;
+        this.host = location.host;
         this.connected = true;
         for (const p of msg.players || []) this.remotes.set(p.id, { ...p });
         this.emit('welcome', msg);
+        break;
+      case 'presence':
+        this.here = msg.here || 0;
+        this.playing = msg.playing || 0;
+        this.emit('presence', msg);
         break;
       case 'roster':
         this.remotes.clear();

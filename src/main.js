@@ -332,10 +332,10 @@ class Game {
     if (!net.connected || net.joined) return;
     if (!st.playerName) st.playerName = PLAYER_NAMES[Math.floor(Math.random() * PLAYER_NAMES.length)];
     net.join(st.playerName, st.playerLook, this.player.x, this.player.y, st.mapId);
-    const others = net.remotes.size;
+    const others = Math.max(net.remotes.size, net.here - 1);
     this.hud.toast(others
-      ? `Joined the valley — ${others} other${others > 1 ? 's' : ''} here.`
-      : 'Joined the valley. Nobody else here yet.', 'good', 6);
+      ? `Joined the valley — ${others} other${others > 1 ? 's' : ''} connected.`
+      : `Joined the valley on ${net.host}. Nobody else connected yet.`, 'good', 6);
   }
 
   enterOverworld() {
@@ -1343,11 +1343,20 @@ class TitleScreen extends Screen {
         if (i === this.index) cursor(ctx, x + 10, ry, this.t);
         drawTextCentered(ctx, o, x + w / 2 + 6, ry, { color: i === this.index ? P.uiGold : P.uiText, shadow: P.uiShadow });
       });
-      const others = this.game.net.remotes.size;
-      drawTextCentered(ctx, this.game.net.connected
-        ? (others ? `${others} other${others > 1 ? 's' : ''} in the valley` : 'Shared valley — nobody else here yet')
-        : 'Arrows / WASD to move   Space to act   Esc for the menu',
-        VIEW_W / 2, VIEW_H - 18, { color: '#2f3d22' });
+      // Naming the host matters: the commonest way to end up alone is for each
+      // player to run their own server and browse to their own localhost.
+      const n = this.game.net;
+      if (n.connected) {
+        const here = Math.max(1, n.here);
+        drawTextCentered(ctx, here > 1 ? `${here} here — shared valley on ${n.host}`
+          : `Shared valley on ${n.host} — you're the only one connected`,
+        VIEW_W / 2, VIEW_H - 26, { color: here > 1 ? '#1f4d2a' : '#2f3d22' });
+        drawTextCentered(ctx, 'Everyone must open this same address',
+          VIEW_W / 2, VIEW_H - 14, { color: '#2f3d22' });
+      } else {
+        drawTextCentered(ctx, 'Arrows / WASD to move   Space to act   Esc for the menu',
+          VIEW_W / 2, VIEW_H - 18, { color: '#2f3d22' });
+      }
       return;
     }
 
