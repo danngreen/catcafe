@@ -130,6 +130,9 @@ async function main() {
     if (hideOut) params.push('hideout');
     // Everything but the net scenarios plays alone, so runs can't see each other.
     if (!sc.startsWith('net')) params.push('solo');
+    // A scenario named ...poll... runs over the HTTP transport instead of a
+    // socket, which is what a machine behind a content filter ends up using.
+    if (sc.includes('poll')) params.push('poll');
     const url = urlIdx >= 0 ? args[urlIdx + 1]
       : `${BASE}/tools/harness.html${params.length ? '?' + params.join('&') : ''}#${sc}`;
     // A hard reload guarantees a clean world for each scenario.

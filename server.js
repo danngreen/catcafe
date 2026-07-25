@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, isAbsolute, join, normalize } from 'node:path';
 import { networkInterfaces } from 'node:os';
 import { upgrade } from './server/ws.js';
+import { PollHub } from './server/poll.js';
 import { Room } from './server/room.js';
 
 const ROOT = new URL('.', import.meta.url).pathname;
@@ -31,6 +32,7 @@ const TYPES = {
 };
 
 const room = new Room(SEED, SAVE);
+const polls = new PollHub();
 
 // Closing the laptop lid should not cost anyone their afternoon.
 for (const sig of ['SIGINT', 'SIGTERM']) {
@@ -46,6 +48,23 @@ const server = createServer(async (req, res) => {
     res.end(JSON.stringify(room.status(), null, 2));
     return;
   }
+  // The session over plain HTTP, for machines that can't hold a socket open.
+  if (path === '/poll' && req.method === 'POST') {
+    let raw = '';
+    req.on('data', (c) => {
+      raw += c;
+      if (raw.length > 1e6) req.destroy();       // nothing legitimate is this big
+    });
+    req.on('end', () => {
+      let body;
+      try { body = JSON.parse(raw || '{}'); } catch { body = {}; }
+      const reply = polls.handle(body, (conn) => room.attach(conn));
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify(reply));
+    });
+    return;
+  }
+
   if (path === '/') path = '/index.html';
   const file = join(ROOT, normalize(path).replace(/^(\.\.[/\\])+/, ''));
   try {

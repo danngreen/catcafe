@@ -6,6 +6,9 @@
 // truth. The game runs perfectly well with no server at all — `connect` just
 // resolves false, `shared` stays false, and every op is a no-op.
 
+import { WsLink, PollLink } from './link.js';
+
+const TRANSPORT_KEY = 'catcafe.transport';
 const SEND_HZ = 15;
 const CUST_HZ = 10;
 // The server hangs up on a socket that has gone quiet, and a player choosing an
@@ -15,7 +18,10 @@ const RETRY_SECONDS = 3;
 
 export class NetClient {
   constructor() {
-    this.ws = null;
+    this.link = null;         // WsLink or PollLink
+    this.transport = null;    // 'ws' | 'poll'
+    this.forcePoll = false;
+    this.wsDrops = 0;
     this.connected = false;
     this.id = null;
     this.seed = null;
@@ -41,13 +47,14 @@ export class NetClient {
     // Counters for the `?netdebug` readout. Cheap, and the difference between
     // "it feels laggy" and "we dropped nine times in a minute".
     this.debug = typeof location !== 'undefined' && location.search.includes('netdebug');
-    this.rttMs = 0;
+    this.rttMs = -1;          // -1 = no answer yet; 0 is a real LAN round trip
     this.lastMsgAt = 0;
     this.lastPosAt = 0;
     this.lastCustAt = 0;
     this.dropCount = 0;
     this.rejoinCount = 0;
     this.msgCount = 0;
+    this.pongCount = 0;
   }
 
   startKeepalive() {
@@ -100,56 +107,131 @@ export class NetClient {
   on(evt, fn) { (this.handlers[evt] ||= []).push(fn); return this; }
   emit(evt, ...a) { for (const fn of this.handlers[evt] || []) fn(...a); }
 
-  /** URL of the session on whatever host served the page. */
-  static url() {
-    // `?solo` plays alone even when a session is available on the host.
-    if (location.search.includes('solo')) return null;
-    if (!location.host) return null;                 // opened from file://
+  /** Is there a session to reach at all? `?solo` says don't look. */
+  static available() {
+    if (new URLSearchParams(location.search).has('solo')) return false;
+    return !!location.host;                          // false when opened from file://
+  }
+
+  static wsUrl() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${proto}//${location.host}/ws`;
   }
 
+  static pollUrl() { return `${location.protocol}//${location.host}/poll`; }
+
+  /**
+   * Which transport to reach for first. Sockets unless we've learnt otherwise
+   * on this machine — a content filter that kills them doesn't get better on
+   * the next attempt, and rediscovering that every time costs a minute of
+   * dropping in and out. `?ws` forgets the lesson, `?poll` skips learning it.
+   */
+  preferPoll() {
+    // Exact parameters, not substrings: "ws" is two letters and would otherwise
+    // turn up inside some unrelated flag one day.
+    const q = new URLSearchParams(location.search);
+    if (q.has('poll')) return true;
+    if (q.has('ws')) { this.forgetTransport(); return false; }
+    if (this.forcePoll) return true;
+    try { return localStorage.getItem(TRANSPORT_KEY) === 'poll'; } catch { return false; }
+  }
+
+  rememberPoll() {
+    this.forcePoll = true;
+    try { localStorage.setItem(TRANSPORT_KEY, 'poll'); } catch { /* private mode */ }
+  }
+
+  forgetTransport() {
+    this.forcePoll = false;
+    try { localStorage.removeItem(TRANSPORT_KEY); } catch { /* private mode */ }
+  }
+
   /**
    * Try to join. Resolves true once the server has sent us a seed, false if
-   * there's no server or it doesn't answer in time — solo play either way.
+   * there's no server or neither transport gets an answer — solo play either way.
    */
-  connect(timeoutMs = 1500) {
-    const url = NetClient.url();
-    if (!url || typeof WebSocket === 'undefined') return Promise.resolve(false);
+  async connect(timeoutMs = 2000) {
+    if (!NetClient.available()) return false;
+    const order = this.preferPoll() ? ['poll'] : ['ws', 'poll'];
+    for (const kind of order) {
+      if (kind === 'ws' && typeof WebSocket === 'undefined') continue;
+      if (kind === 'poll' && typeof fetch === 'undefined') continue;
+      if (await this.tryLink(kind, timeoutMs)) return true;
+    }
+    return false;
+  }
+
+  /** Open one transport and wait for a welcome on it. */
+  tryLink(kind, timeoutMs) {
     return new Promise((resolve) => {
       let settled = false;
-      const done = (ok) => { if (!settled) { settled = true; resolve(ok); } };
-      const timer = setTimeout(() => { done(false); }, timeoutMs);
+      const done = (ok) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(ok);
+      };
+      const timer = setTimeout(() => { this.dropLink(); done(false); }, timeoutMs);
 
-      let ws;
-      try { ws = new WebSocket(url); } catch { clearTimeout(timer); return done(false); }
       // Abandon whatever we were using. Without this an attempt that timed out
       // and then connected anyway would keep feeding us messages — including a
       // `welcome` carrying a different player id, which is enough to make us
       // ignore the real other player and think we run the cafe.
-      const old = this.ws;
-      if (old && old !== ws) { try { old.close(); } catch { /* already gone */ } }
-      this.ws = ws;
+      this.dropLink();
 
-      ws.onmessage = (ev) => {
-        if (this.ws !== ws) return;            // a socket we have moved on from
-        let msg;
-        try { msg = JSON.parse(ev.data); } catch { return; }
-        this.receive(msg);
-        if (msg.t === 'welcome') { clearTimeout(timer); done(true); }
+      const handlers = {
+        message: (text) => {
+          if (this.link !== link) return;         // one we have moved on from
+          let msg;
+          try { msg = JSON.parse(text); } catch { return; }
+          this.receive(msg);
+          if (msg.t === 'welcome') done(true);
+        },
+        close: () => {
+          if (this.link !== link) return;
+          this.link = null;
+          this.noteClose();
+          done(false);
+        },
       };
-      ws.onerror = () => { clearTimeout(timer); done(false); };
-      ws.onclose = () => {
-        if (this.ws !== ws) return;            // an older socket finally closing
-        const wasConnected = this.connected;
-        this.connected = false;
-        this.joined = false;
-        this.owner = null;
-        this.remotes.clear();
-        this.retryIn = 1;
-        if (wasConnected) { this.dropCount++; this.emit('disconnected'); }
-      };
+
+      let link;
+      try {
+        link = kind === 'ws' ? new WsLink(NetClient.wsUrl(), handlers)
+          : new PollLink(NetClient.pollUrl(), handlers);
+      } catch {
+        return done(false);
+      }
+      this.link = link;
+      this.transport = kind;
     });
+  }
+
+  /** Quietly let go of the current link without treating it as a drop. */
+  dropLink() {
+    if (!this.link) return;
+    const link = this.link;
+    this.link = null;
+    link.close();
+  }
+
+  /** The link went away on its own. */
+  noteClose() {
+    const wasConnected = this.connected;
+    this.connected = false;
+    this.joined = false;
+    this.owner = null;
+    this.remotes.clear();
+    this.retryIn = 1;
+    if (!wasConnected) return;
+    this.dropCount++;
+    // A socket that keeps being cut is usually being cut by something that
+    // won't change its mind — a content filter, most often. Stop fighting it.
+    if (this.transport === 'ws' && ++this.wsDrops >= 2) {
+      this.rememberPoll();
+      this.emit('transport', 'poll');
+    }
+    this.emit('disconnected');
   }
 
   receive(msg) {
@@ -249,7 +331,10 @@ export class NetClient {
         this.emit('pos');
         break;
       case 'pong':
-        if (msg.at) this.rttMs = Math.round(Date.now() - msg.at);
+        // Zero is a perfectly ordinary answer on a LAN, so "have we heard back"
+        // has to be a separate question from "how long did it take".
+        this.pongCount++;
+        if (msg.at) this.rttMs = Math.max(0, Math.round(Date.now() - msg.at));
         break;
       default:
         break;
@@ -257,7 +342,7 @@ export class NetClient {
   }
 
   send(obj) {
-    if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(obj));
+    if (this.link) this.link.send(JSON.stringify(obj));
   }
 
   join(name, look, x, y, map) {

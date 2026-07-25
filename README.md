@@ -50,6 +50,21 @@ strand anyone — you come back where you were, with the books as they are now.
 A client that has lost the link stops simulating rather than quietly running a
 second cafe, and says **OFFLINE** in the corner until it's back.
 
+**If a machine can't hold a socket open.** Some can't — macOS Screen Time's
+Content & Privacy Restrictions is the one this was written for. The filter lets
+the connection up and then kills it a few seconds later, over and over, so the
+game connects, works briefly, drops, and comes back, forever. The same filter
+has no objection to ordinary HTTP requests, which is how it served you the game
+in the first place.
+
+So the session also runs over plain HTTP: the same messages, carried by a POST
+ten times a second. The client tries a socket first and, after it has been cut
+twice, gives up on sockets *for that machine* and carries on over HTTP without
+anyone doing anything. It remembers, so it doesn't relearn the lesson every
+time. Add `?poll` to skip straight to HTTP, or `?ws` to forget and try a socket
+again. `?netdebug` shows which one is in use. **You do not need to turn parental
+controls off.**
+
 Staying in the game doesn't depend on the game: the server pings each socket
 itself and the browser answers in its own networking code, with no page script
 involved, so a busy tab or a message that doesn't get through can't get you
@@ -209,7 +224,8 @@ browser and reports console errors:
 node tools/check.js walk cafe shop furnshop build furnish exterior treats taxi sleep map night door title systems1 systems2 --clean
 node tools/check.js runmobile tabmobile pausemobile dialogmobile --mobile 844x390 --clean   # touch
 node tools/check.js net netmobile netbooks netclock netdrop netforget solo --clean  # multiplayer
-node tools/check.js netping netmute netidle --ms 82000 --clean       # keepalive (slow)
+node tools/check.js netping netmute netidle netpollquiet --ms 82000 --clean   # keepalive (slow)
+node tools/check.js netpollbooks netfallback --ms 40000 --clean      # the HTTP transport
 node tools/wsframes.js                                  # WebSocket framing, no browser needed
 # Paired scenarios need two browsers at once: start the first in the background,
 # then the second a few seconds later (netfound/netguest, netcafehost/netcafeguest,

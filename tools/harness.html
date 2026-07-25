@@ -449,7 +449,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         };
         await wait(900);
         const before = st.money;
-        g.net.ws.close();                      // the connection drops under us
+        g.net.link.ws.close();                 // the connection drops under us
         await wait(600);
         const dropped = g.net.connected;
         // While we're away the other player spends; we must not miss it.
@@ -463,6 +463,77 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!g.net.connected || !g.net.joined) window.__errors.push('never came back: ' + window.__drop);
         if (st.money !== before - 100) window.__errors.push('missed what happened while away: ' + window.__drop);
         bot.close();
+      } else if (SCRIPT === 'netpollbooks') {
+        // Everything the socket does, over plain HTTP requests instead. This is
+        // what a machine whose content filter kills long-lived connections ends
+        // up on, and it has to be a real session, not a degraded one.
+        const st = g.state;
+        window.__poll = `via=${g.net.transport} connected=${g.net.connected} joined=${g.net.joined}`;
+        if (g.net.transport !== 'poll') window.__errors.push('not on the HTTP transport: ' + window.__poll);
+        if (!g.net.connected || !g.net.joined) window.__errors.push('never joined: ' + window.__poll);
+
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const bot = new WebSocket(`${proto}//${location.host}/ws`);
+        let ready = false;
+        bot.onmessage = (ev) => {
+          const m = JSON.parse(ev.data);
+          if (m.t === 'welcome' && !ready) {
+            ready = true;
+            bot.send(JSON.stringify({ t: 'join', name: 'Socket', look: st.playerLook,
+              x: g.player.x + 24, y: g.player.y, map: st.mapId }));
+          }
+        };
+        await wait(1200);
+        // A socket player and an HTTP player must see each other and share a till.
+        const sees = g.net.remotes.size;
+        const money0 = st.money;
+        bot.send(JSON.stringify({ t: 'op', op: 'money', d: 250 }));
+        let w = 0;
+        while (st.money === money0 && w < 6000) { await wait(200); w += 200; }
+        st.spend(40);
+        await wait(1200);
+        window.__poll += ` sees=${sees} money ${money0}->${st.money} drops=${g.net.dropCount}`;
+        if (!sees) window.__errors.push('cannot see the socket player: ' + window.__poll);
+        if (st.money !== money0 + 210) window.__errors.push('books did not settle: ' + window.__poll);
+        if (g.net.dropCount) window.__errors.push('the HTTP link dropped: ' + window.__poll);
+        bot.close();
+      } else if (SCRIPT === 'netfallback') {
+        // A socket that keeps being cut is being cut by something that won't
+        // change its mind — a content filter, on the machine this was written
+        // for. After a couple of goes the client should stop trying and carry
+        // on over HTTP, without the player doing anything.
+        const st = g.state;
+        try { localStorage.removeItem('catcafe.transport'); } catch (e) {}
+        const started = g.net.transport;
+        for (let i = 0; i < 2; i++) {
+          if (g.net.link && g.net.link.ws) g.net.link.ws.close();
+          else if (g.net.link) g.net.link.die();
+          let w = 0;
+          while (!g.net.connected && w < 12000) { await wait(250); w += 250; }
+          await wait(800);
+        }
+        await wait(1500);
+        window.__fall = `started=${started} now=${g.net.transport}`
+          + ` connected=${g.net.connected} joined=${g.net.joined} drops=${g.net.dropCount}`;
+        if (started !== 'ws') window.__errors.push('did not start on a socket: ' + window.__fall);
+        if (g.net.transport !== 'poll') window.__errors.push('never gave up on the socket: ' + window.__fall);
+        if (!g.net.connected || !g.net.joined) window.__errors.push('ended up out of the game: ' + window.__fall);
+        // And it must still be a working session, not just a live connection.
+        const money0 = st.money;
+        st.spend(15);
+        await wait(1500);
+        window.__fall += ` money ${money0}->${st.money}`;
+        if (st.money !== money0 - 15) window.__errors.push('books stopped working: ' + window.__fall);
+        try { localStorage.removeItem('catcafe.transport'); } catch (e) {}
+      } else if (SCRIPT === 'netpollquiet') {
+        // And it must stay in the game while doing nothing at all, for longer
+        // than the idle timeout — the poll itself is the proof of life.
+        await wait(75000);
+        window.__poll = `via=${g.net.transport} connected=${g.net.connected}`
+          + ` joined=${g.net.joined} drops=${g.net.dropCount}`;
+        if (g.net.transport !== 'poll') window.__errors.push('not on the HTTP transport: ' + window.__poll);
+        if (g.net.dropCount) window.__errors.push('dropped while quiet: ' + window.__poll);
+        if (!g.net.connected || !g.net.joined) window.__errors.push('not in the game: ' + window.__poll);
       } else if (SCRIPT === 'netforget') {
         // Losing track of somebody has to be recoverable. Arrivals are one-shot
         // messages, and if one goes astray the two clients disagree about who
@@ -515,9 +586,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // we're connected at the end proves nothing: a drop followed by a
         // reconnect a few seconds later looks identical.
         await wait(60000);
-        window.__ping = `rtt=${g.net.rttMs} drops=${g.net.dropCount}`
-          + ` rejoins=${g.net.rejoinCount} msgs=${g.net.msgCount}`;
-        if (!g.net.rttMs) window.__errors.push('no pong ever came back: ' + window.__ping);
+        window.__ping = `via=${g.net.transport} pongs=${g.net.pongCount} rtt=${g.net.rttMs}`
+          + ` drops=${g.net.dropCount} rejoins=${g.net.rejoinCount} msgs=${g.net.msgCount}`;
+        // Count the answers, not the milliseconds: a 0ms round trip on a LAN is
+        // normal, and testing the timing would call a healthy link broken.
+        if (!g.net.pongCount) window.__errors.push('no pong ever came back: ' + window.__ping);
         if (g.net.dropCount) window.__errors.push('dropped despite the heartbeat: ' + window.__ping);
       } else if (SCRIPT === 'netidletitle') {
         // Two people reading the title screen and choosing an apron colour are
@@ -1033,6 +1106,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__ping ? ` ${window.__ping}` : '')
         + (window.__mute ? ` ${window.__mute}` : '')
         + (window.__forget ? ` ${window.__forget}` : '')
+        + (window.__poll ? ` ${window.__poll}` : '')
+        + (window.__fall ? ` ${window.__fall}` : '')
         + (window.__netConnected !== undefined ? ` net=${window.__netConnected} sawJoin=${window.__sawJoin} remote=${window.__remote} afterLeave=${window.__afterLeave} standing=${window.__standing}` : '')
         + (window.__ext ? ` ${window.__ext}` : '')
         + (window.__bookTreat ? ` book[${window.__bookTreat}] pet[${window.__petTreat}] choices=${window.__choices}` : '')
