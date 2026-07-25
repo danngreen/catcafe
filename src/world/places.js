@@ -76,6 +76,7 @@ export const SHOPS = [
   {
     id: 'inn', town: 'brambleford', name: 'The Sleeping Hare', sign: 'inn',
     kind: 'inn', keeper: 'hollis', tw: 5, roof: '#b2624b', timbered: true,
+    storeys: 2, wallH: 54, roofH: 26,
     hours: [0, 24], days: [0, 1, 2, 3, 4, 5, 6],
     greet: 'Bed upstairs whenever you like. Mind the third stair.',
   },

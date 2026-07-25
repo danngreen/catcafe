@@ -230,7 +230,9 @@ export class BuildScreen extends Screen {
       const id = stock[this.palette];
       if (!id) { this.flash('Nothing left to place. Buy furniture from Velvet & Oak.', true); return; }
       const def = ITEMS[id];
-      this.draft.furniture.push({ type: def.place, x: this.cur.x, y: this.cur.y, variant: Math.floor(Math.random() * 3) });
+      // Variant 0 is what the shop and the placement ghost both show. Rolling
+      // a random one here meant a wooden chair could come out purple.
+      this.draft.furniture.push({ type: def.place, x: this.cur.x, y: this.cur.y, variant: 0 });
       this.takeFurniture(id);
       if (this.palette >= this.furnitureStock.length) this.palette = Math.max(0, this.furnitureStock.length - 1);
       this.rebuild();

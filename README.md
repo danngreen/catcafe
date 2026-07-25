@@ -1,4 +1,4 @@
-| M | Map — arrows browse the places you've found |# Cat Cafe
+# Cat Cafe
 
 A whimsical 16-bit-style browser game. You are a cat who walks on two legs and
 runs a cat cafe in a rural valley. Serve coffee, keep cats, explore five
@@ -88,7 +88,9 @@ something to say and some with jobs for you. Several shops only open on certain
 days and certain hours; some paths are blocked until you have the right tool.
 
 Mail birds carry letters between friends. Taxi birds will fly you to anywhere
-you've already visited, for a fare, between 7am and 7pm.
+you've already visited, for a fare, between 7am and 7pm — one comes down,
+collects you in a wicker basket, and sets you down at the far end. The map
+groups everywhere you've been under its town.
 
 A day is twenty real minutes, with a full dawn-to-night cycle and a day of the
 week that shops and customers both care about.
@@ -130,13 +132,14 @@ There's a headless smoke test that drives the game through scenarios in a real
 browser and reports console errors:
 
 ```bash
-node tools/check.js walk cafe shop build furnish exterior treats map night door title systems1 systems2 --clean
+node tools/check.js walk cafe shop furnshop build furnish exterior treats taxi sleep map night door title systems1 systems2 --clean
 node tools/check.js town --shotdir /tmp/shots      # also writes screenshots
 ```
 
 Scenarios cover walking the overworld, the cafe trading loop, entering shops,
-build mode, the map, night lighting, door round-trips, and a full day rollover
-with a save/load check.
+build mode and furnishing, the map, night lighting, door round-trips, the
+taxi flight, a night at the inn, and a full day rollover with a save/load
+check.
 
 It pre-enables the debugger, so if the page ever wedges it interrupts V8 and
 prints the stack rather than hanging silently.

@@ -5,7 +5,7 @@
 
 import { PixBuf, SpriteCache, shade } from '../engine/pixel.js';
 import { P } from './palette.js';
-import { hash2 } from '../engine/util.js';
+import { hash2, clamp } from '../engine/util.js';
 import { TILE } from './tiles.js';
 
 const rgb = (hex, a = 255) => PixBuf.rgba(hex, a);
@@ -403,7 +403,7 @@ export function paintBuilding(buf, opts) {
   const {
     tw = 4, wallH = 26, roofH = 22, wall = P.plaster, roof = P.terracotta,
     roofStyle = 'tile', timbered = false, doorX = null, windows = 2, v = 0,
-    sign = null, awning = null, chimney = true,
+    sign = null, awning = null, chimney = true, storeys = 1,
   } = opts;
 
   const W = tw * TILE;
@@ -454,25 +454,38 @@ export function paintBuilding(buf, opts) {
   buf.ellipse(dX + dW / 2, dY + 1, dW / 2 - 1, 2, rgb(P.wood));
 
   // --- windows ---
-  const winY = wallTop + 6;
+  // A two-storey building gets a row per floor, with a string course between.
+  const upper = storeys > 1;
+  const groundWinY = wallTop + wallH - 30;
+  const winRows = upper ? [wallTop + 6, groundWinY] : [wallTop + 6];
+  if (upper) {
+    const band = wallTop + Math.round(wallH * 0.46);
+    buf.rect(ox, band, W, 3, rgb(shade(wall, -0.22)));
+    buf.hline(ox, band, W, rgb(shade(wall, 0.2)));
+  }
   const slots = [];
   for (let i = 0; i < tw; i++) {
     const wx = ox + i * TILE + 3;
-    if (wx + 10 < dX - 3 || wx > dX + dW + 3) slots.push(wx);
+    slots.push(wx);
   }
-  for (let i = 0; i < Math.min(windows, slots.length); i++) {
-    const wx = slots[Math.floor((i * slots.length) / Math.max(1, Math.min(windows, slots.length)))];
-    buf.rect(wx - 1, winY - 1, 12, 12, rgb(P.woodDk));
-    buf.rect(wx, winY, 10, 10, rgb(P.glass));
-    buf.rect(wx, winY, 10, 4, rgb(P.glassLt));
-    buf.vline(wx + 5, winY, 10, rgb(P.woodDk));
-    buf.hline(wx, winY + 5, 10, rgb(P.woodDk));
-    // Window box with flowers.
-    if (n(i, v, 3) > 0.4) {
-      buf.rect(wx - 2, winY + 10, 14, 3, rgb(P.woodDk));
-      for (let k = 0; k < 4; k++) buf.set(wx + k * 3, winY + 9, rgb([P.flowerR, P.flowerY, P.flowerP, P.flowerW][k % 4]));
+  winRows.forEach((winY, row) => {
+    // Upstairs windows can sit over the door; ground-floor ones cannot.
+    const usable = row === 0 && upper ? slots : slots.filter((wx) => wx + 10 < dX - 3 || wx > dX + dW + 3);
+    const count = Math.min(row === 0 && upper ? tw : windows, usable.length);
+    for (let i = 0; i < count; i++) {
+      const wx = usable[Math.floor((i * usable.length) / Math.max(1, count))];
+      buf.rect(wx - 1, winY - 1, 12, 12, rgb(P.woodDk));
+      buf.rect(wx, winY, 10, 10, rgb(P.glass));
+      buf.rect(wx, winY, 10, 4, rgb(P.glassLt));
+      buf.vline(wx + 5, winY, 10, rgb(P.woodDk));
+      buf.hline(wx, winY + 5, 10, rgb(P.woodDk));
+      // Window box with flowers.
+      if (n(i + row * 5, v, 3) > 0.4) {
+        buf.rect(wx - 2, winY + 10, 14, 3, rgb(P.woodDk));
+        for (let k = 0; k < 4; k++) buf.set(wx + k * 3, winY + 9, rgb([P.flowerR, P.flowerY, P.flowerP, P.flowerW][k % 4]));
+      }
     }
-  }
+  });
 
   // --- roof ---
   const overhang = 4;
@@ -526,10 +539,28 @@ export function paintBuilding(buf, opts) {
   }
 
   if (chimney) {
-    const cx = ox + (v % 2 ? W - 12 : 6);
-    buf.rect(cx, roofTop - 8, 8, 14, rgb(P.brick));
-    for (let y = 0; y < 14; y += 3) buf.hline(cx, roofTop - 8 + y, 8, rgb(P.brickDk));
-    buf.rect(cx - 1, roofTop - 10, 10, 3, rgb(P.stoneLt));
+    // Anchor the stack to the roof surface. Placing it at a fixed offset left
+    // it hanging in the sky beside a narrow roof, or floating above a gable.
+    const halfAt = (yy) => {
+      const t = clamp((yy - roofTop) / roofH, 0, 1);
+      if (roofStyle === 'gable') return (rW * t) / 2;
+      if (roofStyle === 'thatch') return (rW * (0.25 + 0.75 * t)) / 2;
+      return (rW * (0.42 + 0.58 * t)) / 2;
+    };
+    const cw = 8;
+    // Find a row where the roof is wide enough to carry the stack, then bed it
+    // a few pixels in so the tiles meet its base.
+    let emerge = roofTop + Math.round(roofH * (roofStyle === 'gable' ? 0.42 : 0.2));
+    while (halfAt(emerge + 4) < cw + 4 && emerge < roofTop + roofH - 4) emerge += 2;
+    const half = halfAt(emerge + 4);
+    const side = v % 2 ? 1 : -1;
+    const cx = Math.round(buf.w / 2 + side * Math.max(0, half - cw - 2) - cw / 2);
+    const top = emerge - 13;
+    buf.rect(cx, top, cw, emerge + 5 - top, rgb(P.brick));
+    for (let y = top; y < emerge + 5; y += 3) buf.hline(cx, y, cw, rgb(P.brickDk));
+    buf.vline(cx, top, emerge + 5 - top, rgb(P.brickDk));
+    buf.rect(cx - 1, top - 3, cw + 2, 3, rgb(P.stoneLt));
+    buf.hline(cx - 1, top - 3, cw + 2, rgb(P.stoneHi));
   }
 
   // --- shop sign / awning ---
@@ -689,6 +720,45 @@ function paintCounterUnit(buf, v) {
   buf.rect(0, buf.h - 20, buf.w, 3, rgb(P.woodLt));
   for (let x = 2; x < buf.w; x += 8) buf.vline(x, buf.h - 17, 13, rgb(P.woodDk));
   buf.hline(0, buf.h - 4, buf.w, rgb(P.woodDeep));
+  outline(buf);
+}
+
+/** A run of bar counter: heavy top, panelled front, brass foot rail. */
+function paintBar(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 3, buf.w / 2 - 1, 3.4);
+  const top = buf.h - 22;
+  buf.rect(0, top + 4, buf.w, 18, rgb(P.wood));
+  // Panelled front.
+  for (let x = 2; x < buf.w - 2; x += 10) {
+    buf.frame(x, top + 9, 8, 9, rgb(P.woodDk));
+  }
+  // Counter top, overhanging slightly.
+  buf.rect(0, top, buf.w, 5, rgb(P.woodLt));
+  buf.hline(0, top, buf.w, rgb('#e0b183'));
+  buf.hline(0, top + 4, buf.w, rgb(P.woodDeep));
+  // Brass foot rail.
+  buf.hline(1, buf.h - 5, buf.w - 2, rgb(P.gold));
+  buf.hline(1, buf.h - 4, buf.w - 2, rgb(P.goldDk));
+  // A glass and a bottle left out on the top.
+  buf.rect(5, top - 6, 3, 6, rgb(P.glass));
+  buf.set(5, top - 6, rgb(P.glassLt));
+  buf.rect(buf.w - 10, top - 9, 3, 9, rgb('#6b9e8f'));
+  buf.rect(buf.w - 10, top - 11, 3, 2, rgb('#4f7d70'));
+  outline(buf);
+}
+
+/** Tall stool to sit at the bar with. */
+function paintBarStool(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 5, 2);
+  const seat = ['#c9863f', '#b6524f', '#5b8fd6'][v % 3];
+  const cx = buf.w / 2;
+  buf.line(cx - 3, buf.h - 12, cx - 5, buf.h - 2, rgb(P.metalDk));
+  buf.line(cx + 3, buf.h - 12, cx + 5, buf.h - 2, rgb(P.metalDk));
+  buf.rect(cx - 1, buf.h - 13, 2, 11, rgb(P.metal));
+  buf.hline(cx - 5, buf.h - 7, 11, rgb(P.metal));      // foot ring
+  buf.ellipse(cx, buf.h - 14, 5.4, 2.8, rgb(shade(seat, -0.2)));
+  buf.ellipse(cx, buf.h - 15, 4.8, 2.3, rgb(seat));
+  buf.ellipse(cx - 1.4, buf.h - 16, 2.2, 1.1, rgb(shade(seat, 0.22)));
   outline(buf);
 }
 
@@ -963,6 +1033,8 @@ export const OBJECTS = {
   stool:      { w: 16, h: 16, tw: 1, th: 1, solid: false, variants: 3, paint: (b, v) => paintStool(b, v, ['#b6524f', '#5b8fd6', '#eec453'][v % 3]) },
   sofa:       { w: 48, h: 26, tw: 3, th: 1, solid: false, variants: 3, paint: (b, v) => paintSofa(b, v, ['#8a72d6', '#6b9e8f', '#c05a7a'][v % 3]) },
   counter:    { w: 32, h: 24, tw: 2, th: 1, solid: true, variants: 1, paint: paintCounterUnit },
+  bar:        { w: 48, h: 34, tw: 3, th: 1, solid: true, variants: 1, paint: paintBar },
+  barStool:   { w: 16, h: 22, tw: 1, th: 1, solid: false, variants: 3, paint: paintBarStool },
   pastryCase: { w: 32, h: 30, tw: 2, th: 1, solid: true, variants: 1, paint: paintPastryCase },
   register:   { w: 16, h: 20, tw: 1, th: 1, solid: true, variants: 1, paint: paintRegister },
   coffeeMachine: { w: 20, h: 24, tw: 1, th: 1, solid: true, variants: 1, paint: paintCoffeeMachine },
@@ -1003,7 +1075,7 @@ export function objSprite(type, variant = 0) {
 
 /** Buildings are parameterised rather than enumerated, so they cache by config. */
 export function buildingSprite(cfg) {
-  const key = `b|${cfg.tw}|${cfg.wall}|${cfg.roof}|${cfg.roofStyle}|${cfg.timbered ? 1 : 0}|${cfg.wallH}|${cfg.roofH}|${cfg.signKey || ''}|${cfg.awning || ''}|${cfg.v || 0}|${cfg.windows ?? 2}`;
+  const key = `b|${cfg.tw}|${cfg.wall}|${cfg.roof}|${cfg.roofStyle}|${cfg.timbered ? 1 : 0}|${cfg.wallH}|${cfg.roofH}|${cfg.signKey || ''}|${cfg.awning || ''}|${cfg.v || 0}|${cfg.windows ?? 2}|${cfg.storeys || 1}`;
   return cache.get(key, () => {
     const w = cfg.tw * TILE + 16;
     const h = (cfg.wallH || 26) + (cfg.roofH || 22) + 16;

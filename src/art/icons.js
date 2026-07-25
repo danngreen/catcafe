@@ -88,6 +88,144 @@ export const ICONS = {
   toyYarn: (b) => { b.ellipse(8, 9, 5, 4.6, rgb('#8a72d6')); for (let i = 0; i < 5; i++) b.line(3, 6 + i, 13, 9 + i, rgb('#a894e8')); b.line(13, 11, 15, 14, rgb('#8a72d6')); },
   toyWand: (b) => { b.line(3, 14, 10, 5, rgb(P.woodDk)); b.ellipse(11, 4, 2.4, 2, rgb('#eec453')); for (let i = 0; i < 4; i++) b.line(11, 4, 13 + i, 1 + i, rgb('#f0d98a')); },
 
+  // ---- furniture ----
+  // Every piece gets its own silhouette; a shelf of identical brown squares
+  // tells you nothing about what you're buying.
+  chair: (b) => {
+    b.rect(4, 1, 8, 7, rgb(P.wood)); b.rect(4, 1, 8, 2, rgb(P.woodLt));
+    b.vline(7, 3, 5, rgb(P.woodDk));
+    b.rect(3, 8, 10, 3, rgb(P.wood)); b.hline(3, 8, 10, rgb(P.woodLt));
+    b.rect(4, 11, 2, 4, rgb(P.woodDk)); b.rect(10, 11, 2, 4, rgb(P.woodDk));
+  },
+  table: (b) => {
+    b.ellipse(8, 6, 6.6, 3, rgb(P.wood));
+    b.ellipse(8, 5, 5.6, 2.2, rgb(P.woodLt));
+    b.rect(7, 8, 2, 5, rgb(P.woodDk));
+    b.ellipse(8, 13, 4, 1.6, rgb(P.woodDk));
+  },
+  tableCloth: (b) => {
+    b.ellipse(8, 6, 6.6, 3, rgb('#d95f5f'));
+    b.ellipse(8, 5, 5.6, 2.2, rgb('#ec8080'));
+    for (let x = 3; x < 14; x += 3) b.vline(x, 6, 3, rgb('#b84a4a'));
+    b.rect(7, 9, 2, 4, rgb(P.woodDk));
+    b.ellipse(8, 13, 4, 1.6, rgb(P.woodDk));
+  },
+  tableLong: (b) => {
+    b.rect(1, 4, 14, 4, rgb(P.wood)); b.hline(1, 4, 14, rgb(P.woodLt));
+    b.rect(3, 8, 2, 6, rgb(P.woodDk)); b.rect(11, 8, 2, 6, rgb(P.woodDk));
+  },
+  sofa: (b) => {
+    b.rect(1, 4, 14, 8, rgb('#8a72d6'));
+    b.rect(3, 6, 10, 5, rgb('#a08ce8'));
+    b.rect(0, 5, 3, 8, rgb('#6f5ab8')); b.rect(13, 5, 3, 8, rgb('#6f5ab8'));
+    b.rect(1, 3, 14, 2, rgb('#6f5ab8'));
+    b.rect(2, 12, 2, 3, rgb(P.woodDk)); b.rect(12, 12, 2, 3, rgb(P.woodDk));
+  },
+  stool: (b) => {
+    b.ellipse(8, 6, 5.4, 2.8, rgb('#b6524f'));
+    b.ellipse(8, 5, 4.6, 2.1, rgb('#d1706c'));
+    b.line(5, 8, 4, 14, rgb(P.woodDk)); b.line(11, 8, 12, 14, rgb(P.woodDk));
+    b.vline(8, 8, 6, rgb(P.woodDk));
+  },
+  barstool: (b) => {
+    b.ellipse(8, 3, 4.6, 2.2, rgb('#c9863f'));
+    b.ellipse(8, 2, 3.8, 1.6, rgb('#e0a45c'));
+    b.line(5, 5, 4, 15, rgb(P.metalDk)); b.line(11, 5, 12, 15, rgb(P.metalDk));
+    b.vline(8, 5, 10, rgb(P.metal));
+    b.hline(4, 11, 9, rgb(P.metal));   // foot ring
+  },
+  bar: (b) => {
+    b.rect(0, 6, 16, 8, rgb(P.wood));
+    b.rect(0, 4, 16, 3, rgb(P.woodLt));
+    b.hline(0, 7, 16, rgb(P.woodDeep));
+    for (let x = 2; x < 16; x += 5) b.vline(x, 8, 6, rgb(P.woodDk));
+    // A couple of glasses on the top.
+    b.rect(3, 1, 2, 4, rgb(P.glass)); b.rect(9, 1, 2, 4, rgb(P.glass));
+    b.set(3, 1, rgb('#ffffff')); b.set(9, 1, rgb('#ffffff'));
+  },
+  plant: (b) => {
+    b.rect(4, 10, 8, 5, rgb(P.terracotta));
+    b.rect(3, 9, 10, 2, rgb(P.terracottaLt));
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI / 2 + (i - 2) * 0.5;
+      const ex = 8 + Math.cos(a) * 6, ey = 9 + Math.sin(a) * 7;
+      b.line(8, 9, Math.round(ex), Math.round(ey), rgb('#4e9c40'));
+      b.ellipse(ex, ey, 2, 1.7, rgb(i % 2 ? '#5fb04d' : '#3f8a3c'));
+    }
+  },
+  floorlamp: (b) => {
+    for (let i = 0; i < 5; i++) b.hline(5 - i, 2 + i, 6 + i * 2, rgb(i < 2 ? '#ffe9b8' : '#f0d18a'));
+    b.vline(8, 7, 6, rgb(P.metalDk));
+    b.rect(5, 13, 7, 2, rgb(P.metalDk));
+  },
+  painting: (b) => {
+    b.rect(1, 3, 14, 11, rgb(P.gold));
+    b.rect(3, 5, 10, 7, rgb('#7fb8d6'));
+    b.rect(3, 9, 10, 3, rgb('#6aad4a'));
+    b.ellipse(10, 8, 3, 2, rgb('#4e9c40'));
+    b.ellipse(5, 7, 1.6, 1.6, rgb('#ffe9a0'));
+  },
+  bookshelf: (b) => {
+    b.rect(2, 1, 12, 14, rgb(P.woodDk));
+    for (let s = 0; s < 3; s++) {
+      const y = 2 + s * 4;
+      for (let i = 0; i < 4; i++) {
+        b.rect(3 + i * 3, y, 2, 3, rgb(['#d95f5f', '#5b8fd6', '#7fbe57', '#eec453'][(i + s) % 4]));
+      }
+      b.hline(2, y + 3, 12, rgb(P.woodDeep));
+    }
+  },
+  fireplace: (b) => {
+    b.rect(1, 2, 14, 13, rgb(P.stone));
+    for (let y = 2; y < 15; y += 3) for (let x = 1; x < 15; x += 5) b.rect(x + ((y / 3) % 2 ? 2 : 0), y, 4, 2, rgb(P.stoneLt));
+    b.rect(4, 6, 8, 9, rgb('#2a2020'));
+    b.ellipse(8, 13, 3.4, 2.2, rgb('#ff8a3a'));
+    b.ellipse(8, 11.5, 2.2, 2.2, rgb('#ffc04a'));
+    b.ellipse(8, 11, 1.1, 1.2, rgb('#fff0b0'));
+  },
+  piano: (b) => {
+    b.rect(1, 2, 14, 10, rgb('#3a2f28'));
+    b.rect(1, 2, 14, 3, rgb('#5b4a3c'));
+    b.rect(2, 8, 12, 4, rgb('#f6f0e0'));
+    for (let x = 3; x < 14; x += 2) b.vline(x, 8, 4, rgb('#2a2420'));
+    b.rect(2, 12, 2, 3, rgb('#2a2420')); b.rect(12, 12, 2, 3, rgb('#2a2420'));
+  },
+  cattower: (b) => {
+    b.rect(2, 12, 12, 3, rgb('#b6524f'));
+    b.rect(6, 6, 4, 6, rgb(P.thatch));
+    for (let y = 6; y < 12; y += 2) b.hline(6, y, 4, rgb(P.thatchDk));
+    b.rect(3, 3, 10, 3, rgb('#b6524f'));
+    b.ellipse(12, 9, 1.8, 1.8, rgb(P.uiPink));
+  },
+  catbed: (b) => {
+    b.ellipse(8, 10, 6.5, 4, rgb('#d472b0'));
+    b.ellipse(8, 9, 5, 2.8, rgb('#f0a0cc'));
+    b.ellipse(8, 9, 3.6, 1.9, rgb(P.cream));
+  },
+  scratchpost: (b) => {
+    b.rect(2, 12, 12, 3, rgb(P.wood));
+    b.rect(6, 2, 4, 10, rgb(P.thatch));
+    for (let y = 2; y < 12; y += 2) b.hline(6, y, 4, rgb(P.thatchDk));
+    b.ellipse(8, 1, 2, 1.4, rgb(P.thatchLt));
+  },
+  catbowl: (b) => {
+    b.ellipse(8, 9, 6, 3.4, rgb('#6b9e8f'));
+    b.ellipse(8, 8, 4.6, 2.4, rgb('#4f7d70'));
+    b.ellipse(8, 8, 3.4, 1.6, rgb('#a3703f'));
+  },
+  counterUnit: (b) => {
+    b.rect(0, 5, 16, 9, rgb(P.wood));
+    b.rect(0, 3, 16, 3, rgb(P.woodLt));
+    for (let x = 3; x < 16; x += 5) b.vline(x, 6, 8, rgb(P.woodDk));
+    b.hline(0, 13, 16, rgb(P.woodDeep));
+  },
+  rug: (b) => {
+    b.rect(1, 4, 14, 9, rgb(P.rug));
+    b.frame(1, 4, 14, 9, rgb(P.rugDk));
+    b.frame(3, 6, 10, 5, rgb(P.rugLt));
+    b.hline(0, 4, 1, rgb(P.rugDk));
+  },
+
   // ---- world / quest items ----
   letter: (b) => { b.rect(2, 5, 12, 8, rgb(P.paper)); b.frame(2, 5, 12, 8, rgb('#c9c2b0')); b.line(2, 5, 8, 9, rgb('#c9c2b0')); b.line(14, 5, 8, 9, rgb('#c9c2b0')); b.ellipse(11, 11, 1.8, 1.6, rgb('#e8546b')); },
   key: (b) => { b.ellipse(5, 6, 3, 3, rgb(P.gold)); b.ellipse(5, 6, 1.4, 1.4, rgb(0 ? P.gold : P.uiBg)); b.rect(6, 8, 2, 6, rgb(P.gold)); b.rect(8, 11, 3, 2, rgb(P.gold)); b.rect(8, 13, 2, 1, rgb(P.gold)); },

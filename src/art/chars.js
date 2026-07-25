@@ -471,7 +471,8 @@ export const CAT_BREED_LIST = Object.keys(CAT_BREEDS);
  * pose: 'walk' | 'sit' | 'sleep' | 'play' | 'loaf'
  */
 function paintCat(buf, breedKey, dir, frame, pose, groomed) {
-  const b = CAT_BREEDS[breedKey] || CAT_BREEDS.tabby;
+  // Either a catalogue breed or an ad-hoc one built from a coat colour.
+  const b = (typeof breedKey === 'object' && breedKey) ? breedKey : (CAT_BREEDS[breedKey] || CAT_BREEDS.tabby);
   const base = b.base;
   const F = rgb(base), D = rgb(shade(base, -0.25)), L = rgb(shade(base, groomed ? 0.3 : 0.16));
   const M = rgb(b.markCol);
@@ -717,6 +718,81 @@ export function emoteSprite(kind) {
       }
       default: break;
     }
+    return buf.toCanvas();
+  });
+}
+
+/**
+ * The player, curled up as an ordinary cat — used for the night's-sleep card.
+ * Built from their coat colour rather than a catalogue breed.
+ */
+export function playerCatSprite(coatKey, pose = 'sleep') {
+  return cache.get(`pc|${coatKey}|${pose}`, () => {
+    const fur = (COATS[coatKey] || COATS.ginger).fur;
+    const buf = new PixBuf(CAT_W, CAT_H);
+    paintCat(buf, { base: fur, mark: 'none', markCol: shade(fur, -0.24), appeal: 1 },
+      'side', 0, pose, false);
+    return buf.toCanvas();
+  });
+}
+
+/**
+ * The taxi bird, seen from behind/above as it hovers. `flap` 0..3 drives the
+ * wings; `carrying` adds a harness with a passenger seat slung underneath.
+ */
+export const TAXI_W = 58;
+export const TAXI_H = 46;
+/** Local y of the basket floor, so the cutscene knows where to seat you. */
+export const TAXI_SEAT_Y = 34;
+
+export function taxiBirdSprite(flap, carrying) {
+  return cache.get(`tb|${flap}|${carrying ? 1 : 0}`, () => {
+    const buf = new PixBuf(TAXI_W, TAXI_H);
+    const body = '#5f8fd0', bodyDk = shade(body, -0.28), bodyLt = shade(body, 0.22);
+    const cx = TAXI_W / 2;
+    const lift = [0, -6, -10, -6][flap % 4];     // wingtip height through the beat
+    const bob = [0, -1, -2, -1][flap % 4];
+    const by = 17 + bob;
+
+    // Wings: filled tapering shapes, not hairlines, so they read at a glance.
+    for (const s of [-1, 1]) {
+      for (let i = 0; i < 7; i++) {
+        const t = i / 6;
+        const x = Math.round(cx + s * (6 + i * 3.1));
+        const yTop = Math.round(by - 3 + t * lift);
+        const h = Math.round(6 - t * 3);
+        buf.rect(s < 0 ? x - 2 : x, yTop, 3, h, rgb(i % 2 ? body : bodyLt));
+        buf.set(s < 0 ? x - 2 : x + 2, yTop + h - 1, rgb(bodyDk));
+      }
+      // Leading edge.
+      buf.line(cx + s * 6, by - 3, cx + s * 26, by - 3 + lift, rgb(bodyDk));
+    }
+
+    // Body, head, beak.
+    buf.ellipse(cx, by + 2, 7, 9, rgb(body));
+    buf.ellipseBlend(cx - 1.5, by - 2, 4.4, 5, rgb(bodyLt, 160));
+    buf.ellipse(cx, by - 9, 5, 4.6, rgb(body));
+    buf.ellipse(cx - 1.5, by - 10.5, 2.6, 2, rgb(bodyLt));
+    buf.rect(cx - 2, by - 7, 4, 3, rgb('#e8b455'));
+    buf.hline(cx - 2, by - 5, 4, rgb('#c08c30'));
+    buf.rect(cx - 4, by - 11, 2, 2, rgb('#2f2a3d'));
+    buf.rect(cx + 2, by - 11, 2, 2, rgb('#2f2a3d'));
+    // A little cap, because it is a taxi.
+    buf.rect(cx - 5, by - 14, 10, 2, rgb('#e0894a'));
+    buf.rect(cx - 4, by - 16, 8, 2, rgb('#e0894a'));
+    // Tail.
+    buf.ellipse(cx, by + 11, 3.6, 4.2, rgb(bodyDk));
+
+    if (carrying) {
+      // A wicker seat slung on two straps.
+      buf.line(cx - 6, by + 8, cx - 8, TAXI_SEAT_Y, rgb('#7d5430'));
+      buf.line(cx + 6, by + 8, cx + 8, TAXI_SEAT_Y, rgb('#7d5430'));
+      buf.rect(cx - 9, TAXI_SEAT_Y, 18, 8, rgb(P.wood));
+      buf.rect(cx - 9, TAXI_SEAT_Y, 18, 2, rgb(P.woodLt));
+      for (let x = -8; x < 9; x += 3) buf.vline(cx + x, TAXI_SEAT_Y + 2, 6, rgb(P.woodDk));
+      buf.hline(cx - 9, TAXI_SEAT_Y + 7, 18, rgb(P.woodDeep));
+    }
+    outline(buf);
     return buf.toCanvas();
   });
 }

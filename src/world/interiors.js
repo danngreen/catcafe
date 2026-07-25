@@ -120,10 +120,14 @@ export function buildShopInterior(shopId) {
     spots.push({ x, y: room.y + room.h - 2 });
   }
 
+  // The inn has a staircase to the rooms; keep its landing clear of fixtures.
+  const stairs = shopId === 'inn' ? { x: room.x + room.w - 3, y: room.y + 1 } : null;
+
   const free = spots.filter((s) => {
     if (!map.inBounds(s.x, s.y) || map.solid(s.x, s.y)) return false;
     if (map.solid(s.x + 1, s.y)) return false;                       // wide fixtures need room
     if (Math.abs(s.x - doorX) < 2 && s.y >= doorY - 3) return false; // keep the doorway clear
+    if (stairs && Math.abs(s.x - stairs.x) < 3 && Math.abs(s.y - stairs.y) < 3) return false;
     return true;
   });
   // Repeat the fixture list until the shop is comfortably full.
@@ -136,8 +140,14 @@ export function buildShopInterior(shopId) {
   map.addObject('lampIn', room.x + Math.floor(room.w / 2) + 3, room.y + 1, { lightR: 60 });
   map.lights.push({ x: (room.x + room.w / 2) * 16, y: (room.y + room.h / 2) * 16, r: 130, color: '#ffe0b0' });
 
+  if (stairs) {
+    for (let k = -1; k <= 1; k++) map.addObject('stairs', stairs.x + k, stairs.y, { flat: true, variant: (k + 1) % 3 });
+    map.addObject('stairs', stairs.x, stairs.y - 1, { flat: true, variant: 2 });
+    map.setInteract(stairs.x, stairs.y + 1, { kind: 'sign', text: 'Stairs up to the rooms. The third one creaks, exactly as promised.' });
+  }
+
   map.indexObjects();
-  map.meta = { shop: shopId, keeperSpot };
+  map.meta = { shop: shopId, keeperSpot, stairs };
   return map;
 }
 
@@ -257,11 +267,11 @@ export function buildCafeMap(cafe) {
     const o = map.addObject(f.type, x, y, { variant: f.variant || 0, offY: f.type === 'windowIn' || f.type === 'painting' ? 10 : 0 });
     if (!o) continue;
     o.furniture = f;
-    if (f.type === 'chair' || f.type === 'chairUp' || f.type === 'stool' || f.type === 'sofa') {
+    if (['chair', 'chairUp', 'stool', 'barStool', 'sofa'].includes(f.type)) {
       const slots = f.type === 'sofa' ? 3 : 1;
       for (let i = 0; i < slots; i++) seats.push({ x: x + i, y, taken: null });
     }
-    if (f.type.startsWith('table')) tables.push({ x, y, w: o.tw });
+    if (f.type.startsWith('table') || f.type === 'bar') tables.push({ x, y, w: o.tw });
   }
 
   // Seats need a table nearby to be worth sitting at; the rest are perches.

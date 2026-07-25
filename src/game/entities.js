@@ -208,11 +208,19 @@ export class Player extends Actor {
     return t;
   }
 
+  /** The frame we'd draw right now — the taxi cutscene borrows it. */
+  sprite() {
+    return charSprite(this.look.species, this.look.coat, this.look.cloth, this.dir, this.frame);
+  }
+
   draw(ctx, ox, oy) {
-    const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, this.dir, this.frame);
+    const spr = this.sprite();
     const dx = Math.round(this.x - CHAR_W / 2 - ox);
     const dy = Math.round(this.y - CHAR_H - oy);
+    const a = this.alpha ?? 1;
+    if (a < 1) ctx.globalAlpha = a;
     ctx.drawImage(spr, dx, dy);
+    if (a < 1) ctx.globalAlpha = 1;
   }
 }
 

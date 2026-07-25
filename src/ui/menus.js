@@ -7,8 +7,10 @@ import { VIEW_W, VIEW_H } from '../engine/display.js';
 import { P } from '../art/palette.js';
 import { ITEMS, CAT as ICAT } from '../game/items.js';
 import { CAT_BREEDS } from '../art/chars.js';
+import { TOWNS } from '../world/places.js';
 import { iconSprite } from '../art/icons.js';
-import { catSprite } from '../art/chars.js';
+import { objSprite } from '../art/objects.js';
+import { catSprite, playerCatSprite } from '../art/chars.js';
 import { audio } from '../engine/audio.js';
 import { clamp, money, wrapText } from '../engine/util.js';
 import { QUESTS, objectiveText } from '../game/quests.js';
@@ -644,7 +646,7 @@ export class CafeScreen extends Screen {
     }
 
     ly += 6;
-    drawText(ctx, `Today: ${sim.todayCustomers} customers, ${money(sim.todayRevenue)} taken`, x + 12, ly, { color: P.uiText, shadow: P.uiShadow });
+    drawText(ctx, `Today: ${sim.todayCustomers} customers, ${money(sim.todayRevenue)} earned`, x + 12, ly, { color: P.uiText, shadow: P.uiShadow });
     ly += 12;
     drawText(ctx, `Best day so far: ${money(st.bestDayProfit)} profit`, x + 12, ly, { color: P.uiTextDim, shadow: P.uiShadow });
     ly += 12;
@@ -957,7 +959,35 @@ export class MapScreen extends Screen {
     this.pickMode = opts.pick || false;   // taxi destination picker
     this.onPick = opts.onPick || null;
     this.index = 0;
-    this.places = game.state.knownPlaces();
+    this.rows = this.buildRows();
+    this.places = this.rows.filter((r) => r.place).map((r) => r.place);
+  }
+
+  /**
+   * Group the list by settlement: each town is a heading, and the shops you've
+   * been into inside it are listed underneath. Landmarks out in the country
+   * gather under their own heading at the end.
+   */
+  buildRows() {
+    const known = this.game.state.knownPlaces();
+    const byId = new Map(known.map((p) => [p.id, p]));
+    const rows = [];
+    const used = new Set();
+    for (const t of TOWNS) {
+      const townPlace = byId.get(t.id);
+      const shops = known.filter((p) => p.town === t.id && p.id !== t.id)
+        .sort((a, b) => a.name.localeCompare(b.name));
+      if (!townPlace && !shops.length) continue;
+      if (townPlace) { rows.push({ place: townPlace, depth: 0, town: true }); used.add(t.id); }
+      else rows.push({ header: t.name });
+      for (const s of shops) { rows.push({ place: s, depth: 1 }); used.add(s.id); }
+    }
+    const rest = known.filter((p) => !used.has(p.id));
+    if (rest.length) {
+      rows.push({ header: 'Out in the valley' });
+      for (const p of rest) rows.push({ place: p, depth: 1 });
+    }
+    return rows;
   }
 
   update(dt, input) {
@@ -1057,20 +1087,33 @@ export class MapScreen extends Screen {
       }
     }
 
-    // Side list, scrolled to keep the selection in view.
-    const lx = x + w - 116;
+    // Side list: towns as headings, the shops inside them indented beneath.
+    const lx = x + w - 128;
     drawText(ctx, this.pickMode ? 'Destinations' : 'Places found', lx, y + 22, { color: P.uiGold, shadow: P.uiShadow });
-    const VIS = 12;
-    const start = clamp(this.index - Math.floor(VIS / 2), 0, Math.max(0, this.places.length - VIS));
-    for (let i = start; i < Math.min(this.places.length, start + VIS); i++) {
-      const p = this.places[i];
+    const VIS = 13;
+    const selRow = this.rows.findIndex((r) => r.place === this.places[this.index]);
+    const start = clamp(selRow - Math.floor(VIS / 2), 0, Math.max(0, this.rows.length - VIS));
+    for (let i = start; i < Math.min(this.rows.length, start + VIS); i++) {
+      const row = this.rows[i];
       const ry = y + 36 + (i - start) * 12;
-      const sel = i === this.index;
-      if (sel) cursor(ctx, lx - 8, ry, this.t);
-      drawText(ctx, p.name, lx, ry, { color: sel ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
+      if (row.header) {
+        drawText(ctx, row.header, lx, ry, { color: P.uiTextDim, shadow: P.uiShadow });
+        ctx.fillStyle = P.uiEdgeDk;
+        ctx.fillRect(lx, ry + 8, textWidth(row.header), 1);
+        continue;
+      }
+      const sel = row.place === this.places[this.index];
+      const ind = row.depth * 8;
+      if (sel) cursor(ctx, lx + ind - 8, ry, this.t);
+      const col = sel ? P.uiGold : row.town ? P.uiText : P.uiTextDim;
+      drawText(ctx, row.name || row.place.name, lx + ind, ry, { color: col, shadow: P.uiShadow });
+      if (row.town) {
+        ctx.fillStyle = sel ? P.uiGoldDk : P.uiEdgeDk;
+        ctx.fillRect(lx, ry + 8, textWidth(row.place.name), 1);
+      }
     }
-    if (this.places.length > VIS) {
-      drawText(ctx, `${this.index + 1}/${this.places.length}`, lx, y + 36 + VIS * 12 + 2,
+    if (this.rows.length > VIS) {
+      drawText(ctx, `${this.index + 1}/${this.places.length}`, lx, y + 36 + VIS * 12 + 1,
         { color: P.uiTextDim, shadow: P.uiShadow });
     }
 
@@ -1107,19 +1150,46 @@ export class SummaryScreen extends Screen {
   }
   draw(ctx) {
     dim(ctx, 0.75);
-    const w = 250, h = 176;
+    const slept = !!this.s.slept;
+    const w = 250, h = slept ? 214 : 176;
     const x = (VIEW_W - w) / 2, y = (VIEW_H - h) / 2;
     panel(ctx, x, y, w, h);
     const st = this.game.state;
     panelTitle(ctx, x, y, w, `${st.clock.dayFull} morning`);
 
     let ly = y + 16;
+
+    if (slept) {
+      // You, curled up in a cat bed like any sensible cat, purring.
+      // Drawn at 2x: at native size the cat is smaller than the text beside it.
+      const Z = 2;
+      const bed = objSprite('catBed', 0);
+      const cat = playerCatSprite(st.playerLook.coat, 'sleep');
+      const cx = x + w / 2 - 16;
+      const by = ly + 6;
+      ctx.drawImage(bed, 0, 0, bed.width, bed.height,
+        Math.round(cx - (bed.width * Z) / 2), by + 6, bed.width * Z, bed.height * Z);
+      ctx.drawImage(cat, 0, 0, cat.width, cat.height,
+        Math.round(cx - (cat.width * Z) / 2), by + 6 + (bed.height - cat.height - 2) * Z,
+        cat.width * Z, cat.height * Z);
+      // Purring, drifting up beside them.
+      for (let i = 0; i < 3; i++) {
+        const k = ((this.t * 0.45) + i / 3) % 1;
+        ctx.globalAlpha = clamp(1 - k, 0, 1) * 0.9;
+        drawText(ctx, 'P' + 'r'.repeat(2 + Math.floor(k * 4)),
+          Math.round(cx + 26), Math.round(by + 16 - k * 26),
+          { color: P.uiBlue, shadow: P.uiShadow });
+        ctx.globalAlpha = 1;
+      }
+      ly = by + bed.height * Z + 12;
+    }
+
     drawTextCentered(ctx, `Day ${this.s.day + 1} is done`, x + w / 2, ly, { color: P.uiTextDim, shadow: P.uiShadow });
     ly += 18;
 
     const rows = [
       ['Customers', String(this.s.customers), P.uiText],
-      ['Taken', money(this.s.revenue), P.uiGreen],
+      ['Earned', money(this.s.revenue), P.uiGreen],
       ['Costs', money(this.s.costs), P.uiRed],
       ['Profit', money(this.s.profit), this.s.profit >= 0 ? P.uiGold : P.uiRed],
     ];

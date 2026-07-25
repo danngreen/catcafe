@@ -129,9 +129,9 @@ export class GameState {
 
   // -------------------------------------------------------------- places
 
-  visit(id, name, x, y) {
+  visit(id, name, x, y, town = null) {
     if (this.visited[id]) return false;
-    this.visited[id] = { name, x, y };
+    this.visited[id] = { name, x, y, town };
     return true;
   }
 

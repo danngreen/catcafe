@@ -29,6 +29,7 @@ import {
   CafeScreen, JournalScreen, BagScreen, MapScreen, SummaryScreen, PauseScreen,
 } from './ui/menus.js';
 import { BuildScreen } from './ui/build.js';
+import { TaxiFlight, StairWalk } from './ui/cutscene.js';
 
 const WORLD_SEED = 20260724;
 
@@ -206,7 +207,7 @@ class Game {
     this.player.look = look;
     this.enterOverworld();
     this.mode = 'play';
-    st.visit('cafe', 'Your Cat Cafe', this.homeDoor.x, this.homeDoor.y);
+    st.visit('cafe', 'Your Cat Cafe', this.homeDoor.x, this.homeDoor.y, 'brambleford');
     st.visit('brambleford', 'Brambleford', this.towns.brambleford.hub.x, this.towns.brambleford.hub.y);
     this.hud.showLocation('Brambleford');
     this.dialogue.say(
@@ -310,12 +311,18 @@ class Game {
     const talking = this.dialogue.active;
     if (talking) this.dialogue.update(dt, this.input);
 
+    // A cutscene takes the controls but leaves the world running.
+    if (this.cutscene) {
+      this.cutscene.update(dt);
+      if (this.cutscene.done) this.cutscene = null;
+    }
+
     st.clock.update(dt);
     if (st.clock.newDay) this.onNewDay();
 
     const map = this.currentMap;
 
-    if (!talking) {
+    if (!talking && !this.cutscene) {
       this.player.update(dt, this.input, map, !this.fader.busy);
       this.checkWarp();
       if (this.input.hit('use')) this.interact();
@@ -392,9 +399,10 @@ class Game {
 
   // ------------------------------------------------------------ day roll
 
-  onNewDay() {
+  onNewDay(opts = {}) {
     const st = this.state;
     const summary = st.endOfDay();
+    summary.slept = !!opts.slept;
     this.push(new SummaryScreen(this, summary));
     // The flea market gets a fresh pile of junk each weekend.
     if (st.clock.isWeekend) this.fleaStock = null;
@@ -469,6 +477,26 @@ class Game {
    * Buildings are y-sorted sprites rather than baked into the ground chunks,
    * so swapping the image is all it takes.
    */
+  /**
+   * The taxi bird: it comes down for you, carries you off, and the fade only
+   * happens once you're airborne. On the far side it lowers you back down.
+   */
+  flyTaxi(place) {
+    const st = this.state;
+    this.cutscene = new TaxiFlight('pickup', this.player, {
+      onDone: () => {
+        this.fader.out(() => {
+          if (st.mapId !== 'overworld') this.enterOverworld();
+          this.placeOn(this.overworld, place.x, place.y + 1);
+          this.cam.follow(this.overworld, this.player.x, this.player.y, true);
+          this.hud.showLocation(place.name);
+          st.clock.t += 60 * 6;                       // the flight takes a while
+          this.cutscene = new TaxiFlight('dropoff', this.player, {});
+        });
+      },
+    });
+  }
+
   refreshCafeExterior() {
     const o = this.cafeBuilding;
     if (!o || !o.cfg) return;
@@ -656,7 +684,7 @@ class Game {
     const shopId = it.shop;
     if (shopId === 'cafe') {
       this.enterInterior('cafe', st.cafeMap, tile.x, tile.y);
-      st.visit('cafe', 'Your Cat Cafe', tile.x, tile.y);
+      st.visit('cafe', 'Your Cat Cafe', tile.x, tile.y, 'brambleford');
       return;
     }
     const shop = SHOPS.find((s) => s.id === shopId);
@@ -683,7 +711,7 @@ class Game {
     }
     this.enterInterior(`shop:${shopId}`, map, tile.x, tile.y);
     const place = shop || this.landmarks.find((l) => l.id === shopId);
-    if (place) st.visit(shopId, place.name, tile.x, tile.y);
+    if (place) st.visit(shopId, place.name, tile.x, tile.y, shop ? shop.town : null);
     if (shop) {
       const town = TOWNS.find((t) => t.id === shop.town);
       if (town) st.visit(town.id, town.name, this.towns[town.id].hub.x, this.towns[town.id].hub.y);
@@ -735,10 +763,19 @@ class Game {
       choices: [{ label: 'Yes please', value: true }, { label: 'Not yet', value: false }],
       onDone: (yes) => {
         if (!yes) return;
-        this.fader.out(() => {
-          st.clock.skipTo(7);
-          this.onNewDay();
-          this.hud.toast('You slept like a log.', 'good');
+        // Walk to the foot of the stairs and climb out of sight before the
+        // screen fades — the trip upstairs is half the charm of an inn.
+        const map = this.currentMap;
+        const stairs = map.meta && map.meta.stairs
+          ? map.meta.stairs
+          : { x: this.player.tx, y: this.player.ty - 2 };
+        this.cutscene = new StairWalk(this.player, stairs, () => {
+          this.fader.out(() => {
+            st.clock.skipTo(7);
+            this.player.alpha = 1;
+            this.onNewDay({ slept: true });
+            this.hud.toast('You slept like a log.', 'good');
+          });
         });
       },
     });
@@ -821,14 +858,7 @@ class Game {
             const fare = st.taxiFare(p);
             if (st.money < fare) { this.hud.toast("You can't afford the fare.", 'bad'); audio.sfx('error'); return; }
             st.money -= fare;
-            audio.sfx('wing', { gain: 0.9 });
-            this.fader.out(() => {
-              if (st.mapId !== 'overworld') this.enterOverworld();
-              this.placeOn(this.overworld, p.x, p.y + 1);
-              this.cam.follow(this.overworld, this.player.x, this.player.y, true);
-              this.hud.showLocation(p.name);
-              st.clock.t += 60 * 6;   // the flight takes a little while
-            });
+            this.flyTaxi(p);
           },
         }));
       },
@@ -980,7 +1010,10 @@ class Game {
     const lights = map.outdoor && !st.clock.isDark ? [] : map.lights;
 
     // Everything that needs y-sorting into one list.
-    const actors = [this.player];
+    const cut = this.cutscene;
+    const actors = cut && cut.playerHidden ? [] : [this.player];
+    if (cut && cut.playerAlpha !== undefined) this.player.alpha = cut.playerAlpha;
+    else this.player.alpha = 1;
     if (st.mapId === 'overworld') {
       const cx = this.player.x, cy = this.player.y;
       for (const v of this.villagers) {
@@ -996,6 +1029,7 @@ class Game {
     }
 
     this.renderer.draw(ctx, map, this.cam, actors, { night: light.night, tint: light.tint, lights });
+    if (this.cutscene) this.cutscene.draw(ctx, this.cam.ox, this.cam.oy);
 
     this.hud.drawFloats(ctx, this.cam.ox, this.cam.oy);
     this.drawInteractPrompt(ctx);

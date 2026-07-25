@@ -163,6 +163,74 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
         window.__step = 'done';
         await wait(300);
+      } else if (SCRIPT === 'furnshop') {
+        // The furniture catalogue, where every row used to be the same brown box.
+        const st = g.state;
+        st.money = 4000;
+        st.clock.t = 12 * (1200 / 24);
+        const door = g.doorByShop.get('furniture');
+        g.player.x = door.x * 16 + 8; g.player.y = (door.y + 1) * 16 - 2;
+        g.openDoor({ kind: 'door', shop: 'furniture', name: 'furniture' }, door);
+        await wait(1400);
+        g.openShopCounter('furniture');
+        await wait(400);
+        key('Space', true); await wait(250); key('Space', false);
+        await wait(250);
+        key('Space', true); await wait(250); key('Space', false);
+        await wait(700);
+        const sc = g.screens[g.screens.length - 1];
+        window.__shop = sc ? sc.constructor.name : 'none';
+        window.__stockIcons = sc && sc.items
+          ? sc.items.map((id) => (window.game ? id : id)).length + ' items' : 'none';
+        if (window.__shop !== 'ShopScreen') window.__errors.push('furniture shop did not open: ' + window.__shop);
+        await wait(400);
+      } else if (SCRIPT === 'taxi') {
+        const st = g.state;
+        st.money = 3000;
+        st.visit('brambleford', 'Brambleford', 96, 168);
+        st.visit('hollowdown', 'Hollowdown', 212, 72);
+        g.flyTaxi({ id: 'hollowdown', name: 'Hollowdown', x: 212, y: 72 });
+        await wait(600);
+        window.__cut = g.cutscene ? g.cutscene.phase + ':' + g.cutscene.stage : 'none';
+        if (!g.cutscene) window.__errors.push('taxi cutscene never started');
+        await wait(4200);
+        window.__cut2 = g.cutscene ? g.cutscene.phase + ':' + g.cutscene.stage : 'none';
+        window.__landed = `${g.player.tx},${g.player.ty}`;
+        await wait(3200);
+        if (g.cutscene) window.__errors.push('taxi cutscene never finished: ' + g.cutscene.phase);
+        if (Math.abs(g.player.tx - 212) > 4 || Math.abs(g.player.ty - 73) > 4) {
+          window.__errors.push('taxi did not land at the destination: ' + window.__landed);
+        }
+        // Start another pickup and hold it mid-hover so the screenshot shows it.
+        g.flyTaxi({ id: 'brambleford', name: 'Brambleford', x: 96, y: 168 });
+        await wait(1100);
+        if (g.cutscene) g.cutscene.stageT = -1e6;   // freeze the hover for the camera
+        window.__hover = g.cutscene ? g.cutscene.stage : 'none';
+        await wait(400);
+      } else if (SCRIPT === 'sleep') {
+        const st = g.state;
+        const door = g.doorByShop.get('inn');
+        st.clock.t = 20 * (1200 / 24);
+        g.player.x = door.x * 16 + 8; g.player.y = (door.y + 1) * 16 - 2;
+        g.openDoor({ kind: 'door', shop: 'inn', name: 'inn' }, door);
+        await wait(1500);
+        window.__innMap = g.state.mapId;
+        window.__stairs = g.currentMap.meta && g.currentMap.meta.stairs
+          ? `${g.currentMap.meta.stairs.x},${g.currentMap.meta.stairs.y}` : 'none';
+        g.restAtInn();
+        await wait(500);
+        key('Space', true); await wait(250); key('Space', false);   // finish typing
+        await wait(300);
+        key('Space', true); await wait(250); key('Space', false);   // "Yes please"
+        await wait(600);
+        window.__walk = g.cutscene ? g.cutscene.constructor.name : 'none';
+        if (window.__walk !== 'StairWalk') window.__errors.push('no stair walk: ' + window.__walk);
+        await wait(4000);
+        const top = g.screens[g.screens.length - 1];
+        window.__summary = top ? top.constructor.name : 'none';
+        window.__slept = top && top.s ? !!top.s.slept : false;
+        if (window.__summary !== 'SummaryScreen') window.__errors.push('no summary after sleeping');
+        if (!window.__slept) window.__errors.push('summary did not know you slept');
       } else if (SCRIPT === 'treats') {
         const st = g.state;
         st.give('treats', 3);
@@ -307,14 +375,16 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
       } else if (SCRIPT === 'map') {
         // A realistic cluster: a town plus the shops inside it, all within a
         // few tiles of each other.
-        g.state.visit('a', 'Brambleford', 96, 168);
-        g.state.visit('cafe', 'Your Cat Cafe', 97, 170);
-        g.state.visit('grocer', "Pips' Provisions", 100, 166);
-        g.state.visit('bakery', 'The Warm Loaf', 93, 172);
-        g.state.visit('inn', 'The Sleeping Hare', 103, 173);
-        g.state.visit('b', 'Saltmere', 66, 240);
-        g.state.visit('c', 'Hollowdown', 212, 72);
-        g.state.visit('d', 'Thistlewick', 270, 200);
+        g.state.visit('brambleford', 'Brambleford', 96, 168);
+        g.state.visit('cafe', 'Your Cat Cafe', 97, 170, 'brambleford');
+        g.state.visit('grocer', "Pips' Provisions", 100, 166, 'brambleford');
+        g.state.visit('bakery', 'The Warm Loaf', 93, 172, 'brambleford');
+        g.state.visit('inn', 'The Sleeping Hare', 103, 173, 'brambleford');
+        g.state.visit('saltmere', 'Saltmere', 66, 240);
+        g.state.visit('vet', 'Dr. Bramble, Vet', 70, 242, 'saltmere');
+        g.state.visit('hollowdown', 'Hollowdown', 212, 72);
+        g.state.visit('thistlewick', 'Thistlewick', 270, 200);
+        g.state.visit('stones', 'The Standing Stones', 262, 44);
         await wait(200);
         key('KeyM', true); await wait(150); key('KeyM', false);
         await wait(500);
@@ -339,6 +409,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__ext ? ` ${window.__ext}` : '')
         + (window.__bookTreat ? ` book[${window.__bookTreat}] pet[${window.__petTreat}] choices=${window.__choices}` : '')
         + (window.__mapSel ? ` mapSel=${window.__mapSel}` : '')
+        + (window.__shop ? ` shop=${window.__shop} ${window.__stockIcons}` : '')
+        + (window.__cut ? ` hover=${window.__hover} cut=${window.__cut}->${window.__cut2} landed=${window.__landed}` : '')
+        + (window.__walk ? ` inn=${window.__innMap} stairs=${window.__stairs} walk=${window.__walk} summary=${window.__summary} slept=${window.__slept}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';
       out.textContent = `RESULT ${errs.length ? 'FAIL' : 'OK'} (${errs.length} issues)\n${info}\n` + errs.slice(0, 25).join('\n');
