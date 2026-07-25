@@ -965,20 +965,55 @@ export class MapScreen extends Screen {
       ctx.strokeStyle = P.uiEdgeDk;
       ctx.strokeRect(mx + 0.5, my + 0.5, Math.round(mw * scale), Math.round(mh * scale));
 
-      // Pins for everywhere you've been.
+      // Pins for everywhere you've been. Towns and shops pile up in the same
+      // few streets, so labels are placed around their pin and any that can't
+      // find a clear slot are left off — the side list still names them all.
       const st = this.game.state;
+      const at = (p) => ({
+        x: mx + Math.round(p.x * scale * (mw / st.worldW)),
+        y: my + Math.round(p.y * scale * (mh / st.worldH)),
+      });
+
       for (let i = 0; i < this.places.length; i++) {
-        const p = this.places[i];
-        const px = mx + Math.round(p.x * scale * (mw / st.worldW));
-        const py = my + Math.round(p.y * scale * (mh / st.worldH));
+        const p = at(this.places[i]);
         const sel = this.pickMode && i === this.index;
         const bob = sel ? (Math.sin(this.t * 7) > 0 ? -1 : 0) : 0;
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(p.x - 2, p.y - 5 + bob, 5, 7);
         ctx.fillStyle = sel ? P.uiGold : P.uiRed;
-        ctx.fillRect(px - 2, py - 4 + bob, 4, 4);
-        ctx.fillRect(px - 1, py + bob, 2, 2);
-        if (sel || !this.pickMode) {
-          drawText(ctx, p.name, px + 5, py - 4 + bob, { color: sel ? P.uiGold : P.uiText, shadow: '#000000' });
-        }
+        ctx.fillRect(p.x - 2, p.y - 4 + bob, 4, 4);
+        ctx.fillRect(p.x - 1, p.y + bob, 2, 2);
+      }
+
+      const taken = [];
+      const clashes = (r) => taken.some((q) =>
+        r.x < q.x + q.w + 2 && r.x + r.w + 2 > q.x && r.y < q.y + q.h + 1 && r.y + r.h + 1 > q.y);
+
+      // Selected pin first so it always wins a slot.
+      const order = this.places.map((_, i) => i)
+        .sort((a, b) => (b === this.index && this.pickMode ? 1 : 0) - (a === this.index && this.pickMode ? 1 : 0));
+
+      for (const i of order) {
+        const sel = this.pickMode && i === this.index;
+        if (this.pickMode && !sel) continue;
+        const place = this.places[i];
+        const p = at(place);
+        const lw = textWidth(place.name), lh = 8;
+        const slots = [
+          { x: p.x + 5, y: p.y - 5 },
+          { x: p.x - lw - 5, y: p.y - 5 },
+          { x: p.x - Math.round(lw / 2), y: p.y - 15 },
+          { x: p.x - Math.round(lw / 2), y: p.y + 4 },
+          { x: p.x + 5, y: p.y + 4 },
+          { x: p.x - lw - 5, y: p.y + 4 },
+        ];
+        const spot = slots.find((s) => s.x > mx - 2 && s.x + lw < mx + mw * scale + 60
+          && s.y > my && s.y + lh < my + mh * scale && !clashes({ ...s, w: lw, h: lh }));
+        if (!spot) continue;
+        taken.push({ ...spot, w: lw, h: lh });
+        ctx.fillStyle = 'rgba(12,10,20,0.72)';
+        ctx.fillRect(spot.x - 2, spot.y - 1, lw + 3, lh + 2);
+        drawText(ctx, place.name, spot.x, spot.y, { color: sel ? P.uiGold : P.uiText, shadow: '#000000' });
       }
 
       // Where you are now.

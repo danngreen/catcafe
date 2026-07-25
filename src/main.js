@@ -10,7 +10,7 @@ import { clamp, money, makeRng } from './engine/util.js';
 import { Tileset, TILE, T } from './art/tiles.js';
 import { P } from './art/palette.js';
 import { charSprite, catSprite, CAT_BREED_LIST, CAT_BREEDS, COAT_LIST, CLOTHES, COATS } from './art/chars.js';
-import { iconSprite } from './art/icons.js';
+import { buildingSprite } from './art/objects.js';
 
 import { generateWorld, WORLD_W, WORLD_H } from './world/worldgen.js';
 import { Renderer, Camera } from './world/render.js';
@@ -49,7 +49,17 @@ class Game {
       toast: (text, tone) => this.hud.toast(text, tone),
       float: (text, x, y, color) => this.hud.float(text, x, y, color),
       playerPos: () => (this.player ? { x: this.player.x, y: this.player.y, map: this.state.mapId } : null),
-      onCafeRebuilt: () => { this.maps.set('cafe', this.state.cafeMap); this.renderer.invalidateAll(); },
+      onCafeRebuilt: (map) => {
+        this.maps.set('cafe', map);
+        // If we're standing in it, swap the live map too — otherwise we keep
+        // walking around the version from before the rebuild and everything
+        // just built appears to vanish.
+        if (this.state.mapId === 'cafe') {
+          this.currentMap = map;
+          if (this.player) this.placeOn(map, this.player.tx, this.player.ty);
+        }
+        this.renderer.invalidateAll();
+      },
     });
 
     this.boot();
@@ -1082,35 +1092,74 @@ class TitleScreen extends Screen {
 
     // --- creation ---
     dim(ctx, 0.28);
-    const w = 300, h = 190;
-    const x = (VIEW_W - w) / 2, y = 32;
+    const w = 340, h = 196;
+    const x = Math.round((VIEW_W - w) / 2), y = 26;
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, 'Before you open');
 
-    const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, 'down', Math.floor(this.t * 4) % 4);
-    ctx.drawImage(spr, 0, 0, spr.width, spr.height, x + 20, y + 24, spr.width * 3, spr.height * 3);
+    // Live preview: the cafe you're choosing, with you standing at its door.
+    // Building and character are drawn at the same zoom so the proportions
+    // match what you'll actually see in the valley.
+    const Z = 2;
+    const shop = buildingSprite({
+      tw: 3, wall: this.style.wall, roof: this.style.roof, roofStyle: 'tile',
+      timbered: false, wallH: 24, roofH: 20, windows: 1,
+      signKey: 'cafe', signBg: '#f3e3c6', awning: '#c05a7a', v: 0,
+    });
+    const sw = shop.width * Z, sh = shop.height * Z;
+    const bx = x + 14, by = y + 22;
+    const ground = by + sh - 10 * Z;
+    // A patch of grass for it to stand on.
+    ctx.fillStyle = '#5da845';
+    ctx.fillRect(bx - 6, ground, sw + 12, 12 * Z);
+    ctx.fillStyle = '#4b8f39';
+    ctx.fillRect(bx - 6, ground + 11 * Z, sw + 12, 2);
+    ctx.drawImage(shop, 0, 0, shop.width, shop.height, bx, by, sw, sh);
 
-    const rows = [
-      ['Your coat', COATS[this.look.coat] ? this.look.coat : 'ginger', COATS[this.look.coat]?.fur],
-      ['Your clothes', '', this.look.cloth],
-      ['Cafe roof', '', this.style.roof],
-      ['Cafe walls', '', this.style.wall],
-      ['Cafe name', this.style.name, null],
+    const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, 'down', Math.floor(this.t * 4) % 4);
+    const cw = spr.width * Z, ch = spr.height * Z;
+    ctx.drawImage(spr, 0, 0, spr.width, spr.height,
+      Math.round(bx + sw / 2 - cw / 2 + 9 * Z), Math.round(ground + 9 * Z - ch), cw, ch);
+
+    const colX = x + 14 + sw + 18;
+    // Four colour swatches in the right-hand column...
+    const swatchRows = [
+      ['Your coat', COATS[this.look.coat]?.fur],
+      ['Your clothes', this.look.cloth],
+      ['Cafe roof', this.style.roof],
+      ['Cafe walls', this.style.wall],
     ];
-    rows.forEach(([label, val, swatch], i) => {
-      const ry = y + 28 + i * 22;
+    swatchRows.forEach(([label, swatch], i) => {
+      const ry = y + 32 + i * 26;
       const sel = i === this.row;
-      if (sel) { ctx.fillStyle = 'rgba(255,207,107,0.14)'; ctx.fillRect(x + 96, ry - 4, w - 106, 20); cursor(ctx, x + 98, ry + 1, this.t); }
-      drawText(ctx, label, x + 112, ry + 1, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
-      if (swatch) {
-        ctx.fillStyle = swatch;
-        ctx.fillRect(x + 208, ry, 60, 12);
-        ctx.strokeStyle = P.uiEdgeDk;
-        ctx.strokeRect(x + 207.5, ry - 0.5, 61, 13);
-      } else {
-        drawTextRight(ctx, `< ${val} >`, x + w - 12, ry + 1, { color: sel ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
+      if (sel) {
+        ctx.fillStyle = 'rgba(255,207,107,0.14)';
+        ctx.fillRect(colX - 12, ry - 5, (x + w - 10) - (colX - 12), 22);
+        cursor(ctx, colX - 10, ry + 1, this.t);
+      }
+      drawText(ctx, label, colX + 4, ry + 1, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
+      ctx.fillStyle = swatch;
+      ctx.fillRect(x + w - 76, ry, 54, 12);
+      ctx.strokeStyle = P.uiEdgeDk;
+      ctx.strokeRect(x + w - 76.5, ry - 0.5, 55, 13);
+      if (sel) {
+        drawText(ctx, '<', x + w - 88, ry + 1, { color: P.uiGold, shadow: P.uiShadow });
+        drawText(ctx, '>', x + w - 18, ry + 1, { color: P.uiGold, shadow: P.uiShadow });
       }
     });
+
+    // ...and the name on its own line under the preview, where it has room.
+    {
+      const ry = y + h - 46;
+      const sel = this.row === 4;
+      if (sel) {
+        ctx.fillStyle = 'rgba(255,207,107,0.14)';
+        ctx.fillRect(x + 10, ry - 5, w - 20, 22);
+      }
+      drawText(ctx, 'Cafe name', x + 18, ry + 1, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
+      drawTextRight(ctx, `< ${this.style.name} >`, x + w - 16, ry + 1,
+        { color: sel ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
+    }
 
     drawTextCentered(ctx, 'Left / Right to change    Space to begin', x + w / 2, y + h - 16, { color: P.uiTextDim, shadow: P.uiShadow });
     drawTextCentered(ctx, "(You can skip all this — it's only paint)", VIEW_W / 2, y + h + 10, { color: '#2f3d22' });

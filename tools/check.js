@@ -112,8 +112,12 @@ async function main() {
   let failed = 0;
   for (const sc of scenarios) {
     problems.length = 0;
+    // Title-screen scenarios need the real title, so they skip the autostart.
+    const params = [];
+    if (!sc.startsWith('title')) params.push('autostart');
+    if (hideOut) params.push('hideout');
     const url = urlIdx >= 0 ? args[urlIdx + 1]
-      : `${BASE}/tools/harness.html?autostart${hideOut ? '&hideout' : ''}#${sc}`;
+      : `${BASE}/tools/harness.html${params.length ? '?' + params.join('&') : ''}#${sc}`;
     // A hard reload guarantees a clean world for each scenario.
     await send('Page.navigate', { url: 'about:blank' });
     await sleep(120);

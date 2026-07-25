@@ -178,12 +178,20 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         key('Space', true); await wait(200); key('Space', false);
         await wait(700);
         window.__placed = (st.inventory.f_chair || 0) < chairsBefore;
+        const chairsOnMapBefore = g.currentMap.objects.filter((o) => o.type === 'chair').length;
         key('Escape', true); await wait(200); key('Escape', false); // finish
-        await wait(900);
+        await wait(1200);
         window.__seats = `${seatsBefore}->${st.cafeSim.seats().length}`;
+        // Back in normal play: the furniture must still be in the map we are
+        // actually walking around, not just in the build screen's draft.
+        window.__liveMap = g.currentMap === st.cafeMap;
+        const chairsOnMapAfter = g.currentMap.objects.filter((o) => o.type === 'chair').length;
+        window.__chairs = `${chairsOnMapBefore}->${chairsOnMapAfter}`;
         if (window.__build !== 'BuildScreen') window.__errors.push('cafe book did not open build mode: ' + window.__build);
         if (!window.__placed) window.__errors.push('chair was not placed');
         if (st.cafeSim.seats().length <= seatsBefore) window.__errors.push('seat count did not rise: ' + window.__seats);
+        if (!window.__liveMap) window.__errors.push('live map is stale after rebuild');
+        if (chairsOnMapAfter <= chairsOnMapBefore) window.__errors.push('placed furniture vanished on exit: ' + window.__chairs);
       } else if (SCRIPT === 'door') {
         // Enter and leave a building repeatedly from the doorstep itself. The
         // trap only appeared when you pressed Space while standing on the mat.
@@ -211,10 +219,30 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (results.some((r) => r.includes('STUCK'))) {
           window.__errors.push('trapped after leaving a building: ' + window.__door);
         }
+      } else if (SCRIPT.startsWith('title')) {
+        const ts = g.screens[0];
+        ts.index = ts.options.indexOf('New game');
+        key('Space', true); await wait(220); key('Space', false);
+        await wait(500);
+        window.__stage = ts.stage;
+        // Drop to the roof row and recolour it, then the walls.
+        for (let i = 0; i < 2; i++) { key('ArrowDown', true); await wait(190); key('ArrowDown', false); }
+        for (let i = 0; i < 2; i++) { key('ArrowRight', true); await wait(210); key('ArrowRight', false); }
+        key('ArrowDown', true); await wait(190); key('ArrowDown', false);
+        key('ArrowRight', true); await wait(210); key('ArrowRight', false);
+        await wait(500);
+        if (ts.stage !== 'create') window.__errors.push('did not reach the creation screen');
       } else if (SCRIPT === 'map') {
+        // A realistic cluster: a town plus the shops inside it, all within a
+        // few tiles of each other.
         g.state.visit('a', 'Brambleford', 96, 168);
-        g.state.visit('b', 'Saltmere', 52, 254);
-        g.state.visit('c', 'Hollowdown', 208, 68);
+        g.state.visit('cafe', 'Your Cat Cafe', 97, 170);
+        g.state.visit('grocer', "Pips' Provisions", 100, 166);
+        g.state.visit('bakery', 'The Warm Loaf', 93, 172);
+        g.state.visit('inn', 'The Sleeping Hare', 103, 173);
+        g.state.visit('b', 'Saltmere', 66, 240);
+        g.state.visit('c', 'Hollowdown', 212, 72);
+        g.state.visit('d', 'Thistlewick', 270, 200);
         await wait(200);
         key('KeyM', true); await wait(150); key('KeyM', false);
         await wait(600);
@@ -229,7 +257,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
       const g = window.game;
       const extra = (window.__step ? ` step=${window.__step} customers=${window.__customers} revenue=${window.__revenue} summary=${window.__summaryShown} save=${window.__saveOk}` : '')
         + (window.__door ? ` door=[${window.__door}]` : '')
-        + (window.__build ? ` book=${window.__book} build=${window.__build} mode=${window.__buildMode} tabs=${window.__tabs} placed=${window.__placed} seats=${window.__seats}` : '');
+        + (window.__build ? ` book=${window.__book} build=${window.__build} mode=${window.__buildMode} tabs=${window.__tabs} placed=${window.__placed} seats=${window.__seats} liveMap=${window.__liveMap} chairs=${window.__chairs}` : '')
+        + (window.__stage ? ` stage=${window.__stage}` : '');
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';
       out.textContent = `RESULT ${errs.length ? 'FAIL' : 'OK'} (${errs.length} issues)\n${info}\n` + errs.slice(0, 25).join('\n');
       document.title = errs.length ? `FAIL ${errs.length}` : 'OK';
