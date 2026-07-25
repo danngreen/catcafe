@@ -66,9 +66,25 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         for (let i = 0; i < 4; i++) { g.state.cafeSim.trySpawn(g.state.cafeMap); await wait(300); }
         await wait(2500);
       } else if (SCRIPT === 'build') {
+        // Go in the way a player does: through Trowel & Sons.
         g.state.workers = 2; g.state.materials = 3; g.state.money = 5000;
-        g.openBuildMode();
-        await wait(600);
+        g.openShopCounter('builder');
+        await wait(500);
+        key('Space', true); await wait(220); key('Space', false);   // finish typing
+        await wait(250);
+        key('Space', true); await wait(220); key('Space', false);   // close greeting
+        await wait(500);
+        window.__builder = g.screens.length ? g.screens[g.screens.length - 1].constructor.name : 'none';
+        key('ArrowDown', true); await wait(230); key('ArrowDown', false);  // -> Start building
+        key('Space', true); await wait(230); key('Space', false);
+        await wait(700);
+        const bs = g.screens[g.screens.length - 1];
+        window.__build = bs ? bs.constructor.name : 'none';
+        window.__tabs = bs && bs.modes ? bs.modes.join('/') : '?';
+        if (window.__build !== 'BuildScreen') {
+          window.__errors.push('builder yard did not open build mode (got ' + window.__build + ')');
+        }
+        await wait(300);
         for (const code of ['ArrowRight', 'ArrowRight', 'ArrowDown']) { key(code, true); await wait(160); key(code, false); }
         key('Space', true); await wait(120); key('Space', false);
         for (const code of ['ArrowRight', 'ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowDown']) { key(code, true); await wait(140); key(code, false); }
@@ -141,6 +157,33 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
         window.__step = 'done';
         await wait(300);
+      } else if (SCRIPT === 'furnish') {
+        // The whole "I bought a chair, now what" path, with no builders hired.
+        const st = g.state;
+        const seatsBefore = st.cafeSim.seats().length;
+        const chairsBefore = st.inventory.f_chair || 0;
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        await wait(1200);
+        key('KeyC', true); await wait(160); key('KeyC', false);   // cafe book
+        await wait(400);
+        window.__book = g.screens.length ? g.screens[g.screens.length - 1].constructor.name : 'none';
+        key('Space', true); await wait(180); key('Space', false); // arrange & build
+        await wait(700);
+        const top = g.screens[g.screens.length - 1];
+        window.__build = top ? top.constructor.name : 'none';
+        window.__buildMode = top && top.modeName;
+        window.__tabs = top && top.modes ? top.modes.join('/') : '?';
+        // Move somewhere clear and drop a chair.
+        for (const k of ['ArrowDown', 'ArrowDown', 'ArrowLeft']) { key(k, true); await wait(170); key(k, false); }
+        key('Space', true); await wait(200); key('Space', false);
+        await wait(700);
+        window.__placed = (st.inventory.f_chair || 0) < chairsBefore;
+        key('Escape', true); await wait(200); key('Escape', false); // finish
+        await wait(900);
+        window.__seats = `${seatsBefore}->${st.cafeSim.seats().length}`;
+        if (window.__build !== 'BuildScreen') window.__errors.push('cafe book did not open build mode: ' + window.__build);
+        if (!window.__placed) window.__errors.push('chair was not placed');
+        if (st.cafeSim.seats().length <= seatsBefore) window.__errors.push('seat count did not rise: ' + window.__seats);
       } else if (SCRIPT === 'door') {
         // Enter and leave a building repeatedly from the doorstep itself. The
         // trap only appeared when you pressed Space while standing on the mat.
@@ -185,7 +228,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
       const out = document.getElementById('out');
       const g = window.game;
       const extra = (window.__step ? ` step=${window.__step} customers=${window.__customers} revenue=${window.__revenue} summary=${window.__summaryShown} save=${window.__saveOk}` : '')
-        + (window.__door ? ` door=[${window.__door}]` : '');
+        + (window.__door ? ` door=[${window.__door}]` : '')
+        + (window.__build ? ` book=${window.__book} build=${window.__build} mode=${window.__buildMode} tabs=${window.__tabs} placed=${window.__placed} seats=${window.__seats}` : '');
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';
       out.textContent = `RESULT ${errs.length ? 'FAIL' : 'OK'} (${errs.length} issues)\n${info}\n` + errs.slice(0, 25).join('\n');
       document.title = errs.length ? `FAIL ${errs.length}` : 'OK';

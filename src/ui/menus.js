@@ -383,7 +383,9 @@ export class BuilderScreen extends ListScreen {
     this.items = [
       { kind: 'worker', label: `Hire a builder  (crew: ${st.workers})`, cost: 180 + st.workers * 140,
         note: 'Each builder lets you add more floor space.' },
-      { kind: 'build', label: 'Start building', cost: 0, note: 'Lay out new rooms and place your furniture.' },
+      { kind: 'build', label: 'Start building', cost: 0,
+        note: st.workers < 1 ? 'Hire a crew first if you want to lay out new rooms.'
+          : 'Lay out new rooms and arrange your furniture.' },
       { kind: 'materials', label: 'Buy timber & tile', cost: 120,
         note: 'Materials for one more room. You need these before you can build.' },
     ];
@@ -410,7 +412,6 @@ export class BuilderScreen extends ListScreen {
         audio.sfx('saw', { gain: 0.8 });
         this.flash(`Materials delivered. You have ${st.materials} lot${st.materials > 1 ? 's' : ''}.`);
       } else {
-        if (st.workers < 1) { this.flash('Hire at least one builder first.'); return; }
         this.done = true;
         this.game.openBuildMode();
         return;
@@ -506,6 +507,13 @@ export class CafeScreen extends Screen {
         audio.sfx(st.shopOpen ? 'ui_ok' : 'ui_back');
         this.flash(st.shopOpen ? 'Sign turned to OPEN.' : 'Sign turned to CLOSED.');
       }
+    } else if (this.tab === 0 && input.hit('use')) {
+      // The cafe page is where people look for "change my cafe", so this is the
+      // primary way into build mode — no trek to the builder's yard required
+      // just to put down a chair you already own.
+      this.done = true;
+      this.game.openBuildMode();
+      return;
     } else if (this.tab === 3 && input.hit('use')) {
       this.staffAction();
     } else if (this.tab === 2 && input.hit('use')) {
@@ -627,6 +635,22 @@ export class CafeScreen extends Screen {
     const menu = sim.availableMenu();
     drawText(ctx, `On the menu: ${menu.length ? menu.slice(0, 4).map((id) => ITEMS[id].name).join(', ') + (menu.length > 4 ? '...' : '') : 'nothing at all'}`,
       x + 12, ly, { color: menu.length ? P.uiTextDim : P.uiRed, shadow: P.uiShadow });
+    ly += 18;
+
+    // The way into build mode.
+    const waiting = Object.keys(st.inventory).filter((id) => ITEMS[id]?.place && st.inventory[id] > 0)
+      .reduce((s, id) => s + st.inventory[id], 0);
+    const bw = 208;
+    ctx.fillStyle = 'rgba(255,207,107,0.16)';
+    ctx.fillRect(x + 10, ly - 3, bw, 16);
+    ctx.fillStyle = P.uiGold;
+    ctx.fillRect(x + 10, ly - 3, 2, 16);
+    cursor(ctx, x + 12, ly + 1, this.t);
+    drawText(ctx, 'Space: arrange & build', x + 26, ly + 1, { color: P.uiGold, shadow: P.uiShadow });
+    if (waiting) {
+      drawText(ctx, `${waiting} piece${waiting > 1 ? 's' : ''} of furniture waiting in your bag`,
+        x + 12, ly + 17, { color: P.uiGreen, shadow: P.uiShadow });
+    }
 
     // A hint panel that nudges you toward whatever is currently weakest.
     const advice = this.advice();
@@ -644,12 +668,18 @@ export class CafeScreen extends Screen {
   advice() {
     const st = this.game.state;
     const sim = st.cafeSim;
+    const unplaced = Object.keys(st.inventory).some((id) => ITEMS[id]?.place && st.inventory[id] > 0);
+    if (unplaced) return 'You have furniture in your bag. Press Space here to arrange it.';
     if (!sim.availableMenu().length) return 'Your menu board is empty. Buy coffee or cake from a shop.';
-    if (sim.seats().length < 3) return 'Only a seat or two. More chairs means more customers at once.';
+    if (sim.seats().length < 3) return 'Only a seat or two. More chairs means more customers at once — buy them at Velvet & Oak in Thistlewick.';
     if (!st.cats.length) return 'A cat cafe with no cats is just a cafe. Whisker & Paw is down the lane.';
-    if (sim.freeSeats().length === 0) return 'You are turning people away. Build more room, then add tables.';
+    if (sim.freeSeats().length === 0) {
+      return st.workers < 1
+        ? 'You are turning people away. To add a room you need builders: Trowel & Sons, up in Hollowdown.'
+        : 'You are turning people away. Press Space here to build another room, then fill it with tables.';
+    }
     if (st.cats.some((c) => c.sick)) return 'A cat is unwell. The vet is in Saltmere, and it spreads.';
-    if (sim.furnitureAppeal() < 6) return 'The room is a bit bare. Plants, a rug, a painting — people stay longer.';
+    if (sim.furnitureAppeal() < 6) return 'The room is a bit bare. Plants, a rug, a painting — people stay longer. Velvet & Oak, in Thistlewick.';
     if (!st.employee && st.money > 900) return 'You could hire someone. Then the cafe earns while you explore.';
     if (st.cats.every((c) => c.groomed <= 0) && st.cats.length) return 'None of your cats have been groomed lately. Fluff & Tumble, up in Hollowdown.';
     return 'Try a fancier menu item — the margin on cake is better than coffee.';

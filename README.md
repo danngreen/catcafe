@@ -23,7 +23,7 @@ It does need to be served over HTTP (modules don't load from `file://`).
 | Space / Enter | Talk, enter doors, read signs, serve customers |
 | Esc | Menu (and closes screens) |
 | X / Backspace | Back / cancel |
-| C | Cafe book — pantry, cats, staff, opening hours |
+| C | Cafe book — arrange & build, pantry, cats, staff, opening hours |
 | M | Map |
 | I | Bag |
 | Tab | Switch tabs, and switch mode in the build screen |
@@ -55,10 +55,17 @@ unhappy, and ill. Illness spreads between cats, so a sneeze means a trip to the
 vet in Saltmere. Grooming lasts about a week. Rare breeds cost a great deal and
 are worth it.
 
-**Building.** Hire builders from Trowel & Sons in Hollowdown, buy timber, then
-draw new rooms on a plan of your cafe and place furniture in them. Your crew size
-caps how much floor you're allowed. The plan is drawn with the same tiles and
-sprites as the real interior, so what you lay out is what you walk around in.
+**Furnishing and building.** Open the cafe book with **C** and press Space on
+the first page to get a plan of your cafe. Furniture you've bought sits in your
+bag until you place it here — Space to put a piece down, X to pick it back up,
+M/I or Shift to change which piece, Esc when you're done. The Style tab changes
+floor, walls and roof.
+
+Adding *rooms* needs a hired crew: Trowel & Sons in Hollowdown (weekdays,
+7am–4pm) sell builders and timber, and your crew size caps how much floor you're
+allowed. Until you've hired someone the Rooms tab simply isn't offered. The plan
+is drawn with the same tiles and sprites as the real interior, so what you lay
+out is what you walk around in.
 
 **Staff.** Once you have a reputation, hire someone so the cafe keeps earning
 while you're out exploring. Pay them fairly: underpay and service degrades and
@@ -115,7 +122,7 @@ There's a headless smoke test that drives the game through scenarios in a real
 browser and reports console errors:
 
 ```bash
-node tools/check.js walk cafe shop build map night door systems1 systems2 --clean
+node tools/check.js walk cafe shop build furnish map night door systems1 systems2 --clean
 node tools/check.js town --shotdir /tmp/shots      # also writes screenshots
 ```
 

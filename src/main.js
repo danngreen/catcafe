@@ -271,7 +271,13 @@ class Game {
     if (this.screens.length) {
       const s = this.topScreen;
       s.update(dt, this.input, this);
-      if (s.done) this.screens.pop();
+      // Remove *this* screen, not whatever is on top: a screen may push another
+      // one during its own update (the builder's yard opens build mode), and
+      // popping blindly would throw away the screen it just opened.
+      if (s.done) {
+        const i = this.screens.indexOf(s);
+        if (i >= 0) this.screens.splice(i, 1);
+      }
       this.hud.update(dt, st);
       this.input.endFrame();
       audio.update(dt, { night: st.clock.lighting().night });
@@ -434,7 +440,18 @@ class Game {
       this.cam.follow(map, this.player.x, this.player.y, true);
       this.renderer.invalidateAll();
       this.hud.showLocation(map.name);
+      if (mapId === 'cafe') this.nudgeFurniture();
     });
+  }
+
+  /** Point out, once, that unplaced furniture is arranged from the cafe book. */
+  nudgeFurniture() {
+    const st = this.state;
+    if (st.flags.nudged_furniture) return;
+    const any = Object.keys(st.inventory).some((id) => ITEMS[id]?.place && st.inventory[id] > 0);
+    if (!any) return;
+    st.flags.nudged_furniture = true;
+    this.hud.toast('Furniture in your bag — press C, then Space, to place it.', 'good', 7);
   }
 
   interact() {
@@ -758,7 +775,13 @@ class Game {
     // 5. Ordinary chatter, with the odd hint or piece of gossip.
     let line;
     const roll = Math.random();
-    if (def.hint && (st.friends[def.id] || 0) > 0.05 && roll < 0.3) line = def.hint;
+    const heardHint = st.flags[`heard_hint_${def.id}`];
+    if (def.hint && !heardHint && v.lineIndex >= 1) {
+      // Anyone with something genuinely useful to say gets it out by the second
+      // conversation, rather than hiding it behind an invisible friendship roll.
+      line = def.hint;
+      st.flags[`heard_hint_${def.id}`] = true;
+    } else if (def.hint && roll < 0.2) line = def.hint;
     else if (roll < 0.16) line = GOSSIP[Math.floor(Math.random() * GOSSIP.length)];
     else {
       line = def.lines[v.lineIndex % def.lines.length];

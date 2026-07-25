@@ -14,7 +14,9 @@ import { audio } from '../engine/audio.js';
 import { clamp, money } from '../engine/util.js';
 import { objSprite } from '../art/objects.js';
 
-const MODES = ['Rooms', 'Furnish', 'Style'];
+// Laying out rooms needs a hired crew; moving your own furniture about does
+// not, so the Rooms tab simply isn't offered until you have builders.
+const ALL_MODES = ['Rooms', 'Furnish', 'Style'];
 
 const FLOORS = [
   { id: T.FLOOR_WOOD, name: 'Boards' },
@@ -38,6 +40,7 @@ export class BuildScreen extends Screen {
     this.draft = JSON.parse(JSON.stringify(st.cafe));
     this.spentMoney = 0;
     this.spentMaterials = 0;
+    this.modes = st.workers > 0 ? ALL_MODES : ALL_MODES.slice(1);
     this.mode = 0;
     this.cur = { x: 0, y: 0 };
     this.dragStart = null;
@@ -49,12 +52,16 @@ export class BuildScreen extends Screen {
     this.cam = new Camera();
     this.map = null;
     this.rebuild();
-    // Start the cursor flush against the first room's east wall, so the very
-    // first thing you draw is guaranteed to join on.
     const r0 = this.draft.rooms[0];
-    this.cur = { x: r0.x + r0.w, y: r0.y };
+    // In Rooms mode, start flush against the east wall so the first rectangle
+    // you draw is guaranteed to join on; otherwise start inside the room.
+    this.cur = this.modeName === 'Rooms'
+      ? { x: r0.x + r0.w, y: r0.y }
+      : { x: r0.x + Math.floor(r0.w / 2), y: r0.y + Math.floor(r0.h / 2) };
     audio.setTrack('build');
   }
+
+  get modeName() { return this.modes[this.mode]; }
 
   rebuild() {
     draftSerial++;
@@ -110,12 +117,12 @@ export class BuildScreen extends Screen {
     const st = this.game.state;
 
     if (input.hit('shift')) {
-      this.mode = (this.mode + 1) % MODES.length;
+      this.mode = (this.mode + 1) % this.modes.length;
       this.dragStart = null;
       audio.sfx('ui_move');
     }
 
-    if (this.mode === 2) {
+    if (this.modeName === 'Style') {
       this.updateStyle(dt, input);
     } else {
       // Cursor movement is shared by room and furnish modes.
@@ -126,7 +133,7 @@ export class BuildScreen extends Screen {
       this.cur.x = clamp(this.cur.x, -22, 32);
       this.cur.y = clamp(this.cur.y, -18, 26);
 
-      if (this.mode === 0) this.updateRooms(input);
+      if (this.modeName === 'Rooms') this.updateRooms(input);
       else this.updateFurnish(dt, input);
     }
 
@@ -321,7 +328,7 @@ export class BuildScreen extends Screen {
     ctx.globalAlpha = 1;
 
     // Pending room rectangle.
-    if (this.mode === 0 && this.dragStart) {
+    if (this.modeName === 'Rooms' && this.dragStart) {
       const r = this.pendingRect();
       const ok = r.w >= 3 && r.h >= 3 && !this.overlapsExisting(r) && this.touchesExisting(r)
         && this.areaOf(this.draft.rooms) + r.w * r.h <= this.game.state.maxFloorArea();
@@ -336,7 +343,7 @@ export class BuildScreen extends Screen {
     }
 
     // Ghost of the furniture about to be placed.
-    if (this.mode === 1) {
+    if (this.modeName === 'Furnish') {
       const stock = this.furnitureStock;
       const id = stock[this.palette];
       if (id) {
@@ -350,7 +357,7 @@ export class BuildScreen extends Screen {
     }
 
     // Cursor.
-    if (this.mode !== 2) {
+    if (this.modeName !== 'Style') {
       const bob = Math.sin(this.t * 6) > 0 ? 0 : 1;
       ctx.strokeStyle = P.uiGold;
       ctx.lineWidth = 1;
@@ -371,7 +378,7 @@ export class BuildScreen extends Screen {
     ctx.fillRect(0, 22, VIEW_W, 1);
 
     let tx = 8;
-    MODES.forEach((m, i) => {
+    this.modes.forEach((m, i) => {
       const tw = textWidth(m) + 12;
       const sel = i === this.mode;
       ctx.fillStyle = sel ? P.uiGoldDk : '#2a2440';
@@ -388,13 +395,13 @@ export class BuildScreen extends Screen {
     drawTextRight(ctx, money(cash), VIEW_W - 10, 7, { color: cash < 0 ? P.uiRed : P.uiGold, shadow: P.uiShadow });
 
     // Bottom bar: contextual help and, in furnish mode, the palette.
-    const barH = this.mode === 1 ? 42 : 26;
+    const barH = this.modeName === 'Furnish' ? 42 : 26;
     ctx.fillStyle = 'rgba(20,17,32,0.92)';
     ctx.fillRect(0, VIEW_H - barH, VIEW_W, barH);
     ctx.fillStyle = P.uiEdgeDk;
     ctx.fillRect(0, VIEW_H - barH, VIEW_W, 1);
 
-    if (this.mode === 1) {
+    if (this.modeName === 'Furnish') {
       const stock = this.furnitureStock;
       if (!stock.length) {
         drawText(ctx, 'Nothing to place. Buy furniture at Velvet & Oak in Thistlewick.', 10, VIEW_H - 34, { color: P.uiTextDim, shadow: P.uiShadow });
@@ -417,7 +424,7 @@ export class BuildScreen extends Screen {
           { color: P.uiGold, shadow: P.uiShadow });
       }
       drawText(ctx, 'Space place   X pick up   Esc done', 10, VIEW_H - 14, { color: P.uiTextDim, shadow: P.uiShadow });
-    } else if (this.mode === 0) {
+    } else if (this.modeName === 'Rooms') {
       drawText(ctx, this.dragStart ? 'Space again to set the far corner   X cancel'
         : 'Space start room   X demolish   Esc done',
         10, VIEW_H - 17, { color: P.uiTextDim, shadow: P.uiShadow });
@@ -425,7 +432,7 @@ export class BuildScreen extends Screen {
         VIEW_W - 10, VIEW_H - 17, { color: P.uiTextDim, shadow: P.uiShadow });
     }
 
-    if (this.mode === 2) this.drawStylePanel(ctx);
+    if (this.modeName === 'Style') this.drawStylePanel(ctx);
 
     if (this.msgT > 0) {
       const w = textWidth(this.msg) + 18;
