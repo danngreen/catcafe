@@ -4,11 +4,10 @@
 import { Clock } from './time.js';
 import { Cafe } from './cafe.js';
 import { Cat } from './entities.js';
-import { ITEMS, item, baseId } from './items.js';
+import { item, baseId } from './items.js';
 import { CAT_BREEDS } from '../art/chars.js';
 import { startingCafe, buildCafeMap } from '../world/interiors.js';
 import { VILLAGERS } from '../world/places.js';
-import { clamp } from '../engine/util.js';
 import { TILE } from '../art/tiles.js';
 
 const SAVE_KEY = 'catcafe.save.v1';
@@ -49,6 +48,97 @@ export class GameState {
     this.pendingLetters = [];   // letters in flight, delivered on a later day
     this.cafeSim = new Cafe(this);
     this.stockedToday = {};
+
+    // Shared session, set by the game once we've joined one. Everything below
+    // works unchanged when it stays null.
+    this.net = null;
+    this.applying = false;      // true while taking the server's word for it
+    this.cafeOccupied = false;  // is anyone at all standing in the cafe?
+  }
+
+  // --------------------------------------------------------- shared session
+
+  get shared() { return !!(this.net && this.net.shared); }
+
+  /**
+   * Publish a change. Suppressed while we're applying one, or nobody would ever
+   * stop echoing the same edit back and forth.
+   */
+  pub(op) { if (this.shared && !this.applying) this.net.op(op); }
+
+  /** Money moves as a delta so two tills can ring up at once without a clash. */
+  earn(n) { this.money += n; this.pub({ op: 'money', d: n }); }
+  spend(n) { this.money -= n; this.pub({ op: 'money', d: -n }); }
+
+  /** Re-publish a field we just edited in place (flags, quests, hours...). */
+  touch(k) { this.pub({ op: 'set', k, v: this[k] }); }
+
+  touchCats() { this.pub({ op: 'set', k: 'cats', v: this.cats.map((c) => c.save()) }); }
+
+  /** Take the server's value for one field without echoing it back. */
+  applySync(k, v) {
+    this.applying = true;
+    try {
+      if (k === 'cats') this.mergeCats(v || []);
+      else if (k === 'cafe') {
+        // Rebuilding is expensive and moves the player, so ignore the echo of
+        // our own change — which is what we get straight after building.
+        if (JSON.stringify(this.cafe) !== JSON.stringify(v)) { this.cafe = v; this.rebuildCafe(); }
+      } else this[k] = v;
+    } finally {
+      this.applying = false;
+    }
+  }
+
+  /**
+   * Reconcile our cats with the shared list. Existing cats keep their instance
+   * so they carry on padding about the room rather than teleporting home.
+   */
+  mergeCats(list) {
+    const byId = new Map(this.cats.map((c) => [c.id, c]));
+    this.cats = list.map((s) => {
+      const c = byId.get(s.id);
+      if (!c) return new Cat(s.breed, 0, 0, s);
+      Object.assign(c, {
+        breed: s.breed, name: s.name, groomed: s.groomed, coatQuality: s.coatQuality,
+        happiness: s.happiness, hunger: s.hunger, sick: s.sick, sickDays: s.sickDays,
+        accessory: s.accessory, age: s.age,
+      });
+      return c;
+    });
+    this.catActors = this.catActors.filter((c) => this.cats.includes(c));
+    for (const c of this.cats) if (!this.catActors.includes(c)) this.spawnCatActor(c);
+  }
+
+  /** The half of a save that everyone shares. */
+  snapshot() {
+    return {
+      money: this.money, reputation: this.reputation,
+      inventory: this.inventory, stock: this.stock,
+      cats: this.cats.map((c) => c.save()), cafe: this.cafe,
+      flags: this.flags, quests: this.quests, friends: this.friends,
+      workers: this.workers, materials: this.materials, employee: this.employee,
+      shopOpen: this.shopOpen, shopHours: this.shopHours, visited: this.visited,
+      mail: this.mail, pendingLetters: this.pendingLetters,
+      bestDayProfit: this.bestDayProfit, totalCustomers: this.totalCustomers,
+      daysPlayed: this.daysPlayed,
+    };
+  }
+
+  /** Join a valley somebody else already opened: their books replace ours. */
+  adopt(world, clock) {
+    if (!world) return;
+    this.applying = true;
+    try {
+      for (const [k, v] of Object.entries(world)) {
+        if (k === 'cats') this.cats = v.map((s) => new Cat(s.breed, 0, 0, s));
+        else this[k] = v;
+      }
+      if (clock) this.clock.load(clock);
+      this.rebuildCafe();     // their layout, their colours
+    } finally {
+      this.applying = false;
+    }
   }
 
   // ------------------------------------------------------------ inventory
@@ -63,6 +153,7 @@ export class GameState {
       this.cafeSim.addStock(baseId(key), qty, this.clock.day);
     } else {
       this.inventory[key] = (this.inventory[key] || 0) + qty;
+      this.pub({ op: 'inv', key, d: qty });
     }
   }
 
@@ -71,6 +162,7 @@ export class GameState {
     if (this.inventory[id] < qty) return false;
     this.inventory[id] -= qty;
     if (this.inventory[id] <= 0) delete this.inventory[id];
+    this.pub({ op: 'inv', key: id, d: -qty });
     return true;
   }
 
@@ -94,6 +186,7 @@ export class GameState {
     const cat = new Cat(breed, 0, 0);
     this.cats.push(cat);
     this.spawnCatActor(cat);
+    this.touchCats();
     return cat;
   }
 
@@ -136,6 +229,7 @@ export class GameState {
   visit(id, name, x, y, town = null) {
     if (this.visited[id]) return false;
     this.visited[id] = { name, x, y, town };
+    this.touch('visited');
     return true;
   }
 
@@ -172,6 +266,11 @@ export class GameState {
     if (this.money < 0) {
       summary.lines.push({ text: 'You are in the red. Sell something, or open earlier.', tone: 'bad' });
     }
+
+    // Overnight touches most of the books at once, and only one client runs it.
+    this.touchCats();
+    for (const k of ['mail', 'pendingLetters', 'employee', 'reputation',
+      'bestDayProfit', 'totalCustomers', 'daysPlayed']) this.touch(k);
     return summary;
   }
 

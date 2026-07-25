@@ -1,11 +1,13 @@
 // Client half of the multiplayer session.
 //
-// Phase 1: the server tells us the world seed and who else is here, and relays
-// where everyone is standing. Everything else is still local to each client.
-// The game runs perfectly well with no server at all — `connect` just resolves
-// false and nothing else changes.
+// The server tells us the world seed, who else is here and where they are, and
+// it owns the cafe's books: money, pantry, bag, cats, quest flags and the clock.
+// We change those by sending operations and taking the server's answer as the
+// truth. The game runs perfectly well with no server at all — `connect` just
+// resolves false, `shared` stays false, and every op is a no-op.
 
 const SEND_HZ = 15;
+const CUST_HZ = 10;
 
 export class NetClient {
   constructor() {
@@ -18,9 +20,19 @@ export class NetClient {
     this.handlers = {};
     this.here = 0;        // browsers attached, including any still on the title
     this.host = null;
+    this.world = null;    // the shared books, as they stood when we connected
+    this.clock = null;
+    this.owner = null;    // whose client is running the cafe simulation
     this.sendTimer = 0;
+    this.custTimer = 0;
     this.lastSent = { x: -1, y: -1, dir: '', map: '' };
   }
+
+  /** True once we are actually playing in somebody's valley. */
+  get shared() { return this.connected && this.joined; }
+
+  /** Are we the client that simulates the cafe? Alone, we always are. */
+  get simOwner() { return !this.shared || this.owner === this.id; }
 
   on(evt, fn) { (this.handlers[evt] ||= []).push(fn); return this; }
   emit(evt, ...a) { for (const fn of this.handlers[evt] || []) fn(...a); }
@@ -60,6 +72,7 @@ export class NetClient {
       ws.onclose = () => {
         this.connected = false;
         this.joined = false;
+        this.owner = null;
         this.remotes.clear();
         this.emit('disconnected');
       };
@@ -73,9 +86,41 @@ export class NetClient {
         this.seed = msg.seed;
         this.here = msg.here || 1;
         this.host = location.host;
+        this.world = msg.world || null;
+        this.clock = msg.clock || null;
+        this.owner = msg.owner || null;
         this.connected = true;
         for (const p of msg.players || []) this.remotes.set(p.id, { ...p });
         this.emit('welcome', msg);
+        break;
+      case 'world':
+        // Somebody else opened the cafe first; theirs is the real one.
+        this.world = msg.world;
+        this.clock = msg.clock || null;
+        this.emit('world', msg.world, msg.clock);
+        break;
+      case 'sync':
+        this.emit('sync', msg.k, msg.v);
+        break;
+      case 'clock':
+        this.clock = msg.c;
+        this.emit('clock', this.clock);
+        break;
+      case 'newday':
+        this.emit('newday', msg);
+        break;
+      case 'summary':
+        this.emit('summary', msg.s);
+        break;
+      case 'owner':
+        this.owner = msg.id;
+        this.emit('owner', msg.id);
+        break;
+      case 'cust':
+        this.emit('cust', msg.c || []);
+        break;
+      case 'serve':
+        this.emit('serve', msg);
         break;
       case 'presence':
         this.here = msg.here || 0;
@@ -118,6 +163,32 @@ export class NetClient {
     if (!this.connected) return;
     this.joined = true;
     this.send({ t: 'join', name, look, x: Math.round(x), y: Math.round(y), map });
+  }
+
+  /** Change something in the shared books. Silently local when playing alone. */
+  op(o) { if (this.shared) this.send({ t: 'op', ...o }); }
+
+  /** Offer the world we just built. The server keeps only the first offer. */
+  seedWorld(world, clock) { if (this.shared) this.send({ t: 'seedworld', world, clock }); }
+
+  skipTo(hour) { if (this.shared) this.send({ t: 'skip', hour }); }
+
+  sendSummary(s) { if (this.shared) this.send({ t: 'summary', s }); }
+
+  /** Ask whoever runs the cafe to serve whoever is standing here. */
+  askServe(x, y) { if (this.shared) this.send({ t: 'serve', x: Math.round(x), y: Math.round(y) }); }
+
+  /** Owner only: publish the customers, throttled, so the others can draw them. */
+  sendCustomers(dt, customers) {
+    if (!this.shared || !this.simOwner) return;
+    this.custTimer -= dt;
+    if (this.custTimer > 0) return;
+    this.custTimer = 1 / CUST_HZ;
+    this.send({
+      t: 'cust',
+      c: customers.map((c) => [c.id, Math.round(c.x), Math.round(c.y), c.dir, c.frame,
+        c.look, c.state, c.order || null]),
+    });
   }
 
   /** Called every frame; throttles to SEND_HZ and skips when nothing moved. */

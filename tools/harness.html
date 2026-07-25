@@ -291,6 +291,168 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!g.net.connected) window.__errors.push('not connected');
         if (!g.net.joined) window.__errors.push('never sent join');
         if (g.net.remotes.size === 0) window.__errors.push('cannot see the other client: ' + window.__pair);
+      } else if (SCRIPT === 'netbooks') {
+        // The shared books, driven from both ends: a second player changes the
+        // money, the bag and the pantry, and we must end up agreeing.
+        const st = g.state;
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${proto}//${location.host}/ws`);
+        const seen = [];
+        let ready = false;
+        ws.onmessage = (ev) => {
+          const m = JSON.parse(ev.data);
+          if (m.t === 'welcome' && !ready) {
+            ready = true;
+            ws.send(JSON.stringify({ t: 'join', name: 'Ledger', look: st.playerLook, x: 0, y: 0, map: 'overworld' }));
+          }
+          if (m.t === 'sync') seen.push(`${m.k}=${JSON.stringify(m.v)}`);
+        };
+        await wait(900);
+        const op = (o) => ws.send(JSON.stringify({ t: 'op', ...o }));
+
+        // 1. Their money is our money.
+        const money0 = st.money;
+        op({ op: 'money', d: 500 });
+        await wait(700);
+        window.__m1 = `${money0}->${st.money}`;
+        if (st.money !== money0 + 500) window.__errors.push('their earnings never reached us: ' + window.__m1);
+
+        // 2. And ours is theirs — the server's answer is what counts.
+        seen.length = 0;
+        st.spend(30);
+        await wait(700);
+        const told = seen.filter((s) => s.startsWith('money=')).pop();
+        window.__m2 = `${st.money} told=${told}`;
+        if (st.money !== money0 + 470) window.__errors.push('our spending did not settle: ' + window.__m2);
+        if (told !== `money=${money0 + 470}`) window.__errors.push('the other player was not told: ' + window.__m2);
+
+        // 3. The bag.
+        const treats0 = st.inventory.treats || 0;
+        op({ op: 'inv', key: 'treats', d: 3 });
+        await wait(700);
+        window.__bag = `treats ${treats0}->${st.inventory.treats || 0}`;
+        if ((st.inventory.treats || 0) !== treats0 + 3) window.__errors.push('bag did not follow: ' + window.__bag);
+
+        // 4. The pantry, including taking from it.
+        const coffee0 = st.cafeSim.stockCount('house_coffee');
+        op({ op: 'stockAdd', id: 'house_coffee', qty: 5, day: st.clock.day });
+        await wait(600);
+        op({ op: 'stockTake', id: 'house_coffee', qty: 2 });
+        await wait(600);
+        window.__pantry = `coffee ${coffee0}->${st.cafeSim.stockCount('house_coffee')}`;
+        if (st.cafeSim.stockCount('house_coffee') !== coffee0 + 3) {
+          window.__errors.push('pantry did not follow: ' + window.__pantry);
+        }
+
+        // 5. Quest flags.
+        op({ op: 'set', k: 'flags', v: { barrier_eastpass: true } });
+        await wait(700);
+        window.__flag = String(!!st.flags.barrier_eastpass);
+        if (!st.flags.barrier_eastpass) window.__errors.push('flags did not follow');
+        ws.close();
+      } else if (SCRIPT === 'netclock') {
+        // The server owns the clock. When another player sleeps, our morning
+        // arrives too — and the books are cashed up exactly once.
+        const st = g.state;
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${proto}//${location.host}/ws`);
+        let ready = false;
+        ws.onmessage = (ev) => {
+          const m = JSON.parse(ev.data);
+          if (m.t === 'welcome' && !ready) {
+            ready = true;
+            ws.send(JSON.stringify({ t: 'join', name: 'Sleeper', look: st.playerLook, x: 0, y: 0, map: 'overworld' }));
+          }
+        };
+        await wait(900);
+        const day0 = st.clock.day, money0 = st.money;
+        ws.send(JSON.stringify({ t: 'skip', hour: 7 }));
+        await wait(1500);
+        const screen = g.screens[g.screens.length - 1];
+        window.__clock = `netclock=${JSON.stringify(g.net.clock)} day ${day0}->${st.clock.day} hour=${st.clock.hour}`
+          + ` money ${money0}->${st.money} screen=${screen ? screen.constructor.name : 'none'}`;
+        if (st.clock.day !== day0 + 1) window.__errors.push('their morning was not ours: ' + window.__clock);
+        if (st.clock.hour !== 7) window.__errors.push('clock did not follow: ' + window.__clock);
+        // Two cats at 4 a day, nobody served: the day must be cashed up once.
+        if (st.money !== money0 - 8) window.__errors.push('overnight was not run exactly once: ' + window.__clock);
+        if (!screen || screen.constructor.name !== 'SummaryScreen') {
+          window.__errors.push('no morning summary: ' + window.__clock);
+        }
+        ws.close();
+      } else if (SCRIPT === 'netsave' || SCRIPT === 'netsaved') {
+        // Split across a server restart: netsave banks a number, the server is
+        // bounced, and netsaved must find the valley exactly as it was left.
+        const st = g.state;
+        if (SCRIPT === 'netsave') {
+          st.earn(3841);                     // 480 + 3841 = 4321
+          st.cafe.name = 'The Kept Valley';
+          st.touch('cafe');
+          await wait(1500);
+          window.__save = `money=${st.money} day=${st.clock.day}`;
+        } else {
+          await wait(1200);
+          // `joinedExisting` means the *welcome* carried a world — i.e. the
+          // server had one before we said anything, which is the whole point.
+          window.__save = `kept=${!!g.joinedExisting} money=${st.money} cafe=${st.cafe.name}`;
+          if (!g.joinedExisting) window.__errors.push('the valley was not kept: ' + window.__save);
+          if (st.money !== 4321) window.__errors.push('wrong money after restart: ' + window.__save);
+          if (st.cafe.name !== 'The Kept Valley') window.__errors.push('wrong cafe after restart: ' + window.__save);
+        }
+      } else if (SCRIPT === 'netfound' || SCRIPT === 'netguest') {
+        // Run as a pair: netfound opens the cafe, netguest joins it a moment
+        // later and must be looking at the same books, not its own.
+        const st = g.state;
+        if (SCRIPT === 'netfound') {
+          st.earn(1234);              // something unmistakable to find
+          st.cafe.name = 'The Bot Arms';
+          st.touch('cafe');
+          await wait(6000);
+          window.__found = `owner=${g.net.simOwner} money=${st.money} cats=${st.cats.length}`;
+          if (!g.net.simOwner) window.__errors.push('the founder is not running the cafe');
+        } else {
+          await wait(2500);
+          window.__guest = `guest=${!!g.joinedExisting} money=${st.money}`
+            + ` cafe=${st.cafe.name} owner=${g.net.simOwner} cats=${st.cats.length}`;
+          if (!g.joinedExisting) window.__errors.push('joined nothing: ' + window.__guest);
+          if (st.money !== 1714) window.__errors.push('did not adopt the shared money: ' + window.__guest);
+          if (st.cafe.name !== 'The Bot Arms') window.__errors.push('kept its own cafe: ' + window.__guest);
+          if (g.net.simOwner) window.__errors.push('two clients both running the cafe: ' + window.__guest);
+        }
+      } else if (SCRIPT === 'netcafehost' || SCRIPT === 'netcafeguest') {
+        // Both players stand in the same cafe. Only one client may simulate it,
+        // or the same cup of coffee gets sold once per player.
+        const st = g.state;
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        st.shopOpen = true;
+        st.clock.t = 11 * (1200 / 24);
+        await wait(1500);
+        if (SCRIPT === 'netcafehost') {
+          const money0 = st.money;
+          for (let i = 0; i < 4; i++) { st.cafeSim.trySpawn(st.cafeMap); await wait(300); }
+          let waited = 0;
+          while (st.money === money0 && waited < 12000) { await wait(250); waited += 250; }
+          window.__sim = `owner=${g.net.simOwner} mine=${st.cafeSim.customers.length}`
+            + ` puppets=${st.cafeSim.customers.filter((c) => c.puppet).length}`
+            + ` till=${money0}->${st.money}`;
+          if (!g.net.simOwner) window.__errors.push('host is not running the cafe: ' + window.__sim);
+          if (!st.cafeSim.customers.length) window.__errors.push('nobody came in at all');
+          if (st.cafeSim.customers.some((c) => c.puppet)) window.__errors.push('the owner is drawing copies');
+          if (st.money <= money0) window.__errors.push('the host rang up nothing: ' + window.__sim);
+        } else {
+          // The takings are the host's customers paying, and they have to reach
+          // us: that is the whole point of one shared till.
+          const money0 = st.money;
+          let waited = 0;
+          while (st.money === money0 && waited < 9000) { await wait(250); waited += 250; }
+          const cs = st.cafeSim.customers;
+          window.__sim = `owner=${g.net.simOwner} seen=${cs.length}`
+            + ` puppets=${cs.filter((c) => c.puppet).length} moved=${cs.filter((c) => c.x !== c.goalX).length}`
+            + ` till=${money0}->${st.money}`;
+          if (g.net.simOwner) window.__errors.push('the guest is simulating too: ' + window.__sim);
+          if (!cs.length) window.__errors.push('the guest sees an empty room: ' + window.__sim);
+          if (cs.some((c) => !c.puppet)) window.__errors.push('the guest spawned its own: ' + window.__sim);
+          if (st.money <= money0) window.__errors.push('no takings reached the guest: ' + window.__sim);
+        }
       } else if (SCRIPT === 'solo') {
         // With ?solo the game must run exactly as it always did.
         window.__netConnected = g.net.connected;
@@ -660,6 +822,12 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__shore ? ` shore=${window.__shore}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
+        + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')
+        + (window.__found ? ` ${window.__found}` : '')
+        + (window.__guest ? ` ${window.__guest}` : '')
+        + (window.__sim ? ` ${window.__sim}` : '')
+        + (window.__clock ? ` ${window.__clock}` : '')
+        + (window.__save ? ` ${window.__save}` : '')
         + (window.__netConnected !== undefined ? ` net=${window.__netConnected} sawJoin=${window.__sawJoin} remote=${window.__remote} afterLeave=${window.__afterLeave} standing=${window.__standing}` : '')
         + (window.__ext ? ` ${window.__ext}` : '')
         + (window.__bookTreat ? ` book[${window.__bookTreat}] pet[${window.__petTreat}] choices=${window.__choices}` : '')

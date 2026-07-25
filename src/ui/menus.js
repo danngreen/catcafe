@@ -128,7 +128,7 @@ export class ShopScreen extends ListScreen {
     const st = this.game.state;
     const cost = this.price(id) * qty;
     if (st.money < cost) { this.flash("You can't afford that."); audio.sfx('error'); return; }
-    st.money -= cost;
+    st.spend(cost);
     const cols = this.colours(id);
     st.give(cols ? invKey(id, this.variant) : id, qty);
     audio.sfx('buy', { gain: 0.8 });
@@ -266,7 +266,7 @@ export class CatShopScreen extends ListScreen {
       if (st.cats.length >= st.catCapacity()) {
         this.msg = 'No room — build more space first.'; this.msgT = 2.6; audio.sfx('error'); return;
       }
-      st.money -= b.price;
+      st.spend(b.price);
       const cat = st.adoptCat(key);
       audio.sfx('meow_happy', { gain: 0.8 });
       this.msg = `${cat.name} the ${b.name} is coming home with you!`;
@@ -360,7 +360,7 @@ export class ServiceScreen extends ListScreen {
       const cat = this.items[this.index];
       const c = this.cost(cat);
       if (st.money < c) { this.msg = 'Not enough money.'; this.msgT = 2; audio.sfx('error'); return; }
-      st.money -= c;
+      st.spend(c);
       if (this.kind === 'vet') {
         cat.sick = false; cat.sickDays = 0; cat.happiness = clamp(cat.happiness + 0.35, 0, 1);
         this.msg = `${cat.name} is right as rain.`;
@@ -372,6 +372,7 @@ export class ServiceScreen extends ListScreen {
         audio.sfx('brush', { gain: 0.9 });
         setTimeout(() => audio.sfx('purr', { gain: 0.5 }), 260);
       }
+      st.touchCats();
       this.msgT = 3;
       this.refresh();
     }
@@ -454,15 +455,17 @@ export class BuilderScreen extends ListScreen {
       const it = this.items[this.index];
       if (it.kind === 'worker') {
         if (st.money < it.cost) { this.flash("You can't afford a crew that size."); return; }
-        st.money -= it.cost;
+        st.spend(it.cost);
         st.workers++;
+        st.touch('workers');
         audio.sfx('hammer', { gain: 0.9 });
         this.flash(`Hired. You have ${st.workers} builder${st.workers > 1 ? 's' : ''}.`);
         this.refresh();
       } else if (it.kind === 'materials') {
         if (st.money < it.cost) { this.flash("Not enough."); return; }
-        st.money -= it.cost;
+        st.spend(it.cost);
         st.materials++;
+        st.touch('materials');
         audio.sfx('saw', { gain: 0.8 });
         this.flash(`Materials delivered. You have ${st.materials} lot${st.materials > 1 ? 's' : ''}.`);
       } else {
@@ -558,14 +561,17 @@ export class CafeScreen extends Screen {
       const which = this.index % 2;
       if (input.repeat('left', dt)) {
         st.shopHours[which] = clamp(st.shopHours[which] - 1, which === 0 ? 0 : st.shopHours[0] + 1, which === 0 ? st.shopHours[1] - 1 : 24);
+        st.touch('shopHours');
         audio.sfx('ui_move', { gain: 0.5 });
       }
       if (input.repeat('right', dt)) {
         st.shopHours[which] = clamp(st.shopHours[which] + 1, which === 0 ? 0 : st.shopHours[0] + 1, which === 0 ? st.shopHours[1] - 1 : 24);
+        st.touch('shopHours');
         audio.sfx('ui_move', { gain: 0.5 });
       }
       if (input.hit('use')) {
         st.shopOpen = !st.shopOpen;
+        st.touch('shopOpen');
         audio.sfx(st.shopOpen ? 'ui_ok' : 'ui_back');
         this.flash(st.shopOpen ? 'Sign turned to OPEN.' : 'Sign turned to CLOSED.');
       }
@@ -602,6 +608,7 @@ export class CafeScreen extends Screen {
           audio.sfx('meow', { gain: 0.7 });
           this.flash(`${cat.name} looks at you expectantly. Buy treats at the pet shop.`);
         }
+        st.touchCats();
       }
     }
 
@@ -617,11 +624,13 @@ export class CafeScreen extends Screen {
       else if (row?.kind === 'wage_down') { st.employee.wage = Math.max(10, st.employee.wage - 10); this.flash(`Wage cut to ${st.employee.wage}.`); audio.sfx('ui_back'); }
       else if (row?.kind === 'duty') { st.employee.onDuty = !st.employee.onDuty; this.flash(st.employee.onDuty ? 'On duty.' : 'Off duty.'); audio.sfx('ui_ok'); }
       else if (row?.kind === 'fire') { this.flash(`${st.employee.name} packs up and goes.`); st.employee = null; audio.sfx('ui_back'); }
+      st.touch('employee');
     } else {
       const cand = HIRE_POOL[this.index];
       if (!cand) return;
       if (st.reputation < 0.2) { this.flash('Nobody will work somewhere this quiet yet.'); audio.sfx('error'); return; }
       st.employee = { name: cand.name, id: cand.id, wage: cand.fairWage, fairWage: cand.fairWage, quality: 0.6, onDuty: true };
+      st.touch('employee');
       this.flash(`${cand.name} starts tomorrow. Wage set to ${cand.fairWage} a day.`);
       audio.sfx('levelup', { gain: 0.6 });
     }

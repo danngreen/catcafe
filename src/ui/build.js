@@ -219,12 +219,14 @@ export class BuildScreen extends Screen {
     if (!id) return;
     const key = invKey(id, f.variant || 0);
     st.inventory[key] = (st.inventory[key] || 0) + 1;
+    st.pub({ op: 'inv', key, d: 1 });
   }
 
   takeFurniture(id) {
     const st = this.game.state;
     st.inventory[id]--;
     if (st.inventory[id] <= 0) delete st.inventory[id];
+    st.pub({ op: 'inv', key: id, d: -1 });
   }
 
   updateFurnish(dt, input) {
@@ -313,9 +315,11 @@ export class BuildScreen extends Screen {
 
   finish() {
     const st = this.game.state;
-    st.money -= this.spentMoney;
+    st.spend(this.spentMoney);
     st.materials -= this.spentMaterials;
+    st.touch('materials');
     st.cafe = this.draft;
+    st.touch('cafe');
     st.rebuildCafe();
     this.done = true;
     audio.sfx('levelup', { gain: 0.7 });

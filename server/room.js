@@ -1,15 +1,29 @@
-// The shared session. Phase 1 of multiplayer: the server owns the world seed
-// and the roster, and relays where everybody is. Money, pantry, cats and quests
-// are still per-client — those move here in phase 2.
+// The shared session. The server owns the world seed, the roster, the clock and
+// the cafe's books; it relays where everybody is standing, and it nominates one
+// client to run the customer simulation so the takings are counted once.
+
+import { readFileSync, writeFileSync, renameSync } from 'node:fs';
+import { applyOp, WorldClock } from './world.js';
 
 const TICK_HZ = 15;
 const IDLE_TIMEOUT_MS = 30_000;
+const CLOCK_BROADCAST_MS = 1000;
+const SAVE_EVERY_MS = 20_000;
 
 export class Room {
-  constructor(seed) {
+  constructor(seed, savePath = null) {
     this.seed = seed;
     this.players = new Map();     // socket id -> player
     this.nextNumber = 1;
+    this.savePath = savePath;
+    this.world = null;            // seeded by whoever starts playing first
+    this.clock = new WorldClock();
+    this.owner = null;            // id of the client running the cafe sim
+    this.dirty = false;
+    this.lastTick = Date.now();
+    this.sinceClock = 0;
+    this.sinceSave = 0;
+    this.restore();
     this.timer = setInterval(() => this.tick(), 1000 / TICK_HZ);
     this.timer.unref?.();
   }
@@ -45,7 +59,9 @@ export class Room {
         this.broadcast({ t: 'left', id: player.id });
         console.log(`[room] ${player.name || player.id} left (${this.count} playing)`);
       }
+      this.chooseOwner();
       this.announcePresence();
+      if (!this.count) this.persist();     // the last one out saves the valley
     });
 
     // Everything the client needs before it can build the world.
@@ -55,6 +71,9 @@ export class Room {
       seed: this.seed,
       players: this.roster(),
       here: this.players.size,
+      world: this.world,
+      clock: this.clock.save(),
+      owner: this.owner,
     });
     this.announcePresence();
   }
@@ -81,6 +100,7 @@ export class Room {
         this.broadcast({ t: 'joined', p: Room.describe(player) }, player.id);
         // Late joiners need the roster as it stands now, not as it was at connect.
         player.ws.sendJSON({ t: 'roster', players: this.roster(player.id) });
+        this.chooseOwner();
         this.announcePresence();
         console.log(`[room] ${player.name} joined (${this.count} playing)`);
         break;
@@ -93,6 +113,51 @@ export class Room {
         player.map = String(msg.map || 'overworld');
         break;
       }
+      // The first player to start play hands us the world they built. Later
+      // arrivals get it in their welcome, so only the first one is ever taken.
+      case 'seedworld': {
+        if (this.world || !msg.world) {
+          if (this.world) player.ws.sendJSON({ t: 'world', world: this.world, clock: this.clock.save() });
+          break;
+        }
+        this.world = msg.world;
+        this.clock = WorldClock.from(msg.clock);
+        this.dirty = true;
+        console.log(`[room] ${player.name || player.id} opened the cafe`);
+        this.broadcast({ t: 'world', world: this.world, clock: this.clock.save() });
+        break;
+      }
+      case 'op': {
+        if (!this.world) break;
+        const changed = applyOp(this.world, msg);
+        if (!changed.length) break;
+        this.dirty = true;
+        for (const k of changed) this.broadcast({ t: 'sync', k, v: this.world[k] });
+        break;
+      }
+      case 'skip': {                       // somebody slept
+        const hour = Number(msg.hour);
+        if (!Number.isFinite(hour)) break;
+        const rolled = this.clock.skipTo(hour);
+        this.dirty = true;
+        this.broadcast({ t: 'clock', c: this.clock.save() });
+        if (rolled) this.broadcast({ t: 'newday', day: this.clock.day, by: player.name });
+        break;
+      }
+      // Only the sim owner's customers are real; everyone else draws copies.
+      case 'cust':
+        if (player.id === this.owner) this.broadcast({ t: 'cust', c: msg.c }, player.id);
+        break;
+      case 'summary':
+        if (player.id === this.owner) this.broadcast({ t: 'summary', s: msg.s }, player.id);
+        break;
+      // Serving is the one thing a non-owner does to the simulation, so it goes
+      // to whoever is running it.
+      case 'serve': {
+        const owner = this.players.get(this.owner);
+        if (owner && owner.id !== player.id) owner.ws.sendJSON({ t: 'serve', x: msg.x, y: msg.y });
+        break;
+      }
       case 'ping':
         player.ws.sendJSON({ t: 'pong', at: msg.at });
         break;
@@ -102,6 +167,19 @@ export class Room {
   }
 
   get count() { return [...this.players.values()].filter((p) => p.joined).length; }
+
+  /**
+   * The longest-standing player runs the cafe. Somebody has to: if every client
+   * simulated its own customers, each would ring up the same sale.
+   */
+  chooseOwner() {
+    const joined = [...this.players.values()].filter((p) => p.joined);
+    joined.sort((a, b) => a.number - b.number);
+    const next = joined.length ? joined[0].id : null;
+    if (next === this.owner) return;
+    this.owner = next;
+    this.broadcast({ t: 'owner', id: this.owner });
+  }
 
   roster(exceptId) {
     return [...this.players.values()]
@@ -120,13 +198,66 @@ export class Room {
   /** Positions go out as compact tuples; at 15Hz for 8 players it's nothing. */
   tick() {
     const now = Date.now();
+    const dt = Math.min(1, (now - this.lastTick) / 1000);
+    this.lastTick = now;
+
     for (const p of [...this.players.values()]) {
       if (now - p.lastSeen > IDLE_TIMEOUT_MS) p.ws.close(1001, 'idle');
     }
+
     const joined = [...this.players.values()].filter((p) => p.joined);
+
+    // The valley only ages while somebody is in it — a server left running
+    // overnight should not eat a fortnight of wages.
+    if (joined.length && this.world) {
+      if (this.clock.advance(dt)) {
+        this.dirty = true;
+        this.broadcast({ t: 'newday', day: this.clock.day });
+      }
+      this.sinceClock += dt * 1000;
+      if (this.sinceClock >= CLOCK_BROADCAST_MS) {
+        this.sinceClock = 0;
+        // Nested, not spread: the clock's own `t` would otherwise overwrite the
+        // message type and the whole thing would arrive as an unknown message.
+        this.broadcast({ t: 'clock', c: this.clock.save() });
+      }
+      this.sinceSave += dt * 1000;
+      if (this.sinceSave >= SAVE_EVERY_MS) { this.sinceSave = 0; this.persist(); }
+    }
+
     if (joined.length < 2) return;        // nobody to tell
     const pos = joined.map((p) => [p.id, Math.round(p.x), Math.round(p.y), p.dir, p.frame, p.map]);
     const text = JSON.stringify({ t: 'pos', p: pos });
     for (const p of joined) p.ws.send(text);
+  }
+
+  // ------------------------------------------------------------- persistence
+
+  restore() {
+    if (!this.savePath) return;
+    try {
+      const data = JSON.parse(readFileSync(this.savePath, 'utf8'));
+      if (data.seed !== this.seed) {
+        console.log('[room] saved valley is from a different seed — starting fresh');
+        return;
+      }
+      this.world = data.world || null;
+      this.clock = WorldClock.from(data.clock);
+      if (this.world) console.log(`[room] resumed day ${this.clock.day} from ${this.savePath}`);
+    } catch { /* no save yet */ }
+  }
+
+  persist() {
+    if (!this.savePath || !this.world || !this.dirty) return;
+    this.dirty = false;
+    // Write beside the target and rename, so a crash mid-write can't leave a
+    // half-written valley where the real one was.
+    const tmp = `${this.savePath}.tmp`;
+    try {
+      writeFileSync(tmp, JSON.stringify({ seed: this.seed, world: this.world, clock: this.clock.save() }));
+      renameSync(tmp, this.savePath);
+    } catch (err) {
+      console.warn('[room] could not save the valley:', err.message);
+    }
   }
 }

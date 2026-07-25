@@ -97,9 +97,31 @@ class Game {
   }
 
   wireNet() {
+    const st = this.state;
+    st.net = net;
     net.on('joined', (p) => this.hud.toast(`${p.n} joined the valley.`, 'good'));
     net.on('left', (p) => this.hud.toast(`${p.n} left.`, 'info'));
     net.on('disconnected', () => this.hud.toast('Lost the connection to the cafe.', 'bad'));
+
+    // The shared books. Every one of these arrives because somebody — possibly
+    // us — changed something, and the server's copy is the one that counts.
+    net.on('sync', (k, v) => st.applySync(k, v));
+    net.on('world', (world, clock) => {
+      if (this.mode !== 'play') return;      // we'll adopt it when we start
+      st.adopt(world, clock);
+      this.hud.toast('Joined a cafe that was already open.', 'info');
+    });
+    net.on('clock', (c) => { st.clock.day = c.day; st.clock.t = c.t; });
+    net.on('newday', (m) => {
+      if (m.by) this.hud.toast(`${m.by} slept until morning.`, 'info');
+      this.onNewDay({ slept: !!m.by, shared: true });
+    });
+    net.on('summary', (s) => this.showSummary(s));
+    // Whoever runs the sim owns the customers, so on a handover everybody's
+    // current lot are stale: the new owner starts the room fresh.
+    net.on('owner', () => st.cafeSim.clearCustomers());
+    net.on('cust', (list) => { if (!net.simOwner) st.cafeSim.applyCustomers(list); });
+    net.on('serve', (m) => { if (net.simOwner) st.cafeSim.serveNearest(m.x, m.y); });
   }
 
   /** Keep our RemotePlayer actors in step with the roster the server sends. */
@@ -291,11 +313,14 @@ class Game {
     st.visit('cafe', 'Your Cat Cafe', this.homeDoor.x, this.homeDoor.y, 'brambleford');
     st.visit('brambleford', 'Brambleford', this.towns.brambleford.hub.x, this.towns.brambleford.hub.y);
     this.hud.showLocation('Brambleford');
-    this.dialogue.say(
-      "So this is it. Your grandmother's old tea room, three cats, and whatever you can carry.\n\n" +
-      "The valley's out there. Somewhere in it is everything you need to make this place work.\n\n" +
-      "Best get started.",
-      { speaker: 'Brambleford' },
+    this.dialogue.say(st.shared && this.joinedExisting
+      ? `${st.cafe.name || 'The cafe'} is already open, and short-handed.\n\n`
+        + 'The books, the pantry and the cats are shared — anything you buy, everyone has.\n\n'
+        + 'Go and be useful.'
+      : "So this is it. Your grandmother's old tea room, three cats, and whatever you can carry.\n\n"
+        + "The valley's out there. Somewhere in it is everything you need to make this place work.\n\n"
+        + 'Best get started.',
+      { speaker: st.shared && this.joinedExisting ? st.cafe.name || 'The cafe' : 'Brambleford' },
     );
   }
 
@@ -332,6 +357,17 @@ class Game {
     if (!net.connected || net.joined) return;
     if (!st.playerName) st.playerName = PLAYER_NAMES[Math.floor(Math.random() * PLAYER_NAMES.length)];
     net.join(st.playerName, st.playerLook, this.player.x, this.player.y, st.mapId);
+
+    // Either the cafe is already open, in which case its books are the real
+    // ones and ours were only ever a rehearsal, or we're the ones opening it.
+    if (net.world) {
+      st.adopt(net.world, net.clock);
+      this.maps.set('cafe', st.cafeMap);
+      this.joinedExisting = true;
+    } else {
+      net.seedWorld(st.snapshot(), st.clock.save());
+    }
+
     const others = Math.max(net.remotes.size, net.here - 1);
     this.hud.toast(others
       ? `Joined the valley — ${others} other${others > 1 ? 's' : ''} connected.`
@@ -411,8 +447,10 @@ class Game {
       if (this.cutscene.done) this.cutscene = null;
     }
 
+    // The clock keeps ticking locally between the server's updates so the HUD
+    // reads smoothly, but in a shared valley the server decides when a day ends.
     st.clock.update(dt);
-    if (st.clock.newDay) this.onNewDay();
+    if (st.clock.newDay && !st.shared) this.onNewDay();
 
     const map = this.currentMap;
 
@@ -429,11 +467,40 @@ class Game {
     this.updateActors(dt);
     this.syncRemotes(dt);
     net.update(dt, this.player, st.mapId);
-    st.cafeSim.update(dt, this.ambienceCtx || (this.ambienceCtx = {}));
+    this.updateCafeSim(dt);
     this.updateAudio(dt);
     this.hud.update(dt, st);
     this.cam.follow(map, this.player.x, this.player.y - 6);
     this.input.endFrame();
+  }
+
+  /**
+   * Serving is the one thing a player does *to* the simulation, so when we
+   * aren't the one running it we ask whoever is. Waiting for their answer would
+   * be a whole round trip, so we go by our own copy of who's queueing.
+   */
+  tryServe() {
+    const st = this.state;
+    if (net.simOwner) return st.cafeSim.serveNearest(this.player.x, this.player.y);
+    if (!st.cafeSim.waitingNear(this.player.x, this.player.y)) return false;
+    net.askServe(this.player.x, this.player.y);
+    return true;
+  }
+
+  /**
+   * Exactly one client simulates the cafe, or the same cup of coffee would be
+   * sold once per player. The rest draw copies of its customers.
+   */
+  updateCafeSim(dt) {
+    const st = this.state;
+    // "Is anyone minding the shop" is a question about everybody, not just us.
+    st.cafeOccupied = st.inCafe || (st.shared && net.onMap('cafe').length > 0);
+    if (net.simOwner) {
+      st.cafeSim.update(dt, this.ambienceCtx || (this.ambienceCtx = {}));
+      net.sendCustomers(dt, st.cafeSim.customers);
+    } else {
+      st.cafeSim.updatePuppets(dt);
+    }
   }
 
   updateActors(dt) {
@@ -497,8 +564,17 @@ class Game {
 
   onNewDay(opts = {}) {
     const st = this.state;
+    // Cashing up is a change to the shared books, so only one client does it;
+    // the others are sent the finished card so everyone reads the same figures.
+    if (!net.simOwner) return;
     const summary = st.endOfDay();
     summary.slept = !!opts.slept;
+    net.sendSummary(summary);
+    this.showSummary(summary);
+  }
+
+  showSummary(summary) {
+    const st = this.state;
     this.push(new SummaryScreen(this, summary));
     // The flea market gets a fresh pile of junk each weekend.
     if (st.clock.isWeekend) this.fleaStock = null;
@@ -624,7 +700,7 @@ class Game {
     const f = this.player.facingTile();
 
     // Serving a waiting customer takes priority — it's time-sensitive.
-    if (st.inCafe && st.cafeSim.serveNearest(this.player.x, this.player.y)) {
+    if (st.inCafe && this.tryServe()) {
       audio.sfx('ui_ok', { gain: 0.5 });
       return;
     }
@@ -740,6 +816,7 @@ class Game {
         break;
       }
     }
+    st.touchCats();
   }
 
   handleInteract(it, tile) {
@@ -867,10 +944,13 @@ class Game {
           : { x: this.player.tx, y: this.player.ty - 2 };
         this.cutscene = new StairWalk(this.player, stairs, () => {
           this.fader.out(() => {
-            st.clock.skipTo(7);
             this.player.alpha = 1;
-            this.onNewDay({ slept: true });
             this.hud.toast('You slept like a log.', 'good');
+            // One valley, one morning: the server moves everybody's clock and
+            // tells us all that the day rolled.
+            if (st.shared) { net.skipTo(7); return; }
+            st.clock.skipTo(7);
+            this.onNewDay({ slept: true });
           });
         });
       },
@@ -890,6 +970,7 @@ class Game {
     audio.sfx(it.need === 'shears' ? 'bush' : 'hammer', { gain: 0.9 });
     setTimeout(() => audio.sfx(it.need === 'shears' ? 'bush' : 'hammer', { gain: 0.8 }), 220);
     st.flags[`barrier_${it.barrier}`] = true;
+    st.touch('flags');
     // Clear the obstacles nearby.
     const doomed = this.overworld.objects.filter((o) => o.id === it.barrier);
     for (const o of doomed) this.overworld.removeObject(o);
@@ -906,6 +987,7 @@ class Game {
       audio.sfx('mail', { gain: 0.8 });
       this.dialogue.say(letter.text, { speaker: `Letter from ${letter.from}`, item: 'letter' });
       if (letter.gift) { st.give(letter.gift[0], letter.gift[1]); this.hud.toast(`Enclosed: ${ITEMS[letter.gift[0]].name} x${letter.gift[1]}`, 'good'); }
+      st.touch('mail');
       return;
     }
     const friends = Object.keys(st.friends).filter((f) => st.friends[f] > 0);
@@ -920,6 +1002,7 @@ class Game {
         const to = friends[Math.floor(Math.random() * friends.length)];
         const name = st.villagerName(to);
         st.friends[to] = clamp((st.friends[to] || 0) + 0.15, 0, 1);
+        st.touch('friends');
         audio.sfx('wing', { gain: 0.7 });
         // They'll write back in a day or two, sometimes with something in the envelope.
         st.pendingLetters.push({
@@ -928,6 +1011,7 @@ class Game {
           text: replyText(name),
           gift: Math.random() < 0.55 ? [['treats', 2], ['honey', 1], ['wildflowers', 1], ['toy_yarn', 1]][Math.floor(Math.random() * 4)] : null,
         });
+        st.touch('pendingLetters');
         this.dialogue.say(`A mail bird takes the note, gives you a look that says "this had better be worth the trip", and flaps off towards ${name}.`);
       },
     });
@@ -953,7 +1037,7 @@ class Game {
           onPick: (p) => {
             const fare = st.taxiFare(p);
             if (st.money < fare) { this.hud.toast("You can't afford the fare.", 'bad'); audio.sfx('error'); return; }
-            st.money -= fare;
+            st.spend(fare);
             this.flyTaxi(p);
           },
         }));
@@ -998,6 +1082,7 @@ class Game {
         onDone: () => {
           finish();
           st.quests[q.id] = 'active';
+          st.touch('quests');
           // Deliver-type errands hand you the parcel there and then.
           if (q.objective.type === 'deliver') st.give(q.objective.item, 1);
           audio.sfx('quest', { gain: 0.7 });
@@ -1026,6 +1111,7 @@ class Game {
       // conversation, rather than hiding it behind an invisible friendship roll.
       line = def.hint;
       st.flags[`heard_hint_${def.id}`] = true;
+      st.touch('flags');
     } else if (def.hint && roll < 0.2) line = def.hint;
     else if (roll < 0.16) line = GOSSIP[Math.floor(Math.random() * GOSSIP.length)];
     else {
@@ -1033,6 +1119,7 @@ class Game {
       v.lineIndex++;
     }
     st.friends[def.id] = clamp((st.friends[def.id] || 0) + 0.02, 0, 1);
+    st.touch('friends');
     v.showEmote('talk', 1.2);
     this.dialogue.say(line, { speaker: def.name, onDone: finish });
   }
@@ -1051,12 +1138,13 @@ class Game {
     const st = this.state;
     st.quests[q.id] = 'done';
     const r = q.reward || {};
-    if (r.money) st.money += r.money;
+    if (r.money) st.earn(r.money);
     if (r.items) for (const [id, n] of r.items) st.give(id, n);
     if (r.flags) for (const f of r.flags) st.flags[f] = true;
     if (r.rep) st.reputation = clamp(st.reputation + r.rep, 0, 1);
     if (r.friendship) for (const f of r.friendship) st.friends[f] = clamp((st.friends[f] || 0) + 0.4, 0, 1);
     if (r.hint) st.flags[`hint_${r.hint}`] = true;
+    for (const k of ['quests', 'flags', 'reputation', 'friends']) st.touch(k);
     audio.sfx('fanfare', { gain: 0.7 });
     const rewardLine = r.money ? `\n\n(+${money(r.money)})` : '';
     this.dialogue.say(q.complete + rewardLine, {
@@ -1253,6 +1341,9 @@ class TitleScreen extends Screen {
     this.look = { species: 'cat', coat: 'ginger', cloth: CLOTHES[5] };
     // Only shown when there's a session: solo play needs no name.
     this.multiplayer = !!game.net.connected;
+    // Somebody has already opened the cafe, so its paint isn't ours to pick.
+    this.joining = false;
+    if (game.net.world) this.adoptOpenCafe();
     this.name = game.state.playerName
       || PLAYER_NAMES[Math.floor(Math.random() * PLAYER_NAMES.length)];
     this.style = {
@@ -1262,8 +1353,20 @@ class TitleScreen extends Screen {
     this.row = 0;
   }
 
+  /** There's a cafe already: show its colours, and drop the choices we can't make. */
+  adoptOpenCafe() {
+    this.joining = true;
+    this.options = ['Join the cafe'];
+    this.index = 0;
+    this.row = Math.min(this.row, 2);
+    const c = this.game.net.world.cafe;
+    if (c) this.style = { wall: c.wall, roof: c.roof, awning: c.awning, floor: c.floor, name: c.name };
+  }
+
   update(dt, input) {
     this.t += dt;
+    // Somebody may open the cafe while we're still reading the title.
+    if (!this.joining && this.game.net.world) this.adoptOpenCafe();
     if (this.stage === 'title') {
       if (input.repeat('up', dt)) { this.index = (this.index - 1 + this.options.length) % this.options.length; audio.sfx('ui_move'); }
       if (input.repeat('down', dt)) { this.index = (this.index + 1) % this.options.length; audio.sfx('ui_move'); }
@@ -1276,7 +1379,7 @@ class TitleScreen extends Screen {
     }
 
     // Character & cafe creation.
-    const rows = this.multiplayer ? 6 : 5;
+    const rows = this.joining ? 3 : (this.multiplayer ? 6 : 5);
     if (input.repeat('up', dt)) { this.row = (this.row - 1 + rows) % rows; audio.sfx('ui_move'); }
     if (input.repeat('down', dt)) { this.row = (this.row + 1) % rows; audio.sfx('ui_move'); }
     const dir = input.repeat('right', dt) ? 1 : input.repeat('left', dt) ? -1 : 0;
@@ -1362,7 +1465,7 @@ class TitleScreen extends Screen {
 
     // --- creation ---
     dim(ctx, 0.28);
-    const w = 340, h = this.multiplayer ? 218 : 196;
+    const w = 340, h = this.joining ? 176 : (this.multiplayer ? 218 : 196);
     const x = Math.round((VIEW_W - w) / 2), y = this.multiplayer ? 18 : 26;
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, 'Before you open');
@@ -1408,7 +1511,10 @@ class TitleScreen extends Screen {
     }
 
     // Four colour swatches in the right-hand column...
-    const swatchRows = [
+    const swatchRows = this.joining ? [
+      ['Your coat', COATS[this.look.coat]?.fur],
+      ['Your clothes', this.look.cloth],
+    ] : [
       ['Your coat', COATS[this.look.coat]?.fur],
       ['Your clothes', this.look.cloth],
       ['Cafe roof', this.style.roof],
@@ -1434,7 +1540,12 @@ class TitleScreen extends Screen {
     });
 
     // ...and the name on its own line under the preview, where it has room.
-    {
+    if (this.joining) {
+      drawTextCentered(ctx, `${this.style.name || 'The cafe'} is already open`,
+        x + w / 2, y + h - 44, { color: P.uiGold, shadow: P.uiShadow });
+      drawTextCentered(ctx, 'You just need a face and a name',
+        x + w / 2, y + h - 32, { color: P.uiTextDim, shadow: P.uiShadow });
+    } else {
       const ry = y + h - 46;
       const sel = this.row === 4 + nameRow;
       if (sel) {

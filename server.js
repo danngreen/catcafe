@@ -4,7 +4,7 @@
 
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { extname, join, normalize } from 'node:path';
+import { extname, isAbsolute, join, normalize } from 'node:path';
 import { networkInterfaces } from 'node:os';
 import { upgrade } from './server/ws.js';
 import { Room } from './server/room.js';
@@ -13,6 +13,11 @@ const ROOT = new URL('.', import.meta.url).pathname;
 const PORT = Number(process.env.PORT || 8080);
 // One shared valley. Change it (or set WORLD_SEED) for a different countryside.
 const SEED = Number(process.env.WORLD_SEED || 20260724);
+// Where the shared cafe is kept between sessions. SESSION_SAVE=0 plays without
+// saving at all, which is what the test harness wants.
+const SAVE = process.env.SESSION_SAVE === '0' ? null
+  : isAbsolute(process.env.SESSION_SAVE || '') ? process.env.SESSION_SAVE
+    : join(ROOT, process.env.SESSION_SAVE || 'valley.json');
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -25,7 +30,12 @@ const TYPES = {
   '.ico': 'image/x-icon',
 };
 
-const room = new Room(SEED);
+const room = new Room(SEED, SAVE);
+
+// Closing the laptop lid should not cost anyone their afternoon.
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => { room.persist(); process.exit(0); });
+}
 
 const server = createServer(async (req, res) => {
   let path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
@@ -66,4 +76,5 @@ server.listen(PORT, () => {
   console.log(`Cat Cafe — http://localhost:${PORT}`);
   for (const addr of lanAddresses()) console.log(`  on this network: http://${addr}:${PORT}`);
   console.log(`  world seed ${SEED}`);
+  console.log(SAVE ? `  shared cafe saved to ${SAVE}` : '  not saving the shared cafe');
 });

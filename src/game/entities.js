@@ -299,7 +299,9 @@ export class Villager extends Actor {
 // Cats
 // ---------------------------------------------------------------------------
 
-let catSerial = 1;
+// As with customers: two clients must never mint the same cat id, or adopting
+// one in a shared valley would overwrite somebody else's.
+let catSerial = Math.floor(Math.random() * 1e9);
 
 export class Cat extends Actor {
   constructor(breed, x, y, data = {}) {
@@ -454,9 +456,17 @@ export function randomCatName() {
 // Customers
 // ---------------------------------------------------------------------------
 
+// Ids have to be unique across every client in a session, so they start
+// somewhere random rather than at 1.
+let custSerial = Math.floor(Math.random() * 1e9);
+
 export class Customer extends Actor {
   constructor(x, y, look, patience = 1) {
     super(x, y);
+    this.id = custSerial++;
+    this.puppet = false;      // a copy of somebody else's customer
+    this.goalX = x;
+    this.goalY = y;
     this.look = look;
     this.speed = 34 + rng() * 10;
     this.state = 'entering';   // entering -> toCounter -> ordering -> toSeat -> seated -> leaving
@@ -501,6 +511,23 @@ export class Customer extends Actor {
     this.path = p || [];
     this.pathIndex = 0;
     return !!p;
+  }
+
+  /**
+   * A copy of a customer somebody else's client is simulating. Positions arrive
+   * ten times a second and we draw sixty, so ease rather than snap.
+   */
+  updatePuppet(dt) {
+    const dx = this.goalX - this.x, dy = this.goalY - this.y;
+    const d = Math.hypot(dx, dy);
+    this.moving = d > 0.7;
+    if (d > 96) { this.x = this.goalX; this.y = this.goalY; }
+    else {
+      const k = Math.min(1, dt * 14);
+      this.x += dx * k;
+      this.y += dy * k;
+    }
+    this.animate(dt);
   }
 
   draw(ctx, ox, oy) {

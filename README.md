@@ -28,9 +28,21 @@ The host owns the world seed, so every client generates a byte-identical valley
 from one number — no map is ever sent. Add `?solo` to the URL to play alone even
 when a session is running.
 
-*Phase 1 is what's built today: you share a world and can see each other walking
-about. Money, pantry, cats and quests are still per-player — those move to the
-server next.*
+**One cafe, one set of books.** The till, the pantry, the bag, the cats, the
+quest flags and the clock all live on the server. Buy beans and they're in
+everyone's pantry; take a fare and everyone's money goes down; sleep at the inn
+and morning comes for all of you. Whoever started the cafe picked its paint and
+its name — everyone after that just picks a face and a name for themselves.
+
+The customer simulation runs on exactly one client (the longest-standing player),
+which publishes where its customers are standing so the rest can draw them. That
+matters: if every client simulated the room, the same cup of coffee would be sold
+once per player. Anyone can still serve — a press of Space asks whoever is
+running the room to take the order.
+
+The server keeps the shared cafe in `valley.json` beside `server.js`, so closing
+the laptop doesn't cost anyone their afternoon. `SESSION_SAVE=0 npm start` plays
+without saving; `SESSION_SAVE=/some/path.json` puts it elsewhere.
 
 ## Controls
 
@@ -174,7 +186,10 @@ browser and reports console errors:
 ```bash
 node tools/check.js walk cafe shop furnshop build furnish exterior treats taxi sleep map night door title systems1 systems2 --clean
 node tools/check.js runmobile tabmobile pausemobile dialogmobile --mobile 844x390 --clean   # touch
-node tools/check.js net solo --clean                                    # multiplayer
+node tools/check.js net netmobile netbooks netclock solo --clean        # multiplayer
+# Paired scenarios need two browsers at once: start the first in the background,
+# then the second a few seconds later (netfound/netguest, netcafehost/netcafeguest,
+# nettitle/netpresence). netsave/netsaved bracket a server restart.
 node tools/check.js town --shotdir /tmp/shots      # also writes screenshots
 ```
 

@@ -97,6 +97,7 @@ export class Cafe {
   addStock(id, qty, day) {
     if (!this.state.stock[id]) this.state.stock[id] = [];
     this.state.stock[id].push({ qty, day });
+    this.state.pub({ op: 'stockAdd', id, qty, day });
   }
 
   /** Consume one portion, oldest batch first. */
@@ -111,6 +112,7 @@ export class Cafe {
       if (need <= 0) break;
     }
     this.state.stock[id] = batches.filter((b) => b.qty > 0);
+    this.state.pub({ op: 'stockTake', id, qty });
     return need <= 0;
   }
 
@@ -134,6 +136,12 @@ export class Cafe {
 
   // ---------------------------------------------------------------- opening
 
+  /**
+   * Anyone behind the counter will do. Playing alone that is only ever you; in
+   * a shared valley one of you can mind the shop while the others go shopping.
+   */
+  get minded() { return this.state.cafeOccupied || this.state.inCafe; }
+
   get isOpen() {
     const st = this.state;
     if (!st.shopOpen) return false;
@@ -141,7 +149,7 @@ export class Cafe {
     const [o, c] = st.shopHours;
     if (h < o || h >= c) return false;
     // Somebody has to be minding the place.
-    return st.inCafe || (st.employee && st.employee.onDuty);
+    return this.minded || (st.employee && st.employee.onDuty);
   }
 
   /** Why we're closed — shown on the cafe screen. */
@@ -152,16 +160,39 @@ export class Cafe {
     const [o, c] = st.shopHours;
     if (h < o) return `Opens at ${fmtHour(o)}`;
     if (h >= c) return `Closed for the day at ${fmtHour(c)}`;
-    if (!st.inCafe && !(st.employee && st.employee.onDuty)) return 'Nobody is minding the counter';
+    if (!this.minded && !(st.employee && st.employee.onDuty)) return 'Nobody is minding the counter';
     return '';
   }
 
   // ------------------------------------------------------------- live sim
 
   update(dt, ctx) {
-    const st = this.state;
-    if (st.inCafe) this.updateLive(dt, ctx);
+    if (this.minded) this.updateLive(dt, ctx);
     else this.updateAway(dt);
+  }
+
+  /**
+   * What the clients who aren't running the simulation do instead: ease the
+   * copies along towards wherever the owner last said they were.
+   */
+  updatePuppets(dt) {
+    for (const c of this.customers) c.updatePuppet(dt);
+  }
+
+  /** Take the owner's word for who is in the room and where they're standing. */
+  applyCustomers(list) {
+    const byId = new Map(this.customers.map((c) => [c.id, c]));
+    this.customers = list.map(([id, x, y, dir, frame, look, state, order]) => {
+      let c = byId.get(id);
+      if (!c) {
+        c = new Customer(x, y, look || { species: 'mouse', coat: 'grey', cloth: CLOTHES[0] });
+        c.id = id;
+        c.puppet = true;
+      }
+      c.goalX = x; c.goalY = y;
+      c.dir = dir; c.frame = frame; c.state = state; c.order = order;
+      return c;
+    });
   }
 
   updateLive(dt, ctx) {
@@ -199,7 +230,7 @@ export class Cafe {
     const h = st.clock.hourFloat;
     let rate = this.charm() * 0.45 * hourDemand(h);
     if (st.clock.isWeekend) rate *= 1.65;
-    if (st.employee && !st.inCafe) rate *= 0.55 + st.employee.quality * 0.5;
+    if (st.employee && !this.minded) rate *= 0.55 + st.employee.quality * 0.5;
     // A visibly full room turns people away before they even try the door.
     const free = this.freeSeats().length;
     const total = this.seats().length || 1;
@@ -302,7 +333,7 @@ export class Cafe {
       case 'waiting': {
         c.stateT += dt;
         c.moving = false;
-        const staffed = st.inCafe || (st.employee && st.employee.onDuty);
+        const staffed = this.minded || (st.employee && st.employee.onDuty);
         // Serving them yourself is faster and they like you more for it.
         const autoDelay = st.employee && st.employee.onDuty ? 4.5 - st.employee.quality * 2 : 5;
         if (c.served) {
@@ -414,16 +445,22 @@ export class Cafe {
 
   /** Called by the player pressing Space at a waiting customer. */
   serveNearest(px, py) {
+    const best = this.waitingNear(px, py);
+    if (!best) return false;
+    best.served = true;
+    best.servedByPlayer = true;
+    return true;
+  }
+
+  /** The nearest customer standing there waiting to be served, if any. */
+  waitingNear(px, py) {
     let best = null, bestD = 34;
     for (const c of this.customers) {
       if (c.state !== 'waiting' || c.served) continue;
       const d = Math.hypot(c.x - px, c.y - py);
       if (d < bestD) { bestD = d; best = c; }
     }
-    if (!best) return false;
-    best.served = true;
-    best.servedByPlayer = true;
-    return true;
+    return best;
   }
 
   completeOrder(c, byPlayer) {
@@ -440,7 +477,7 @@ export class Cafe {
     let pay = it.price;
     let sat = 0.45 + it.appeal * 0.16;
     if (byPlayer) { sat += 0.22; pay = Math.round(pay * 1.1); }        // a tip for good service
-    if (st.employee && st.employee.onDuty && !st.inCafe) {
+    if (st.employee && st.employee.onDuty && !this.minded) {
       sat *= 0.55 + st.employee.quality * 0.6;
     }
     c.satisfaction = clamp(c.satisfaction * 0.4 + sat, 0, 1.6);
@@ -452,7 +489,7 @@ export class Cafe {
     c.queueSlot = undefined;   // free our place in the queue
 
     audio.sfx(byPlayer ? 'cash' : 'coin', { gain: 0.6 });
-    st.money += pay;
+    st.earn(pay);
     this.todayRevenue += pay;
     st.floatText(`+${pay}`, c.x, c.y - 26, '#ffcf6b');
 
@@ -478,6 +515,7 @@ export class Cafe {
     const st = this.state;
     const s = clamp(c.satisfaction, 0, 1.6);
     st.reputation = clamp(st.reputation + (s - 0.62) * 0.012, 0, 1);
+    st.touch('reputation');
     if (s > 0.9) this.servedStreak++;
     else this.servedStreak = 0;
     if (c.spend > 0) audio.sfx('coin', { gain: 0.35 });
@@ -503,11 +541,12 @@ export class Cafe {
     const it = ITEMS[id];
     const q = st.employee ? st.employee.quality : 0.4;
     const pay = Math.round(it.price * (0.7 + q * 0.35));
-    st.money += pay;
+    st.earn(pay);
     this.todayRevenue += pay;
     this.todayCustomers++;
     const sat = (0.4 + it.appeal * 0.14) * (0.55 + q * 0.6);
     st.reputation = clamp(st.reputation + (sat - 0.62) * 0.008, 0, 1);
+    st.touch('reputation');
   }
 
   // --------------------------------------------------------- daily rollover
@@ -601,7 +640,7 @@ export class Cafe {
       summary.lines.push({ text: `${l.qty} x ${ITEMS[l.id]?.name || l.id} went off.`, tone: 'warn' });
     }
 
-    st.money -= summary.costs;
+    st.spend(summary.costs);
     summary.profit = summary.revenue - summary.costs;
 
     if (this.passedBy > 3) {
