@@ -39,6 +39,8 @@ export const T = {
   BRIDGE: 24,
   COUNTER: 25,
   WALL_TOP: 26,
+  WATER_SHOAL: 27,
+  WATER_MID: 28,
 };
 
 const rgb = (hex, a = 255) => PixBuf.rgba(hex, a);
@@ -229,35 +231,62 @@ function paintCliffTop(buf, v) {
 // Water is a flat body colour with a few drifting horizontal wave dashes —
 // the way 16-bit games did it. Full-tile sine shading reads as diagonal
 // corduroy once the tiles repeat, which is exactly what we don't want.
-function waveTile(buf, v, frame, body, crest, deep, density) {
+//
+// Depth comes in four bands. Each one speckles a little of the band above and
+// below into its own dither, so neighbouring tiles meet in a gradient instead
+// of a visible step, and the autotiled fringes do the rest.
+function waveTile(buf, v, frame, opts) {
+  const { body, crest, shade: dark, lighter, darker, density } = opts;
   buf.fill(rgb(body));
   for (let y = 0; y < TILE; y++) {
     for (let x = 0; x < TILE; x++) {
-      if (n(x, y, v + 61) < 0.09) buf.set(x, y, rgb(deep));
+      const r = n(x, y, v + 61);
+      if (r < 0.07) buf.set(x, y, rgb(dark));
+      else if (lighter && r > 0.94) buf.set(x, y, rgb(lighter));
+      else if (darker && r < 0.12) buf.set(x, y, rgb(darker));
     }
   }
-  const rows = 3;
-  for (let r = 0; r < rows; r++) {
-    const baseY = Math.floor(n(r, v, 7) * TILE);
+  for (let rIdx = 0; rIdx < 3; rIdx++) {
+    const baseY = Math.floor(n(rIdx, v, 7) * TILE);
     const y = (baseY + Math.floor(frame * 0.5)) % TILE;
-    const startX = (Math.floor(n(v, r, 11) * TILE) + frame * (r % 2 ? 1 : -1) + TILE * 4) % TILE;
-    const len = 3 + Math.floor(n(r, v, 13) * 4);
-    if (n(r, frame, v + 17) > density) continue;
+    const startX = (Math.floor(n(v, rIdx, 11) * TILE) + frame * (rIdx % 2 ? 1 : -1) + TILE * 4) % TILE;
+    const len = 3 + Math.floor(n(rIdx, v, 13) * 4);
+    if (n(rIdx, frame, v + 17) > density) continue;
     for (let k = 0; k < len; k++) {
       const px = (startX + k) % TILE;
       buf.set(px, y, rgb(crest));
       // A soft shadow under the crest gives the ripple some body.
-      buf.set(px, (y + 1) % TILE, rgb(deep));
+      buf.set(px, (y + 1) % TILE, rgb(dark));
     }
   }
 }
 
+function paintWaterShoal(buf, v, frame) {
+  waveTile(buf, v, frame, {
+    body: P.waterShoal, crest: P.foam, shade: P.waterShallow,
+    lighter: P.waterHi, darker: P.waterShallow, density: 0.82,
+  });
+}
+
 function paintWater(buf, v, frame) {
-  waveTile(buf, v, frame, P.water, P.waterHi, P.waterDk, 0.72);
+  waveTile(buf, v, frame, {
+    body: P.water, crest: P.waterHi, shade: P.waterMid,
+    lighter: P.waterShallow, darker: P.waterMid, density: 0.72,
+  });
+}
+
+function paintWaterMid(buf, v, frame) {
+  waveTile(buf, v, frame, {
+    body: P.waterMid, crest: P.waterLt, shade: P.waterDeep,
+    lighter: P.water, darker: P.waterDk, density: 0.58,
+  });
 }
 
 function paintWaterDeep(buf, v, frame) {
-  waveTile(buf, v, frame, P.waterDk, P.waterLt, P.waterDeep, 0.45);
+  waveTile(buf, v, frame, {
+    body: P.waterDeep, crest: P.water, shade: P.waterAbyss,
+    lighter: P.waterDk, darker: P.waterAbyss, density: 0.42,
+  });
 }
 
 function paintFarm(buf, v) {
@@ -409,7 +438,9 @@ function paintVoid(buf) { buf.fill(rgb('#12141c')); }
 export const TERRAIN = {
   [T.VOID]:        { name: 'void', prio: -1, paint: paintVoid, solid: true, edge: false, variants: 1 },
   [T.WATER_DEEP]:  { name: 'deep water', prio: 0, paint: paintWaterDeep, solid: true, edge: false, variants: 2, anim: 6, liquid: true },
-  [T.WATER]:       { name: 'water', prio: 1, paint: paintWater, solid: true, edge: true, variants: 2, anim: 6, liquid: true },
+  [T.WATER_MID]:   { name: 'water', prio: 0.3, paint: paintWaterMid, solid: true, edge: true, edgeSoft: true, variants: 2, anim: 6, liquid: true },
+  [T.WATER]:       { name: 'water', prio: 0.6, paint: paintWater, solid: true, edge: true, edgeSoft: true, variants: 2, anim: 6, liquid: true },
+  [T.WATER_SHOAL]: { name: 'shallows', prio: 0.9, paint: paintWaterShoal, solid: true, edge: true, edgeSoft: true, variants: 2, anim: 6, liquid: true },
   [T.SAND]:        { name: 'sand', prio: 2, paint: paintSand, solid: false, edge: true, variants: 5 },
   [T.COBBLE]:      { name: 'cobbles', prio: 3, paint: paintCobble, solid: false, edge: true, variants: 4 },
   [T.GRAVEL]:      { name: 'gravel', prio: 3, paint: paintGravel, solid: false, edge: true, variants: 4 },
@@ -436,6 +467,11 @@ export const TERRAIN = {
   [T.COUNTER]:     { name: 'counter', prio: 12, paint: paintCounter, solid: true, edge: false, variants: 2 },
 };
 
+/** Every depth band, shallow to deep. One place to ask "is this water?". */
+export const WATER_TILES = [T.WATER_SHOAL, T.WATER, T.WATER_MID, T.WATER_DEEP];
+const WATER_SET = new Set(WATER_TILES);
+export const isWater = (id) => WATER_SET.has(id);
+
 export const isSolidTerrain = (id) => !!(TERRAIN[id] && TERRAIN[id].solid);
 export const isLiquid = (id) => !!(TERRAIN[id] && TERRAIN[id].liquid);
 export const terrainName = (id) => (TERRAIN[id] ? TERRAIN[id].name : '?');
@@ -452,14 +488,47 @@ export const EDGE_DIRS = ['nw', 'ne', 'sw', 'se', 'n', 'e', 's', 'w'];
  * Carve an irregular fringe out of a full tile. Returns a canvas holding just
  * the band of pixels that should spill onto a neighbouring tile.
  */
-function carveEdge(full, dir, salt) {
+function carveEdge(full, dir, salt, depth = 4, soft = false) {
   const out = new PixBuf(TILE, TILE);
-  const depthAt = (i) => 4 + Math.floor(n(i, dir.length, salt) * 3);
+  const depthAt = (i) => depth + Math.floor(n(i, dir.length, salt) * 3);
 
   const copy = (x, y) => {
     const p = full.data[y * TILE + x];
     if (p >>> 24) out.set(x, y, p);
   };
+
+  // A soft edge dithers across a wide span instead of carving a solid band.
+  // Between two shades of blue a hard fringe reads as a contour line; a
+  // probability ramp reads as one shade fading into the next.
+  if (soft) {
+    const span = 8;
+    const ramp = (x, y, k) => n(x * 3 + k, y * 5 - k, salt + 29) < (1 - k / span) ** 2;
+    if (dir === 'n' || dir === 's') {
+      for (let x = 0; x < TILE; x++) {
+        for (let k = 0; k < span; k++) {
+          const y = dir === 'n' ? k : TILE - 1 - k;
+          if (ramp(x, y, k)) copy(x, y);
+        }
+      }
+    } else if (dir === 'e' || dir === 'w') {
+      for (let y = 0; y < TILE; y++) {
+        for (let k = 0; k < span; k++) {
+          const x = dir === 'w' ? k : TILE - 1 - k;
+          if (ramp(x, y, k)) copy(x, y);
+        }
+      }
+    } else {
+      const ox = dir[1] === 'w' ? 0 : TILE - 1;
+      const oy = dir[0] === 'n' ? 0 : TILE - 1;
+      for (let y = 0; y < TILE; y++) {
+        for (let x = 0; x < TILE; x++) {
+          const d = Math.hypot(x - ox, y - oy);
+          if (d < span && ramp(x, y, d)) copy(x, y);
+        }
+      }
+    }
+    return out.toCanvas();
+  }
 
   if (dir === 'n' || dir === 's') {
     for (let x = 0; x < TILE; x++) {
@@ -529,7 +598,7 @@ export class Tileset {
         // Rebuild a clean copy for carving (frame 0, variant 0).
         const src = new PixBuf(TILE, TILE);
         def.paint(src, 0, 0);
-        for (const d of EDGE_DIRS) e[d] = carveEdge(src, d, id);
+        for (const d of EDGE_DIRS) e[d] = carveEdge(src, d, id, def.edgeDepth ?? 4, !!def.edgeSoft);
         this.edges[id] = e;
       }
     }

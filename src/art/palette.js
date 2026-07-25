@@ -35,11 +35,17 @@ export const P = {
   gravel: '#b0a894',
 
   // --- water ---
+  // A five-step depth ramp, so shore-to-deep reads as a gradient rather than
+  // two flat bands meeting at a line.
+  waterShoal: '#7fd0ee',
+  waterShallow: '#5fb4e0',
   water: '#4a9fd4',
   waterLt: '#74c4ea',
   waterHi: '#a8e2f6',
+  waterMid: '#3a83be',
   waterDk: '#2e6ea8',
   waterDeep: '#1f4d80',
+  waterAbyss: '#173c66',
   foam: '#e8f7ff',
 
   // --- wood & building ---

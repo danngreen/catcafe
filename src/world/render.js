@@ -67,27 +67,15 @@ export class Renderer {
         const px = i * TILE, py = j * TILE;
 
         g.drawImage(this.ts.tile(id, tx, ty, 0), px, py);
-        if (def && def.anim) anim.push({ i, j, tx, ty, id });
 
         // Fringes: any neighbour whose terrain outranks ours creeps in.
-        const myPrio = prio(id);
-        for (const dir of EDGE_DIRS) {
-          const dx = dir.includes('e') ? 1 : dir.includes('w') ? -1 : 0;
-          const dy = dir.includes('n') ? -1 : dir.includes('s') ? 1 : 0;
-          const nid = map.get(tx + dx, ty + dy);
-          if (nid === id || prio(nid) <= myPrio) continue;
-          if (!this.ts.hasEdge(nid)) continue;
-          // Diagonals only fill the gap the cardinals leave behind.
-          if (dir.length === 2) {
-            const nsId = map.get(tx, ty + dy), ewId = map.get(tx + dx, ty);
-            if (prio(nsId) > myPrio || prio(ewId) > myPrio) continue;
-          }
-          // Draw the *opposite* side of the neighbour's fringe: a terrain to our
-          // north spills onto our northern edge.
-          const opp = { n: 'n', s: 's', e: 'e', w: 'w', ne: 'ne', nw: 'nw', se: 'se', sw: 'sw' }[dir];
-          const img = this.ts.edge(nid, opp);
-          if (img) g.drawImage(img, px, py);
-        }
+        const edges = this.edgesFor(map, tx, ty, id);
+        for (const img of edges) g.drawImage(img, px, py);
+
+        // Animated tiles are redrawn over the chunk every frame, so they have
+        // to carry their fringes with them — otherwise the redraw paints over
+        // the blend and every shoreline comes out hard-edged.
+        if (def && def.anim) anim.push({ i, j, tx, ty, id, edges });
       }
     }
 
@@ -141,6 +129,29 @@ export class Renderer {
     return { canvas, anim };
   }
 
+  /** Overlays that blend this tile into any higher-priority neighbours. */
+  edgesFor(map, tx, ty, id) {
+    const out = [];
+    const myPrio = prio(id);
+    for (const dir of EDGE_DIRS) {
+      const dx = dir.includes('e') ? 1 : dir.includes('w') ? -1 : 0;
+      const dy = dir.includes('n') ? -1 : dir.includes('s') ? 1 : 0;
+      const nid = map.get(tx + dx, ty + dy);
+      if (nid === id || prio(nid) <= myPrio) continue;
+      if (!this.ts.hasEdge(nid)) continue;
+      // Diagonals only fill the gap the cardinals leave behind.
+      if (dir.length === 2) {
+        const nsId = map.get(tx, ty + dy), ewId = map.get(tx + dx, ty);
+        if (prio(nsId) > myPrio || prio(ewId) > myPrio) continue;
+      }
+      // Take the *opposite* side of the neighbour's fringe: a terrain to our
+      // north spills onto our northern edge.
+      const img = this.ts.edge(nid, dir);
+      if (img) out.push(img);
+    }
+    return out;
+  }
+
   getChunk(map, cx, cy) {
     const key = cy * map.chunksX + cx;
     if (map.dirtyChunks.has(key)) { this.chunks.delete(key); map.dirtyChunks.delete(key); }
@@ -191,6 +202,7 @@ export class Renderer {
           const sx = px + a.i * TILE, sy = py + a.j * TILE;
           if (sx < -TILE || sy < -TILE || sx > VIEW_W || sy > VIEW_H) continue;
           ctx.drawImage(this.ts.tile(a.id, a.tx, a.ty, this.waterFrame), sx, sy);
+          for (const img of a.edges) ctx.drawImage(img, sx, sy);
         }
       }
     }

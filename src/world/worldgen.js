@@ -5,7 +5,7 @@
 // Everything is driven by one seed, so the same world rebuilds identically.
 
 import { GameMap } from './tilemap.js';
-import { T, TILE } from '../art/tiles.js';
+import { T, TILE, isWater } from '../art/tiles.js';
 import { makeRng, fbm, clamp, hash2 } from '../engine/util.js';
 import { TOWNS, SHOPS } from './places.js';
 import { buildingSprite } from '../art/objects.js';
@@ -41,8 +41,11 @@ export function generateWorld(seed = 20240724) {
       const m = fbm(x / 38, y / 38, seed + 77, 4);
       moist[i] = m;
 
-      if (v < 0.16) { map.ground[i] = T.WATER_DEEP; continue; }
-      if (v < 0.215) { map.ground[i] = T.WATER; continue; }
+      // Depth in four bands rather than two, so the sea fades out to the horizon.
+      if (v < 0.12) { map.ground[i] = T.WATER_DEEP; continue; }
+      if (v < 0.155) { map.ground[i] = T.WATER_MID; continue; }
+      if (v < 0.19) { map.ground[i] = T.WATER; continue; }
+      if (v < 0.215) { map.ground[i] = T.WATER_SHOAL; continue; }
       if (v < 0.275) { map.ground[i] = T.SAND; continue; }   // a proper beach
 
       // Elevation only bites well inland, so the coast stays low and open.
@@ -79,7 +82,7 @@ export function generateWorld(seed = 20240724) {
   for (let y = 1; y < WORLD_H - 1; y++) {
     for (let x = 1; x < WORLD_W - 1; x++) {
       const i = y * WORLD_W + x;
-      if (map.ground[i] === T.WATER || map.ground[i] === T.WATER_DEEP) continue;
+      if (isWater(map.ground[i])) continue;
       const e = elev[i];
       if (e >= 2) continue;
       const up = Math.max(
@@ -147,6 +150,10 @@ export function generateWorld(seed = 20240724) {
 // Rivers
 // ---------------------------------------------------------------------------
 
+/** Shallow to deep, for keeping the deepest write when discs overlap. */
+const DEPTH_RANK = { [T.WATER_SHOAL]: 1, [T.WATER]: 2, [T.WATER_MID]: 3, [T.WATER_DEEP]: 4 };
+const depthRank = (id) => DEPTH_RANK[id] || 0;
+
 function carveRiver(map, inland, src, rng, seed) {
   const pts = [];
   let x = src.x, y = src.y;
@@ -174,7 +181,14 @@ function carveRiver(map, inland, src, rng, seed) {
         const tx = Math.round(x) + k, ty = Math.round(y) + j;
         if (!map.inBounds(tx, ty)) continue;
         const idx = ty * WORLD_W + tx;
-        map.ground[idx] = (j * j + k * k <= (w - 1) * (w - 1)) ? T.WATER_DEEP : T.WATER;
+        const d2 = j * j + k * k;
+        const want = d2 <= (w - 1) * (w - 1) ? T.WATER_MID
+          : d2 <= w * w ? T.WATER : T.WATER_SHOAL;
+        // Successive discs overlap, so only ever deepen a tile — otherwise a
+        // later disc's shallow rim punches holes in the earlier deep channel.
+        map.ground[idx] = isWater(map.ground[idx])
+          ? (depthRank(want) > depthRank(map.ground[idx]) ? want : map.ground[idx])
+          : want;
       }
     }
     // Wet sandy banks either side.
@@ -184,7 +198,7 @@ function carveRiver(map, inland, src, rng, seed) {
         const tx = Math.round(x) + k, ty = Math.round(y) + j;
         if (!map.inBounds(tx, ty)) continue;
         const idx = ty * WORLD_W + tx;
-        if (map.ground[idx] !== T.WATER && map.ground[idx] !== T.WATER_DEEP && rng.chance(0.7)) {
+        if (!isWater(map.ground[idx]) && rng.chance(0.7)) {
           map.ground[idx] = T.SAND;
         }
       }
@@ -234,8 +248,8 @@ function roadCost(map, elev, reserved, x, y) {
   const i = y * WORLD_W + x;
   const g = map.ground[i];
   if (g === T.CLIFF) return 200;          // a notch through chalk is a last resort
-  if (g === T.WATER_DEEP) return 900;     // never route a road out to sea
-  if (g === T.WATER) return 220;          // narrow river crossings only
+  if (g === T.WATER_DEEP || g === T.WATER_MID) return 900;   // never route a road out to sea
+  if (isWater(g)) return 220;                                // narrow river crossings only
   if (reserved[i] === 2) return 1;        // reuse an existing road
   if (reserved[i] === 1) return 2;        // through a town: follow its streets
   if (g === T.FOREST_FLOOR) return 7;
@@ -287,7 +301,7 @@ function carveRoad(map, elev, reserved, a, b, seed) {
   for (let i = goal; i !== -1; i = came[i]) path.push(i);
   path.reverse();
 
-  const isWaterId = (id) => id === T.WATER || id === T.WATER_DEEP;
+  const isWaterId = isWater;
   const paint = (tx, ty) => {
     if (!map.inBounds(tx, ty)) return;
     const ti = ty * W + tx;
@@ -348,7 +362,7 @@ function tidyBridges(map) {
       let walkable = 0;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const g = map.ground[(y + dy) * W + (x + dx)];
-        if (g !== T.WATER && g !== T.WATER_DEEP) walkable++;
+        if (!isWater(g)) walkable++;
       }
       if (walkable === 0) map.ground[i] = T.WATER;
     }
@@ -373,7 +387,7 @@ function stampTown(map, spec, elev, reserved, rng, doors, seed) {
       if (!map.inBounds(x, y)) continue;
       const i = y * WORLD_W + x;
       const g = map.ground[i];
-      if (g === T.WATER || g === T.WATER_DEEP) {
+      if (isWater(g)) {
         // Feather the reclaimed edge so the new shoreline isn't a square.
         const edge = Math.min(x - (ox - 1), (ox + w) - x, y - (oy - 1), (oy + h) - y);
         if (edge <= 0 && rng.chance(0.5)) continue;
@@ -466,7 +480,7 @@ function stampTown(map, spec, elev, reserved, rng, doors, seed) {
     for (let i = 0; i < tw; i++) {
       for (let j = 0; j < 3; j++) {
         const g = map.get(px + i, py - j);
-        if (g === T.WATER || g === T.WATER_DEEP || g === T.CLIFF) return false;
+        if (isWater(g) || g === T.CLIFF) return false;
       }
     }
     return true;
@@ -525,7 +539,7 @@ function stampTown(map, spec, elev, reserved, rng, doors, seed) {
     if (!map.inBounds(x, y)) return;
     if (map.solid(x, y)) return;
     const g = map.get(x, y);
-    if (g === T.WATER || g === T.WATER_DEEP || g === T.CLIFF) return;
+    if (isWater(g) || g === T.CLIFF) return;
     map.addObject(type, x, y, opts);
   };
   for (const s of streets) {
@@ -553,7 +567,7 @@ function stampTown(map, spec, elev, reserved, rng, doors, seed) {
 function paveTile(map, reserved, x, y) {
   if (!map.inBounds(x, y)) return;
   const i = y * WORLD_W + x;
-  if (map.ground[i] === T.WATER || map.ground[i] === T.WATER_DEEP) return;
+  if (isWater(map.ground[i])) return;
   if (map.ground[i] === T.CLIFF) return;
   map.ground[i] = T.COBBLE;
   reserved[i] = 2;
@@ -600,7 +614,7 @@ function placeLandmarks(map, elev, reserved, inland, rng) {
       const tx = x + i, ty = y + j;
       if (!map.inBounds(tx, ty)) continue;
       const k = ty * WORLD_W + tx;
-      if (map.ground[k] === T.WATER || map.ground[k] === T.WATER_DEEP) continue;
+      if (isWater(map.ground[k])) continue;
       if (terrain) map.ground[k] = terrain;
       reserved[k] = 1;
     }
@@ -682,12 +696,12 @@ function scatterNature(map, elev, moist, inland, reserved, rng, seed) {
       if (reserved[i]) continue;
       if (map.blocked[i]) continue;
       const g = map.ground[i];
-      if (g === T.WATER || g === T.WATER_DEEP || g === T.CLIFF || g === T.BRIDGE) continue;
+      if (isWater(g) || g === T.CLIFF || g === T.BRIDGE) continue;
 
       const r = hash2(x, y, seed + 4242);
       const m = moist[i];
-      const nearWater = map.get(x + 1, y) === T.WATER || map.get(x - 1, y) === T.WATER
-        || map.get(x, y + 1) === T.WATER || map.get(x, y - 1) === T.WATER;
+      const nearWater = isWater(map.get(x + 1, y)) || isWater(map.get(x - 1, y))
+        || isWater(map.get(x, y + 1)) || isWater(map.get(x, y - 1));
 
       if (g === T.SAND) {
         if (nearWater && r < 0.1) map.addObject('reeds', x, y, { variant: rng.int(3) });
@@ -735,7 +749,7 @@ function scatterNature(map, elev, moist, inland, reserved, rng, seed) {
       const idx = y * W + x;
       if (reserved[idx] || map.blocked[idx]) continue;
       const g = map.ground[idx];
-      if (g === T.WATER || g === T.WATER_DEEP || g === T.CLIFF) break;
+      if (isWater(g) || g === T.CLIFF) break;
       map.ground[idx] = T.HEDGE;
     }
   }

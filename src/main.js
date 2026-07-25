@@ -10,7 +10,7 @@ import { drawText, drawTextCentered, drawTextRight, textWidth, LINE_H } from './
 import { makeCanvas } from './engine/pixel.js';
 import { clamp, money, makeRng } from './engine/util.js';
 
-import { Tileset, TILE, T } from './art/tiles.js';
+import { Tileset, TILE, T, isWater } from './art/tiles.js';
 import { P } from './art/palette.js';
 import { charSprite, catSprite, CAT_BREED_LIST, CAT_BREEDS, COAT_LIST, CLOTHES, COATS } from './art/chars.js';
 import { buildingSprite } from './art/objects.js';
@@ -197,8 +197,10 @@ class Game {
     const img = g.createImageData(WORLD_W, WORLD_H);
     const colorFor = (id) => {
       switch (id) {
-        case T.WATER_DEEP: return [31, 77, 128];
+        case T.WATER_DEEP: return [23, 60, 102];
+        case T.WATER_MID: return [58, 131, 190];
         case T.WATER: return [74, 159, 212];
+        case T.WATER_SHOAL: return [127, 208, 238];
         case T.BRIDGE: return [140, 100, 60];
         case T.SAND: return [227, 207, 155];
         case T.DIRT: return [173, 127, 82];
@@ -414,7 +416,7 @@ class Game {
         this._ambT = 0.8;
         const tx = this.player.tx, ty = this.player.ty;
         const total = 13 * 13;
-        const water = map.countNear(tx, ty, (id) => id === T.WATER || id === T.WATER_DEEP, 6) / total;
+        const water = map.countNear(tx, ty, isWater, 6) / total;
         const forest = map.countNear(tx, ty, (id) => id === T.FOREST_FLOOR, 6) / total;
         const sand = map.countNear(tx, ty, (id) => id === T.SAND, 6) / total;
         const nearOcean = tx < 90 && ty > 180;

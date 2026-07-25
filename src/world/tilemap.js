@@ -159,7 +159,7 @@ export class GameMap {
 export function stepSoundFor(id) {
   switch (id) {
     case T.FLOOR_WOOD: case T.DECK: case T.BRIDGE: return 'step_wood';
-    case T.WATER: return 'step_water';
+    case T.WATER: case T.WATER_SHOAL: case T.WATER_MID: case T.WATER_DEEP: return 'step_water';
     case T.COBBLE: case T.FLOOR_STONE: case T.STONE: return 'step';
     default: return 'step';
   }

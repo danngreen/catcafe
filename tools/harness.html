@@ -180,6 +180,31 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
         window.__step = 'done';
         await wait(300);
+      } else if (SCRIPT === 'shore') {
+        // Find a beach with open sea beyond it, so the depth ramp is in frame.
+        const m = g.overworld;
+        const SAND = 5, SHOAL = 27, DEEP = 8;
+        let best = null;
+        for (let y = 236; y < 316 && !best; y++) {
+          for (let x = 8; x < 100; x++) {
+            if (m.get(x, y) !== SAND) continue;
+            let shoal = false, deep = false;
+            for (let k = 1; k < 20; k++) {
+              const id = m.get(x - k, y + Math.round(k * 0.6));
+              if (id === SHOAL) shoal = true;
+              if (id === DEEP) deep = true;
+            }
+            if (shoal && deep) { best = { x, y }; break; }
+          }
+        }
+        if (best) {
+          g.player.x = best.x * 16 + 8;
+          g.player.y = (best.y + 1) * 16 - 2;
+          g.cam.follow(g.overworld, g.player.x, g.player.y, true);
+        }
+        window.__shore = best ? `${best.x},${best.y}` : 'none';
+        if (!best) window.__errors.push('no shoreline with a full depth ramp found');
+        await wait(900);
       } else if (SCRIPT === 'tabmobile') {
         // Build-mode tabs by touch: Tab is keyboard-only.
         const st = g.state;
@@ -515,6 +540,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__paused ? ` paused=${window.__paused} safe=${window.__safe}` : '')
         + (window.__run ? ` ${window.__run}` : '')
         + (window.__tabs2 ? ` modes=${window.__tabs2}` : '')
+        + (window.__shore ? ` shore=${window.__shore}` : '')
         + (window.__ext ? ` ${window.__ext}` : '')
         + (window.__bookTreat ? ` book[${window.__bookTreat}] pet[${window.__petTreat}] choices=${window.__choices}` : '')
         + (window.__mapSel ? ` mapSel=${window.__mapSel}` : '')
