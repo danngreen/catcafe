@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Cat Cafe</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🐈</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="frame">
+    <canvas id="screen" width="480" height="270"></canvas>
+    <div id="boot">
+      <div class="boot-inner">
+        <div class="boot-title">Cat Cafe</div>
+        <div class="boot-sub">click to begin</div>
+      </div>
+    </div>
+  </div>
+  <div id="touch" hidden>
+    <div class="dpad">
+      <button data-key="ArrowUp" class="tb up">▲</button>
+      <button data-key="ArrowLeft" class="tb left">◀</button>
+      <button data-key="ArrowRight" class="tb right">▶</button>
+      <button data-key="ArrowDown" class="tb down">▼</button>
+    </div>
+    <div class="abtns">
+      <button data-key=" " class="tb a">A</button>
+      <button data-key="Escape" class="tb b">B</button>
+    </div>
+  </div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "cat-cafe",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Whimsical 16-bit cat cafe management & exploration game for the browser",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node tools/check.js"
+  }
+}

@@ -1,0 +1,84 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background: #0e1013;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#frame {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+#screen {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: block;
+  background: #1a1c26;
+  box-shadow: 0 0 0 2px #2b2f3d, 0 18px 60px rgba(0,0,0,.7);
+}
+
+#boot {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(10,12,16,.92);
+  cursor: pointer;
+  z-index: 5;
+}
+#boot.hidden { display: none; }
+
+.boot-inner { text-align: center; font-family: ui-monospace, Menlo, monospace; }
+.boot-title {
+  font-size: 42px;
+  letter-spacing: 6px;
+  color: #ffd9a0;
+  text-shadow: 0 3px 0 #b06a3c, 0 0 24px rgba(255,190,120,.35);
+}
+.boot-sub {
+  margin-top: 14px;
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: #7f8aa3;
+  animation: blink 1.4s steps(2) infinite;
+}
+@keyframes blink { 50% { opacity: .25; } }
+
+/* On-screen controls for touch devices */
+#touch {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 190px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 18px 22px;
+  z-index: 4;
+  pointer-events: none;
+}
+#touch .dpad { position: relative; width: 156px; height: 156px; pointer-events: auto; }
+#touch .abtns { display: flex; gap: 14px; align-items: flex-end; pointer-events: auto; }
+.tb {
+  background: rgba(45,50,68,.82);
+  color: #cfd8ea;
+  border: 2px solid rgba(140,156,190,.5);
+  border-radius: 12px;
+  font-size: 20px;
+  width: 52px; height: 52px;
+  touch-action: none;
+}
+.tb:active { background: rgba(90,100,132,.95); }
+.tb.up { position: absolute; left: 52px; top: 0; }
+.tb.down { position: absolute; left: 52px; top: 104px; }
+.tb.left { position: absolute; left: 0; top: 52px; }
+.tb.right { position: absolute; left: 104px; top: 52px; }
+.tb.a { width: 66px; height: 66px; border-radius: 50%; }
+.tb.b { width: 54px; height: 54px; border-radius: 50%; }

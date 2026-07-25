@@ -1,0 +1,293 @@
+// Interiors. Shops are laid out from a small recipe; the cafe is rebuilt from
+// whatever the player has actually constructed, so knocking through a wall in
+// the build mode changes the room you walk around in.
+
+import { GameMap } from './tilemap.js';
+import { T } from '../art/tiles.js';
+import { SHOPS } from './places.js';
+import { makeRng } from '../engine/util.js';
+
+/**
+ * Turn a set of room rectangles into a walled interior.
+ * Walls are derived rather than authored: any tile touching floor becomes wall,
+ * with the row above a north wall getting the blank upper course.
+ */
+function wallInRooms(map, rooms, floorId) {
+  const isFloor = (x, y) => rooms.some((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+
+  for (const r of rooms) map.fillRect(r.x, r.y, r.w, r.h, floorId);
+
+  for (let y = 0; y < map.h; y++) {
+    for (let x = 0; x < map.w; x++) {
+      if (isFloor(x, y)) continue;
+      let touches = false;
+      for (let j = -1; j <= 1 && !touches; j++) {
+        for (let i = -1; i <= 1; i++) {
+          if (isFloor(x + i, y + j)) { touches = true; break; }
+        }
+      }
+      if (!touches) continue;
+      // A wall with floor directly below it is a wall we look at face-on.
+      map.set(x, y, isFloor(x, y + 1) ? T.WALL_IN : T.WALL_TOP);
+    }
+  }
+  // One more blank course above every face wall, so rooms have visible height.
+  for (let y = map.h - 1; y >= 1; y--) {
+    for (let x = 0; x < map.w; x++) {
+      if (map.get(x, y) === T.WALL_IN && !isFloor(x, y - 1) && map.get(x, y - 1) === T.VOID) {
+        map.set(x, y - 1, T.WALL_TOP);
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shops
+// ---------------------------------------------------------------------------
+
+const SHOP_LAYOUTS = {
+  grocer: { w: 15, h: 11, floor: T.FLOOR_WOOD, fixtures: ['shelfFood', 'shelfFood', 'crate', 'barrel'] },
+  bakery: { w: 15, h: 11, floor: T.FLOOR_TILE, fixtures: ['pastryCase', 'shelfFood', 'plantPot'] },
+  petshop: { w: 17, h: 12, floor: T.FLOOR_WOOD, fixtures: ['catTower', 'catBed', 'shelf', 'plantPot'] },
+  inn: { w: 17, h: 12, floor: T.FLOOR_WOOD, fixtures: ['fireplace', 'tableSq', 'chair', 'bookshelf', 'piano'] },
+  groomer: { w: 15, h: 11, floor: T.FLOOR_TILE, fixtures: ['shelf', 'catTower', 'plantPot'] },
+  builder: { w: 15, h: 11, floor: T.FLOOR_STONE, fixtures: ['crate', 'crate', 'barrel', 'shelf'] },
+  hardware: { w: 15, h: 11, floor: T.FLOOR_STONE, fixtures: ['shelf', 'shelf', 'crate', 'barrel'] },
+  vet: { w: 15, h: 11, floor: T.FLOOR_TILE, fixtures: ['shelf', 'catBed', 'plantPot'] },
+  fishmonger: { w: 15, h: 10, floor: T.FLOOR_STONE, fixtures: ['crate', 'crate', 'barrel'] },
+  harbour: { w: 15, h: 11, floor: T.FLOOR_WOOD, fixtures: ['shelf', 'barrel', 'crate'] },
+  furniture: { w: 19, h: 13, floor: T.FLOOR_WOOD, fixtures: ['sofa', 'tableRound', 'chair', 'bookshelf', 'lampIn', 'plantPot'] },
+  flea: { w: 19, h: 12, floor: T.FLOOR_STONE, fixtures: ['crate', 'crate', 'shelf', 'tableSq', 'barrel', 'plantPot'] },
+  teahouse: { w: 15, h: 11, floor: T.FLOOR_WOOD, fixtures: ['shelf', 'tableRound', 'chair', 'plantPot'] },
+  exotic: { w: 17, h: 12, floor: T.RUG, fixtures: ['catTower', 'catTower', 'catBed', 'lampIn', 'plantPot'] },
+  herbalist: { w: 15, h: 11, floor: T.FLOOR_WOOD, fixtures: ['bookshelf', 'shelf', 'plantPot', 'plantPot'] },
+  beekeeper: { w: 13, h: 10, floor: T.FLOOR_WOOD, fixtures: ['shelf', 'crate', 'plantPot'] },
+};
+
+export function buildShopInterior(shopId) {
+  const shop = SHOPS.find((s) => s.id === shopId);
+  if (!shop) return null;
+  const L = SHOP_LAYOUTS[shopId] || { w: 15, h: 11, floor: T.FLOOR_WOOD, fixtures: ['shelf'] };
+  const rng = makeRng(hashStr(shopId));
+
+  const W = L.w + 4, H = L.h + 5;
+  const map = new GameMap(`shop:${shopId}`, W, H, {
+    kind: 'indoor', name: shop.name, fill: T.VOID,
+    music: 'shop', ambience: { indoor: 0.5 },
+  });
+
+  const room = { x: 2, y: 3, w: L.w, h: L.h };
+  wallInRooms(map, [room], L.floor);
+
+  // Front door, bottom-centre, back out to the street.
+  const doorX = room.x + Math.floor(room.w / 2);
+  const doorY = room.y + room.h;
+  map.set(doorX, doorY, L.floor);
+  map.set(doorX, doorY - 1, L.floor);
+  map.addObject('doormat', doorX, doorY, { flat: true });
+  map.addWarp(doorX, doorY, 'overworld', 0, 0, { sound: 'door' });
+  map.spawn = { x: doorX, y: doorY - 1 };
+
+  // Windows and pictures along the back wall.
+  for (let i = 0; i < 2; i++) {
+    const wx = room.x + 2 + i * (room.w - 5);
+    map.addObject('windowIn', wx, room.y - 1, { offY: 10 });
+  }
+
+  // Counter across the back with the shopkeeper behind it.
+  const cx = room.x + Math.floor(room.w / 2) - 1;
+  const cy = room.y + 2;
+  map.addObject('counter', cx - 1, cy, {});
+  map.addObject('register', cx + 2, cy, {});
+  const keeperSpot = { x: cx, y: cy - 1 };
+  // The tile in front of the counter is where you talk to them.
+  for (let i = -1; i <= 2; i++) {
+    map.setInteract(cx + i, cy + 1, { kind: 'shopkeeper', shop: shopId });
+  }
+
+  // Fixtures. Fill the back wall either side of the counter first, then work
+  // down the side walls, so a shop always looks stocked rather than sparse.
+  const spots = [];
+  spots.push({ x: room.x + 1, y: room.y + 1 });
+  spots.push({ x: room.x + room.w - 3, y: room.y + 1 });
+  spots.push({ x: room.x + 4, y: room.y + 1 });
+  spots.push({ x: room.x + room.w - 6, y: room.y + 1 });
+  for (let y = room.y + 4; y < room.y + room.h - 1; y += 3) {
+    spots.push({ x: room.x + 1, y });
+    spots.push({ x: room.x + room.w - 3, y });
+  }
+  for (let x = room.x + 3; x < room.x + room.w - 4; x += 4) {
+    spots.push({ x, y: room.y + room.h - 2 });
+  }
+
+  const free = spots.filter((s) => {
+    if (!map.inBounds(s.x, s.y) || map.solid(s.x, s.y)) return false;
+    if (map.solid(s.x + 1, s.y)) return false;                       // wide fixtures need room
+    if (Math.abs(s.x - doorX) < 2 && s.y >= doorY - 3) return false; // keep the doorway clear
+    return true;
+  });
+  // Repeat the fixture list until the shop is comfortably full.
+  const wanted = Math.min(free.length, L.fixtures.length + 3);
+  for (let i = 0; i < wanted; i++) {
+    const f = L.fixtures[i % L.fixtures.length];
+    map.addObject(f, free[i].x, free[i].y, { variant: rng.int(3) });
+  }
+
+  map.addObject('lampIn', room.x + Math.floor(room.w / 2) + 3, room.y + 1, { lightR: 60 });
+  map.lights.push({ x: (room.x + room.w / 2) * 16, y: (room.y + room.h / 2) * 16, r: 130, color: '#ffe0b0' });
+
+  map.indexObjects();
+  map.meta = { shop: shopId, keeperSpot };
+  return map;
+}
+
+// ---------------------------------------------------------------------------
+// Special interiors
+// ---------------------------------------------------------------------------
+
+export function buildSpecialInterior(id) {
+  if (id === 'oldmill') {
+    const map = new GameMap('shop:oldmill', 17, 14, { kind: 'indoor', name: 'The Old Mill', fill: T.VOID, music: 'night', ambience: { indoor: 0.4, water: 0.35 } });
+    wallInRooms(map, [{ x: 2, y: 3, w: 13, h: 9 }], T.FLOOR_WOOD);
+    const doorX = 8, doorY = 12;
+    map.set(doorX, doorY, T.FLOOR_WOOD);
+    map.addWarp(doorX, doorY, 'overworld', 0, 0, {});
+    map.spawn = { x: doorX, y: doorY - 1 };
+    map.addObject('crate', 3, 5); map.addObject('barrel', 4, 10);
+    map.addObject('shelf', 11, 5); map.addObject('stump', 6, 7);
+    map.addObject('windowIn', 5, 2, { offY: 10 });
+    map.setInteract(8, 6, { kind: 'sign', text: 'The great millstone, still and cold.\n\nSomething small and warm is asleep in the flour hopper. It opens one eye, decides you are acceptable, and goes back to sleep.' });
+    map.meta = { special: 'oldmill' };
+    map.lights.push({ x: 8 * 16, y: 7 * 16, r: 90, color: '#c9b48a' });
+    map.indexObjects();
+    return map;
+  }
+
+  if (id === 'lighthouse') {
+    const map = new GameMap('shop:lighthouse', 13, 13, { kind: 'indoor', name: 'Gullrock Light', fill: T.VOID, music: 'night', ambience: { indoor: 0.3, waves: 0.6 } });
+    wallInRooms(map, [{ x: 3, y: 3, w: 7, h: 8 }], T.FLOOR_STONE);
+    const doorX = 6, doorY = 11;
+    map.set(doorX, doorY, T.FLOOR_STONE);
+    map.addWarp(doorX, doorY, 'overworld', 0, 0, {});
+    map.spawn = { x: doorX, y: doorY - 1 };
+    map.addObject('bookshelf', 4, 5);
+    map.addObject('lampIn', 8, 5, { lightR: 70 });
+    map.setInteract(6, 5, { kind: 'sign', text: 'The lamp room is up a spiral stair too narrow for you.\n\nOn the table: a logbook, a cold cup of tea, and a note that reads "back in five minutes". It is dated eleven years ago.' });
+    map.meta = { special: 'lighthouse' };
+    map.lights.push({ x: 6 * 16, y: 6 * 16, r: 110, color: '#ffe6a8' });
+    map.indexObjects();
+    return map;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// The cafe
+// ---------------------------------------------------------------------------
+
+export const CAFE_MARGIN = 4;
+
+/** The room you start with: modest, but yours. */
+export function startingCafe(style = {}) {
+  return {
+    rooms: [{ x: 0, y: 0, w: 11, h: 8, name: 'Cafe' }],
+    furniture: [
+      { type: 'counter', x: 1, y: 1 },
+      { type: 'register', x: 3, y: 1 },
+      { type: 'coffeeMachine', x: 4, y: 1 },
+      { type: 'pastryCase', x: 6, y: 1 },
+      { type: 'tableRound', x: 3, y: 4 },
+      { type: 'chair', x: 2, y: 4 },
+      { type: 'chair', x: 4, y: 4 },
+      { type: 'tableRound', x: 8, y: 4 },
+      { type: 'chair', x: 7, y: 4 },
+      { type: 'catBed', x: 9, y: 6 },
+      { type: 'catBowl', x: 1, y: 6 },
+      { type: 'catTower', x: 10, y: 2 },
+      { type: 'plantPot', x: 0, y: 6 },
+      { type: 'menuBoard', x: 0, y: 1 },
+    ],
+    floor: style.floor ?? T.FLOOR_WOOD,
+    wall: style.wall ?? '#efe2c8',
+    roof: style.roof ?? '#c86a4a',
+    doorX: 5,
+    name: style.name || 'The Contented Cat',
+  };
+}
+
+/**
+ * Rebuild the cafe interior map from its layout. Called at startup and every
+ * time the player finishes building.
+ */
+export function buildCafeMap(cafe) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const r of cafe.rooms) {
+    minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
+    maxX = Math.max(maxX, r.x + r.w); maxY = Math.max(maxY, r.y + r.h);
+  }
+  const offX = CAFE_MARGIN - minX;
+  const offY = CAFE_MARGIN - minY;
+  const W = (maxX - minX) + CAFE_MARGIN * 2;
+  const H = (maxY - minY) + CAFE_MARGIN * 2 + 1;
+
+  const map = new GameMap('cafe', W, H, {
+    kind: 'indoor', name: cafe.name || 'The Cat Cafe', fill: T.VOID,
+    music: 'cafe', ambience: { indoor: 0.5 },
+  });
+
+  const rooms = cafe.rooms.map((r) => ({ x: r.x + offX, y: r.y + offY, w: r.w, h: r.h, name: r.name }));
+  wallInRooms(map, rooms, cafe.floor ?? T.FLOOR_WOOD);
+
+  // Front door on the bottom edge of the first room.
+  const home = rooms[0];
+  const doorX = home.x + Math.min(home.w - 1, Math.max(0, cafe.doorX ?? Math.floor(home.w / 2)));
+  const doorY = home.y + home.h;
+  map.set(doorX, doorY, cafe.floor ?? T.FLOOR_WOOD);
+  map.addObject('doormat', doorX, doorY, { flat: true });
+  map.addWarp(doorX, doorY, 'overworld', 0, 0, { sound: 'door' });
+  map.spawn = { x: doorX, y: doorY - 1 };
+
+  // Furniture, translated into map space.
+  const seats = [];
+  const tables = [];
+  for (const f of cafe.furniture) {
+    const x = f.x + offX, y = f.y + offY;
+    if (!map.inBounds(x, y)) continue;
+    const o = map.addObject(f.type, x, y, { variant: f.variant || 0, offY: f.type === 'windowIn' || f.type === 'painting' ? 10 : 0 });
+    if (!o) continue;
+    o.furniture = f;
+    if (f.type === 'chair' || f.type === 'chairUp' || f.type === 'stool' || f.type === 'sofa') {
+      const slots = f.type === 'sofa' ? 3 : 1;
+      for (let i = 0; i < slots; i++) seats.push({ x: x + i, y, taken: null });
+    }
+    if (f.type.startsWith('table')) tables.push({ x, y, w: o.tw });
+  }
+
+  // Seats need a table nearby to be worth sitting at; the rest are perches.
+  for (const s of seats) {
+    s.table = tables.find((t) => Math.abs(t.x - s.x) <= 2 && Math.abs(t.y - s.y) <= 2) || null;
+  }
+
+  // Windows along the top wall, so the room feels like it has an outside.
+  for (let x = home.x + 1; x < home.x + home.w - 1; x += 4) {
+    if (map.get(x, home.y - 1) === T.WALL_IN) map.addObject('windowIn', x, home.y - 1, { offY: 10 });
+  }
+
+  map.lights.push({ x: (home.x + home.w / 2) * 16, y: (home.y + home.h / 2) * 16, r: 150, color: '#ffdcae' });
+  for (const r of rooms.slice(1)) {
+    map.lights.push({ x: (r.x + r.w / 2) * 16, y: (r.y + r.h / 2) * 16, r: 130, color: '#ffdcae' });
+  }
+
+  map.indexObjects();
+  map.meta = {
+    cafe: true, seats, tables, rooms, offX, offY,
+    door: { x: doorX, y: doorY },
+  };
+  return map;
+}
+
+function hashStr(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}

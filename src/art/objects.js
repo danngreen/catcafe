@@ -1,0 +1,1019 @@
+// World objects: trees, rocks, fences, buildings and every stick of cafe
+// furniture. Each entry declares a tile footprint (what you bump into) and a
+// painter that draws a sprite which may stand much taller than that footprint,
+// so tree canopies and roofs rise above the player.
+
+import { PixBuf, SpriteCache, shade } from '../engine/pixel.js';
+import { P } from './palette.js';
+import { hash2 } from '../engine/util.js';
+import { TILE } from './tiles.js';
+
+const rgb = (hex, a = 255) => PixBuf.rgba(hex, a);
+const n = (x, y, s) => hash2(x * 37 + s * 101, y * 53 - s * 17, 0x0b7e);
+
+function outline(buf, color = '#2b2333') {
+  const c = rgb(color);
+  const src = new Uint32Array(buf.data);
+  const at = (x, y) => (x < 0 || y < 0 || x >= buf.w || y >= buf.h ? 0 : src[y * buf.w + x]);
+  for (let y = 0; y < buf.h; y++) {
+    for (let x = 0; x < buf.w; x++) {
+      if (at(x, y) >>> 24) continue;
+      if ((at(x - 1, y) >>> 24) || (at(x + 1, y) >>> 24) || (at(x, y - 1) >>> 24) || (at(x, y + 1) >>> 24)) buf.set(x, y, c);
+    }
+  }
+}
+
+function groundShadow(buf, cx, cy, rx, ry) {
+  buf.ellipseBlend(cx, cy, rx, ry, rgb('#000000', 62));
+}
+
+// ---------------------------------------------------------------------------
+// Foliage
+// ---------------------------------------------------------------------------
+
+/** Layered blob canopy with a lit top-left and a dark underside. */
+function canopy(buf, cx, cy, rx, ry, base, v, opts = {}) {
+  const dk = shade(base, -0.3), lt = shade(base, 0.16), hi = shade(base, 0.33);
+  const lobes = opts.lobes ?? 5;
+  buf.ellipse(cx, cy, rx, ry, rgb(dk));
+  for (let i = 0; i < lobes; i++) {
+    const a = (i / lobes) * Math.PI * 2 + n(i, v, 3) * 0.7;
+    const d = 0.45 + n(i, v, 5) * 0.3;
+    buf.ellipse(cx + Math.cos(a) * rx * d, cy + Math.sin(a) * ry * d, rx * 0.55, ry * 0.55, rgb(base));
+  }
+  buf.ellipse(cx, cy - ry * 0.18, rx * 0.78, ry * 0.7, rgb(base));
+  buf.ellipse(cx - rx * 0.28, cy - ry * 0.4, rx * 0.5, ry * 0.42, rgb(lt));
+  buf.ellipse(cx - rx * 0.36, cy - ry * 0.52, rx * 0.26, ry * 0.22, rgb(hi));
+  // Speckle so the mass doesn't look like flat vector shapes.
+  for (let i = 0; i < 26; i++) {
+    const a = n(i, v, 11) * Math.PI * 2, d = Math.sqrt(n(i, v, 13));
+    const px = Math.round(cx + Math.cos(a) * rx * d), py = Math.round(cy + Math.sin(a) * ry * d);
+    if (buf.get(px, py) >>> 24) buf.set(px, py, rgb(n(i, v, 17) > 0.5 ? lt : dk));
+  }
+}
+
+function trunk(buf, cx, top, bottom, w, col) {
+  const dk = shade(col, -0.3), lt = shade(col, 0.18);
+  buf.rect(Math.round(cx - w / 2), top, w, bottom - top, rgb(col));
+  buf.vline(Math.round(cx - w / 2), top, bottom - top, rgb(dk));
+  buf.vline(Math.round(cx + w / 2 - 1), top, bottom - top, rgb(dk));
+  buf.vline(Math.round(cx - w / 2 + 1), top, bottom - top, rgb(lt));
+  // Roots flaring at the base.
+  buf.hline(Math.round(cx - w / 2 - 1), bottom - 2, w + 2, rgb(dk));
+  buf.hline(Math.round(cx - w / 2 - 2), bottom - 1, w + 4, rgb(dk));
+}
+
+function paintOak(buf, v) {
+  const green = [P.forest, '#3f8a3c', '#4a9440', '#2f6f31'][v % 4];
+  groundShadow(buf, buf.w / 2, buf.h - 3, 11, 4);
+  trunk(buf, buf.w / 2, 24, buf.h - 2, 7, P.wood);
+  canopy(buf, buf.w / 2, 20, 17, 15, green, v, { lobes: 6 });
+  outline(buf);
+}
+
+function paintPine(buf, v) {
+  const green = ['#2f6b3a', '#28603a', '#356f3e'][v % 3];
+  groundShadow(buf, buf.w / 2, buf.h - 3, 9, 3.4);
+  trunk(buf, buf.w / 2, 34, buf.h - 2, 6, P.woodDk);
+  // Stacked triangular tiers.
+  const cx = buf.w / 2;
+  for (let t = 0; t < 4; t++) {
+    const yTop = 4 + t * 10;
+    const wBase = 8 + t * 5;
+    for (let i = 0; i < 13; i++) {
+      const w = Math.round((wBase * i) / 12) + 2;
+      const y = yTop + i;
+      const c = i < 3 ? shade(green, 0.2) : i > 9 ? shade(green, -0.25) : green;
+      buf.hline(Math.round(cx - w), y, w * 2, rgb(c));
+    }
+  }
+  for (let i = 0; i < 30; i++) {
+    const px = Math.round(cx + (n(i, v, 3) - 0.5) * 22), py = Math.round(6 + n(i, v, 7) * 44);
+    if (buf.get(px, py) >>> 24) buf.set(px, py, rgb(n(i, v, 9) > 0.5 ? shade(green, 0.25) : shade(green, -0.3)));
+  }
+  outline(buf);
+}
+
+function paintBirch(buf, v) {
+  const green = ['#6aad4a', '#79b954', '#5fa244'][v % 3];
+  groundShadow(buf, buf.w / 2, buf.h - 3, 8, 3);
+  const cx = buf.w / 2;
+  buf.rect(cx - 2, 22, 5, buf.h - 24, rgb('#e8e4d6'));
+  buf.vline(cx - 2, 22, buf.h - 24, rgb('#c4bfad'));
+  for (let i = 0; i < 6; i++) {
+    const y = 25 + i * 5 + Math.floor(n(i, v, 3) * 3);
+    buf.hline(cx - 2, y, 2 + Math.floor(n(i, v, 5) * 3), rgb('#4a4a48'));
+  }
+  canopy(buf, cx, 17, 13, 13, green, v, { lobes: 5 });
+  outline(buf);
+}
+
+function paintApple(buf, v) {
+  const green = '#4e9c40';
+  groundShadow(buf, buf.w / 2, buf.h - 3, 10, 3.6);
+  trunk(buf, buf.w / 2, 24, buf.h - 2, 6, P.wood);
+  canopy(buf, buf.w / 2, 19, 15, 14, green, v, { lobes: 6 });
+  // Fruit peeking out of the leaves.
+  for (let i = 0; i < 5; i++) {
+    const a = n(i, v, 21) * Math.PI * 2, d = 0.4 + n(i, v, 23) * 0.5;
+    const px = Math.round(buf.w / 2 + Math.cos(a) * 15 * d), py = Math.round(19 + Math.sin(a) * 14 * d);
+    buf.ellipse(px, py, 2, 2, rgb(P.flowerR));
+    buf.set(px - 1, py - 1, rgb('#ff9a8f'));
+  }
+  outline(buf);
+}
+
+function paintWillow(buf, v) {
+  const green = '#8fbe58';
+  groundShadow(buf, buf.w / 2, buf.h - 3, 12, 4);
+  trunk(buf, buf.w / 2, 26, buf.h - 2, 8, P.woodDk);
+  canopy(buf, buf.w / 2, 18, 18, 12, green, v, { lobes: 6 });
+  // Drooping fronds.
+  for (let i = 0; i < 14; i++) {
+    const x = Math.round(buf.w / 2 + (n(i, v, 5) - 0.5) * 34);
+    const len = 6 + Math.floor(n(i, v, 9) * 14);
+    for (let k = 0; k < len; k++) {
+      buf.set(x + (k > len * 0.6 ? 1 : 0), 26 + k, rgb(k % 3 === 0 ? shade(green, -0.2) : green));
+    }
+  }
+  outline(buf);
+}
+
+function paintBush(buf, v, berries) {
+  const green = ['#3f8a3c', '#478f42', '#37793a'][v % 3];
+  groundShadow(buf, buf.w / 2, buf.h - 2, 8, 3);
+  canopy(buf, buf.w / 2, buf.h - 9, 9, 7.5, green, v, { lobes: 4 });
+  if (berries) {
+    for (let i = 0; i < 6; i++) {
+      const px = Math.round(buf.w / 2 + (n(i, v, 3) - 0.5) * 14);
+      const py = Math.round(buf.h - 12 + n(i, v, 7) * 9);
+      if (buf.get(px, py) >>> 24) { buf.set(px, py, rgb(P.berry)); buf.set(px, py - 1, rgb('#f07a8f')); }
+    }
+  }
+  outline(buf);
+}
+
+function paintStump(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 7, 2.6);
+  buf.ellipse(buf.w / 2, buf.h - 8, 7, 5, rgb(P.woodDk));
+  buf.rect(buf.w / 2 - 7, buf.h - 8, 14, 6, rgb(P.woodDk));
+  buf.ellipse(buf.w / 2, buf.h - 9, 7, 4.4, rgb(P.wood));
+  buf.ellipse(buf.w / 2, buf.h - 9, 4.4, 2.8, rgb(P.woodLt));
+  buf.ellipse(buf.w / 2, buf.h - 9, 1.8, 1.2, rgb(P.wood));
+  outline(buf);
+}
+
+function paintReeds(buf, v) {
+  const green = '#5c9c4a';
+  for (let i = 0; i < 7; i++) {
+    const x = 3 + i * 2 + Math.floor(n(i, v, 3) * 2);
+    const h = 8 + Math.floor(n(i, v, 5) * 9);
+    buf.vline(x, buf.h - 2 - h, h, rgb(i % 2 ? green : shade(green, -0.2)));
+    if (n(i, v, 7) > 0.55) {
+      buf.rect(x - 1, buf.h - 4 - h, 3, 4, rgb(P.woodDk)); // cattail head
+    }
+  }
+  outline(buf);
+}
+
+function paintMushroom(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 4, 1.8);
+  const cap = [P.flowerR, '#e0894a', '#cf7fbd'][v % 3];
+  buf.rect(buf.w / 2 - 1, buf.h - 6, 3, 5, rgb(P.cream));
+  buf.ellipse(buf.w / 2, buf.h - 7, 5, 3.4, rgb(cap));
+  buf.ellipse(buf.w / 2 - 1, buf.h - 8, 2, 1.2, rgb(shade(cap, 0.3)));
+  buf.set(buf.w / 2 + 2, buf.h - 7, rgb('#ffffff'));
+  buf.set(buf.w / 2 - 2, buf.h - 6, rgb('#ffffff'));
+  outline(buf);
+}
+
+// ---------------------------------------------------------------------------
+// Rock & landscape furniture
+// ---------------------------------------------------------------------------
+
+function paintRock(buf, v, big) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, big ? 11 : 6, big ? 4 : 2.4);
+  const cx = buf.w / 2, cy = buf.h - (big ? 12 : 7);
+  const rx = big ? 12 : 6.5, ry = big ? 9 : 5;
+  buf.ellipse(cx, cy, rx, ry, rgb(P.stoneDk));
+  buf.ellipse(cx, cy - 1, rx * 0.9, ry * 0.85, rgb(P.stone));
+  buf.ellipse(cx - rx * 0.25, cy - ry * 0.4, rx * 0.5, ry * 0.42, rgb(P.stoneLt));
+  buf.ellipse(cx - rx * 0.3, cy - ry * 0.5, rx * 0.22, ry * 0.2, rgb(P.stoneHi));
+  for (let i = 0; i < 10; i++) {
+    const px = Math.round(cx + (n(i, v, 3) - 0.5) * rx * 1.6);
+    const py = Math.round(cy + (n(i, v, 5) - 0.5) * ry * 1.6);
+    if (buf.get(px, py) >>> 24) buf.set(px, py, rgb(n(i, v, 7) > 0.5 ? P.stoneLt : P.stoneDeep));
+  }
+  if (big) for (let i = 0; i < 4; i++) {
+    const px = Math.round(cx + (n(i, v, 9) - 0.5) * rx);
+    buf.ellipse(px, cy - ry + 1, 2.4, 1.4, rgb(P.moss));
+  }
+  outline(buf);
+}
+
+function paintFence(buf, v, vertical) {
+  const w = P.wood, d = P.woodDk;
+  if (vertical) {
+    buf.rect(buf.w / 2 - 1, 0, 3, buf.h - 2, rgb(w));
+    buf.vline(buf.w / 2 - 1, 0, buf.h - 2, rgb(d));
+    for (let y = 3; y < buf.h - 4; y += 7) {
+      buf.rect(buf.w / 2 - 4, y, 9, 2, rgb(shade(w, 0.1)));
+      buf.hline(buf.w / 2 - 4, y + 2, 9, rgb(d));
+    }
+  } else {
+    for (let x = 1; x < buf.w; x += 8) {
+      buf.rect(x, 2, 3, buf.h - 4, rgb(w));
+      buf.vline(x, 2, buf.h - 4, rgb(d));
+      buf.rect(x, 1, 3, 1, rgb(shade(w, 0.25)));
+    }
+    buf.rect(0, 5, buf.w, 2, rgb(shade(w, 0.12)));
+    buf.hline(0, 7, buf.w, rgb(d));
+    buf.rect(0, 11, buf.w, 2, rgb(shade(w, 0.12)));
+    buf.hline(0, 13, buf.w, rgb(d));
+  }
+  outline(buf);
+}
+
+function paintSignpost(buf, v, label) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 5, 2);
+  buf.rect(buf.w / 2 - 1, 10, 3, buf.h - 12, rgb(P.woodDk));
+  buf.rect(2, 2, buf.w - 4, 10, rgb(P.wood));
+  buf.frame(2, 2, buf.w - 4, 10, rgb(P.woodDeep));
+  buf.rect(3, 3, buf.w - 6, 3, rgb(P.woodLt));
+  // Illegible little "writing" — real text is drawn by the UI when you read it.
+  for (let i = 0; i < 3; i++) buf.hline(5, 6 + i * 2, buf.w - 12 - i * 2, rgb(P.woodDeep));
+  outline(buf);
+}
+
+function paintLamppost(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 4, 1.8);
+  const cx = buf.w / 2;
+  buf.rect(cx - 1, 10, 3, buf.h - 12, rgb(P.slateDk));
+  buf.vline(cx - 1, 10, buf.h - 12, rgb(P.slate));
+  buf.rect(cx - 3, buf.h - 3, 7, 2, rgb(P.slateDk));
+  // Lantern box.
+  buf.rect(cx - 4, 2, 9, 9, rgb(P.slateDk));
+  buf.rect(cx - 3, 3, 7, 7, rgb(P.glass));
+  buf.rect(cx - 3, 3, 7, 3, rgb(P.glassLt));
+  buf.rect(cx - 5, 0, 11, 3, rgb(P.slate));
+  outline(buf);
+}
+
+function paintWell(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 3, 14, 5);
+  const cx = buf.w / 2, base = buf.h - 6;
+  buf.ellipse(cx, base, 13, 6, rgb(P.stoneDk));
+  buf.rect(cx - 13, base - 8, 26, 9, rgb(P.stone));
+  for (let y = 0; y < 9; y += 3) for (let x = -12; x < 12; x += 5) {
+    buf.rect(cx + x + (y % 6 ? 2 : 0), base - 8 + y, 4, 2, rgb(n(x, y, v) > 0.5 ? P.stoneLt : P.stone));
+  }
+  buf.ellipse(cx, base - 8, 12, 5, rgb(P.stoneLt));
+  buf.ellipse(cx, base - 8, 9, 3.4, rgb('#1d3550'));
+  buf.ellipse(cx, base - 7, 8, 2.6, rgb(P.waterDk));
+  // Posts and roof.
+  buf.rect(cx - 12, base - 30, 3, 23, rgb(P.woodDk));
+  buf.rect(cx + 9, base - 30, 3, 23, rgb(P.woodDk));
+  for (let i = 0; i < 9; i++) {
+    buf.hline(cx - 16 + i, base - 32 + i, (16 - i) * 2, rgb(i < 3 ? P.terracottaLt : P.terracotta));
+  }
+  outline(buf);
+}
+
+function paintBench(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 13, 3);
+  buf.rect(2, 6, buf.w - 4, 4, rgb(P.wood));
+  buf.hline(2, 6, buf.w - 4, rgb(P.woodLt));
+  buf.hline(2, 9, buf.w - 4, rgb(P.woodDk));
+  buf.rect(2, 0, buf.w - 4, 3, rgb(P.wood));
+  buf.rect(3, 10, 3, buf.h - 11, rgb(P.woodDk));
+  buf.rect(buf.w - 6, 10, 3, buf.h - 11, rgb(P.woodDk));
+  outline(buf);
+}
+
+function paintBarrel(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 6, 2.4);
+  buf.rect(2, 3, buf.w - 4, buf.h - 5, rgb(P.wood));
+  buf.ellipse(buf.w / 2, 3, buf.w / 2 - 2, 2.6, rgb(P.woodLt));
+  buf.hline(1, 6, buf.w - 2, rgb(P.metalDk));
+  buf.hline(1, buf.h - 6, buf.w - 2, rgb(P.metalDk));
+  buf.vline(4, 3, buf.h - 5, rgb(P.woodDk));
+  buf.vline(buf.w - 5, 3, buf.h - 5, rgb(P.woodDk));
+  outline(buf);
+}
+
+function paintCrate(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 7, 2.4);
+  buf.rect(1, 2, buf.w - 2, buf.h - 4, rgb(P.wood));
+  buf.frame(1, 2, buf.w - 2, buf.h - 4, rgb(P.woodDeep));
+  buf.line(2, 3, buf.w - 3, buf.h - 4, rgb(P.woodDk));
+  buf.line(buf.w - 3, 3, 2, buf.h - 4, rgb(P.woodDk));
+  outline(buf);
+}
+
+function paintHaystack(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 12, 4);
+  buf.ellipse(buf.w / 2, buf.h - 9, 13, 9, rgb(P.thatch));
+  buf.ellipse(buf.w / 2 - 2, buf.h - 12, 8, 5, rgb(P.thatchLt));
+  for (let i = 0; i < 40; i++) {
+    const px = Math.round(buf.w / 2 + (n(i, v, 3) - 0.5) * 26);
+    const py = Math.round(buf.h - 9 + (n(i, v, 5) - 0.5) * 17);
+    if (buf.get(px, py) >>> 24) buf.set(px, py, rgb(n(i, v, 9) > 0.5 ? P.thatchLt : P.thatchDk));
+  }
+  outline(buf);
+}
+
+function paintMailbox(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 4, 1.8);
+  const cx = buf.w / 2;
+  buf.rect(cx - 1, 12, 3, buf.h - 13, rgb(P.woodDk));
+  buf.rect(cx - 6, 3, 13, 9, rgb('#5b8fd6'));
+  buf.ellipse(cx, 3, 6.5, 3.4, rgb('#5b8fd6'));
+  buf.rect(cx - 6, 3, 13, 2, rgb('#7fadea'));
+  buf.rect(cx + 4, 5, 2, 5, rgb(P.flowerR));  // little flag
+  buf.rect(cx - 4, 7, 7, 3, rgb('#3f6ba8'));
+  outline(buf);
+}
+
+function paintPlanter(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 7, 2.4);
+  buf.rect(2, buf.h - 8, buf.w - 4, 7, rgb(P.terracotta));
+  buf.rect(1, buf.h - 9, buf.w - 2, 2, rgb(P.terracottaLt));
+  buf.rect(2, buf.h - 3, buf.w - 4, 2, rgb(P.terracottaDk));
+  canopy(buf, buf.w / 2, buf.h - 13, 7, 5.5, '#4e9c40', v, { lobes: 4 });
+  const cols = [P.flowerR, P.flowerY, P.flowerP, P.flowerW];
+  for (let i = 0; i < 4; i++) {
+    const px = Math.round(buf.w / 2 + (n(i, v, 3) - 0.5) * 12);
+    const py = Math.round(buf.h - 15 + n(i, v, 5) * 5);
+    buf.ellipse(px, py, 1.6, 1.4, rgb(cols[i % 4]));
+  }
+  outline(buf);
+}
+
+/** Flat stone steps, drawn as a ground decal where a path climbs a terrace. */
+function paintStairs(buf, v) {
+  const steps = 4;
+  const sh = Math.floor(buf.h / steps);
+  for (let s = 0; s < steps; s++) {
+    const y = s * sh;
+    const inset = s;
+    buf.rect(inset, y, buf.w - inset * 2, sh, rgb(s % 2 ? P.stoneLt : P.stone));
+    buf.hline(inset, y, buf.w - inset * 2, rgb(P.stoneHi));
+    buf.hline(inset, y + sh - 1, buf.w - inset * 2, rgb(P.stoneDeep));
+    for (let x = inset; x < buf.w - inset; x++) {
+      if (n(x, y, v + s) < 0.16) buf.set(x, y + 1 + (s % 2), rgb(P.stoneDk));
+    }
+  }
+  buf.vline(0, 0, buf.h, rgb(P.stoneDk));
+  buf.vline(buf.w - 1, 0, buf.h, rgb(P.stoneDk));
+}
+
+function paintDock(buf, v) {
+  buf.rect(0, 0, buf.w, buf.h - 4, rgb(P.wood));
+  for (let x = 0; x < buf.w; x += 5) buf.vline(x, 0, buf.h - 4, rgb(P.woodDk));
+  buf.hline(0, 0, buf.w, rgb(P.woodLt));
+  buf.rect(1, buf.h - 4, 3, 4, rgb(P.woodDeep));
+  buf.rect(buf.w - 4, buf.h - 4, 3, 4, rgb(P.woodDeep));
+  outline(buf);
+}
+
+function paintPerch(buf, v) {
+  // Taxi-bird landing post: a tall pole with a crossbar and a little flag.
+  groundShadow(buf, buf.w / 2, buf.h - 2, 6, 2.4);
+  const cx = buf.w / 2;
+  buf.rect(cx - 2, 6, 4, buf.h - 8, rgb(P.woodDk));
+  buf.rect(cx - 2, 6, 2, buf.h - 8, rgb(P.wood));
+  buf.rect(cx - 9, 8, 19, 3, rgb(P.wood));
+  buf.rect(cx - 9, 11, 19, 1, rgb(P.woodDeep));
+  buf.rect(cx + 2, 0, 9, 7, rgb('#e0894a'));
+  buf.rect(cx + 2, 0, 9, 2, rgb('#f0a468'));
+  buf.rect(cx - 6, buf.h - 4, 13, 3, rgb(P.stone));
+  outline(buf);
+}
+
+// ---------------------------------------------------------------------------
+// Buildings
+// ---------------------------------------------------------------------------
+
+/**
+ * Draw a cottage/shopfront. Buildings are the largest sprites in the game, so
+ * they get real attention: stone footing, plaster or timbered walls, an
+ * overhanging tiled or thatched roof, a chimney, glazing bars in the windows.
+ */
+export function paintBuilding(buf, opts) {
+  const {
+    tw = 4, wallH = 26, roofH = 22, wall = P.plaster, roof = P.terracotta,
+    roofStyle = 'tile', timbered = false, doorX = null, windows = 2, v = 0,
+    sign = null, awning = null, chimney = true,
+  } = opts;
+
+  const W = tw * TILE;
+  const ox = Math.round((buf.w - W) / 2);
+  const wallTop = buf.h - 4 - wallH;
+  const roofTop = wallTop - roofH;
+  const wallDk = shade(wall, -0.18), wallLt = shade(wall, 0.14);
+  const roofDk = shade(roof, -0.26), roofLt = shade(roof, 0.18);
+
+  groundShadow(buf, buf.w / 2, buf.h - 3, W / 2 + 2, 5);
+
+  // --- walls ---
+  buf.rect(ox, wallTop, W, wallH, rgb(wall));
+  buf.rect(ox, wallTop, W, 2, rgb(wallLt));
+  for (let y = wallTop; y < wallTop + wallH; y++) {
+    for (let x = ox; x < ox + W; x++) if (n(x, y, v) < 0.07) buf.set(x, y, rgb(wallDk));
+  }
+  // Stone footing.
+  buf.rect(ox, buf.h - 8, W, 4, rgb(P.stone));
+  for (let x = ox; x < ox + W; x += 5) buf.rect(x + (v % 2), buf.h - 8, 4, 2, rgb(P.stoneLt));
+  buf.hline(ox, buf.h - 4, W, rgb(P.stoneDk));
+
+  if (timbered) {
+    const t = rgb(P.timber);
+    buf.rect(ox, wallTop, 3, wallH, t);
+    buf.rect(ox + W - 3, wallTop, 3, wallH, t);
+    buf.rect(ox, wallTop, W, 3, t);
+    buf.rect(ox, wallTop + Math.floor(wallH / 2), W, 2, t);
+    for (let i = 1; i < tw; i++) buf.rect(ox + i * TILE, wallTop, 2, wallH, t);
+    // Diagonal braces in the upper register.
+    for (let i = 0; i < tw; i++) {
+      const bx = ox + i * TILE + 2;
+      buf.line(bx, wallTop + Math.floor(wallH / 2), bx + TILE - 5, wallTop + 3, t);
+    }
+  }
+
+  // --- door ---
+  const dW = 12, dH = 18;
+  const dX = doorX === null ? Math.round(buf.w / 2 - dW / 2) : ox + doorX * TILE + 2;
+  const dY = buf.h - 8 - dH + 2;
+  buf.rect(dX - 1, dY - 1, dW + 2, dH + 1, rgb(P.woodDeep));
+  buf.rect(dX, dY, dW, dH, rgb(P.wood));
+  buf.rect(dX + 1, dY + 1, dW - 2, 2, rgb(P.woodLt));
+  buf.vline(dX + dW / 2, dY, dH, rgb(P.woodDk));
+  buf.rect(dX + dW - 4, dY + dH / 2, 2, 2, rgb(P.gold));
+  // Arched top on the doorway.
+  buf.ellipse(dX + dW / 2, dY, dW / 2 + 1, 3, rgb(P.woodDeep));
+  buf.ellipse(dX + dW / 2, dY + 1, dW / 2 - 1, 2, rgb(P.wood));
+
+  // --- windows ---
+  const winY = wallTop + 6;
+  const slots = [];
+  for (let i = 0; i < tw; i++) {
+    const wx = ox + i * TILE + 3;
+    if (wx + 10 < dX - 3 || wx > dX + dW + 3) slots.push(wx);
+  }
+  for (let i = 0; i < Math.min(windows, slots.length); i++) {
+    const wx = slots[Math.floor((i * slots.length) / Math.max(1, Math.min(windows, slots.length)))];
+    buf.rect(wx - 1, winY - 1, 12, 12, rgb(P.woodDk));
+    buf.rect(wx, winY, 10, 10, rgb(P.glass));
+    buf.rect(wx, winY, 10, 4, rgb(P.glassLt));
+    buf.vline(wx + 5, winY, 10, rgb(P.woodDk));
+    buf.hline(wx, winY + 5, 10, rgb(P.woodDk));
+    // Window box with flowers.
+    if (n(i, v, 3) > 0.4) {
+      buf.rect(wx - 2, winY + 10, 14, 3, rgb(P.woodDk));
+      for (let k = 0; k < 4; k++) buf.set(wx + k * 3, winY + 9, rgb([P.flowerR, P.flowerY, P.flowerP, P.flowerW][k % 4]));
+    }
+  }
+
+  // --- roof ---
+  const overhang = 4;
+  const rx0 = ox - overhang, rW = W + overhang * 2;
+  if (roofStyle === 'gable') {
+    // Triangular front gable.
+    for (let i = 0; i < roofH; i++) {
+      const t = i / roofH;
+      const w = Math.round(rW * t);
+      const c = i < 3 ? roofLt : i > roofH - 5 ? roofDk : roof;
+      buf.hline(Math.round(buf.w / 2 - w / 2), roofTop + i, w, rgb(c));
+    }
+    buf.rect(rx0, wallTop - 3, rW, 3, rgb(roofDk));
+    for (let i = 0; i < roofH; i += 4) {
+      const t = i / roofH, w = Math.round(rW * t);
+      buf.hline(Math.round(buf.w / 2 - w / 2), roofTop + i, w, rgb(roofDk));
+    }
+  } else if (roofStyle === 'thatch') {
+    for (let i = 0; i < roofH; i++) {
+      const t = i / roofH;
+      const w = Math.round(rW * (0.25 + 0.75 * t));
+      const c = i < 4 ? P.thatchLt : i > roofH - 6 ? P.thatchDk : P.thatch;
+      buf.hline(Math.round(buf.w / 2 - w / 2), roofTop + i, w, rgb(c));
+    }
+    // Straw strokes.
+    for (let i = 0; i < rW * 1.4; i++) {
+      const x = Math.round(rx0 + n(i, v, 3) * rW);
+      const y = Math.round(roofTop + 3 + n(i, v, 5) * (roofH - 4));
+      if (buf.get(x, y) >>> 24) buf.line(x, y, x, y + 2, rgb(n(i, v, 7) > 0.5 ? P.thatchLt : P.thatchDk));
+    }
+    buf.hline(rx0, wallTop - 1, rW, rgb(P.thatchDk));
+  } else {
+    // Hipped tile roof: rows of scalloped tiles, widening downwards.
+    for (let i = 0; i < roofH; i++) {
+      const t = i / roofH;
+      const w = Math.round(rW * (0.42 + 0.58 * t));
+      const c = i < 3 ? roofLt : roof;
+      buf.hline(Math.round(buf.w / 2 - w / 2), roofTop + i, w, rgb(c));
+    }
+    for (let row = 3; row < roofH; row += 4) {
+      const t = row / roofH, w = Math.round(rW * (0.42 + 0.58 * t));
+      const x0 = Math.round(buf.w / 2 - w / 2);
+      buf.hline(x0, roofTop + row, w, rgb(roofDk));
+      for (let x = x0; x < x0 + w; x += 4) {
+        buf.set(x, roofTop + row - 1, rgb(roofDk));
+        buf.set(x + 1, roofTop + row - 2, rgb(roofLt));
+      }
+    }
+    buf.rect(rx0, wallTop - 3, rW, 3, rgb(roofDk));
+    buf.hline(rx0, wallTop - 4, rW, rgb(roofLt));
+  }
+
+  if (chimney) {
+    const cx = ox + (v % 2 ? W - 12 : 6);
+    buf.rect(cx, roofTop - 8, 8, 14, rgb(P.brick));
+    for (let y = 0; y < 14; y += 3) buf.hline(cx, roofTop - 8 + y, 8, rgb(P.brickDk));
+    buf.rect(cx - 1, roofTop - 10, 10, 3, rgb(P.stoneLt));
+  }
+
+  // --- shop sign / awning ---
+  if (awning) {
+    const aw = W - 6, ax = ox + 3, ay = wallTop + 1;
+    for (let i = 0; i < 7; i++) buf.hline(ax - i, ay + i, aw + i * 2, rgb(i % 4 < 2 ? awning : shade(awning, 0.3)));
+    buf.hline(ax - 6, ay + 7, aw + 12, rgb(shade(awning, -0.3)));
+    for (let x = 0; x < aw + 12; x += 6) buf.ellipse(ax - 6 + x + 3, ay + 8, 3, 2, rgb(x % 12 ? awning : shade(awning, 0.3)));
+  }
+  if (sign) {
+    const sw = 22, sx = Math.round(buf.w / 2 - sw / 2) + (sign.side || 0) * 26;
+    const sy = wallTop - 2;
+    buf.rect(sx + sw / 2 - 1, sy - 4, 2, 4, rgb(P.metalDk));
+    buf.rect(sx, sy, sw, 13, rgb(sign.bg || P.wood));
+    buf.frame(sx, sy, sw, 13, rgb(P.woodDeep));
+    if (sign.icon) sign.icon(buf, sx + sw / 2, sy + 6);
+  }
+
+  outline(buf);
+}
+
+// ---------------------------------------------------------------------------
+// Shop sign glyphs — tiny pictograms that tell you what a building sells.
+// ---------------------------------------------------------------------------
+
+export const SIGN_ICONS = {
+  cafe: (b, x, y) => { // steaming cup
+    b.rect(x - 4, y - 2, 7, 5, rgb(P.cream)); b.rect(x + 3, y - 1, 2, 2, rgb(P.cream));
+    b.rect(x - 3, y - 1, 5, 2, rgb(P.coffee));
+    b.set(x - 2, y - 5, rgb('#ffffff')); b.set(x, y - 6, rgb('#ffffff')); b.set(x + 1, y - 4, rgb('#ffffff'));
+  },
+  grocer: (b, x, y) => { // apple + carrot
+    b.ellipse(x - 2, y, 3, 3, rgb(P.flowerR)); b.set(x - 2, y - 4, rgb(P.forest));
+    b.ellipse(x + 3, y + 1, 2, 3, rgb('#e08b3f')); b.set(x + 3, y - 3, rgb(P.forest));
+  },
+  vet: (b, x, y) => { // cross
+    b.rect(x - 1, y - 5, 3, 10, rgb(P.flowerR)); b.rect(x - 5, y - 1, 11, 3, rgb(P.flowerR));
+  },
+  groomer: (b, x, y) => { // brush
+    b.rect(x - 4, y - 3, 8, 4, rgb(P.uiPink)); b.rect(x - 4, y + 1, 8, 2, rgb(P.wood));
+    for (let i = 0; i < 4; i++) b.vline(x - 3 + i * 2, y + 3, 3, rgb(P.woodDk));
+  },
+  pet: (b, x, y) => { // paw print
+    b.ellipse(x, y + 2, 3, 2.4, rgb(P.furBrown));
+    b.ellipse(x - 3, y - 2, 1.4, 1.6, rgb(P.furBrown));
+    b.ellipse(x, y - 3, 1.4, 1.6, rgb(P.furBrown));
+    b.ellipse(x + 3, y - 2, 1.4, 1.6, rgb(P.furBrown));
+  },
+  furniture: (b, x, y) => { // armchair
+    b.rect(x - 5, y - 2, 10, 6, rgb('#8a72d6')); b.rect(x - 5, y - 4, 3, 6, rgb('#6f5ab8'));
+    b.rect(x + 2, y - 4, 3, 6, rgb('#6f5ab8'));
+  },
+  builder: (b, x, y) => { // hammer
+    b.rect(x - 1, y - 2, 2, 7, rgb(P.wood));
+    b.rect(x - 4, y - 5, 9, 4, rgb(P.metal)); b.rect(x - 4, y - 5, 9, 1, rgb('#e0e4ea'));
+  },
+  bakery: (b, x, y) => { // croissant-ish roll
+    b.ellipse(x, y, 5, 3.2, rgb('#e0a45c'));
+    b.ellipse(x, y - 1, 4, 2, rgb('#f0c184'));
+    b.set(x - 3, y + 2, rgb('#c9863f')); b.set(x + 3, y + 2, rgb('#c9863f'));
+  },
+  tea: (b, x, y) => { // teapot
+    b.ellipse(x, y + 1, 4.4, 3.4, rgb('#6b9e8f'));
+    b.rect(x + 3, y - 1, 4, 2, rgb('#6b9e8f'));
+    b.rect(x - 1, y - 5, 3, 2, rgb('#4f7d70'));
+  },
+  book: (b, x, y) => {
+    b.rect(x - 5, y - 4, 10, 9, rgb('#5b8fd6')); b.rect(x - 4, y - 3, 8, 7, rgb(P.paper));
+    b.vline(x, y - 4, 9, rgb('#3f6ba8'));
+  },
+  fish: (b, x, y) => {
+    b.ellipse(x - 1, y, 4.4, 2.6, rgb('#7fb8d6'));
+    b.line(x + 4, y - 3, x + 4, y + 3, rgb('#5b8fd6')); b.line(x + 6, y - 3, x + 4, y, rgb('#5b8fd6'));
+    b.line(x + 6, y + 3, x + 4, y, rgb('#5b8fd6'));
+    b.set(x - 3, y - 1, rgb('#2f2a3d'));
+  },
+  inn: (b, x, y) => { // bed
+    b.rect(x - 5, y, 11, 4, rgb(P.wood)); b.rect(x - 5, y - 3, 5, 4, rgb('#f0e6d2'));
+    b.rect(x - 6, y - 4, 2, 8, rgb(P.woodDk));
+  },
+  town: (b, x, y) => { // little house
+    for (let i = 0; i < 5; i++) b.hline(x - i, y - 4 + i, i * 2 + 1, rgb(P.terracotta));
+    b.rect(x - 4, y + 1, 9, 4, rgb(P.plaster));
+    b.rect(x - 1, y + 2, 3, 3, rgb(P.woodDk));
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Interior furniture
+// ---------------------------------------------------------------------------
+
+function paintTableRound(buf, v, cloth) {
+  groundShadow(buf, buf.w / 2, buf.h - 3, 11, 3.4);
+  buf.rect(buf.w / 2 - 2, buf.h - 12, 5, 9, rgb(P.woodDk));
+  buf.ellipse(buf.w / 2, buf.h - 4, 8, 3, rgb(P.woodDeep));
+  buf.ellipse(buf.w / 2, buf.h - 14, 12, 7, rgb(P.wood));
+  buf.ellipse(buf.w / 2, buf.h - 15, 11, 6, rgb(P.woodLt));
+  if (cloth) {
+    buf.ellipse(buf.w / 2, buf.h - 15, 10, 5.4, rgb(cloth));
+    buf.ellipse(buf.w / 2, buf.h - 16, 8, 4, rgb(shade(cloth, 0.18)));
+  }
+  outline(buf);
+}
+
+function paintTableSquare(buf, v, cloth) {
+  groundShadow(buf, buf.w / 2, buf.h - 3, 12, 3.4);
+  buf.rect(4, buf.h - 11, 3, 8, rgb(P.woodDk));
+  buf.rect(buf.w - 7, buf.h - 11, 3, 8, rgb(P.woodDk));
+  buf.rect(2, buf.h - 18, buf.w - 4, 8, rgb(P.wood));
+  buf.rect(2, buf.h - 18, buf.w - 4, 3, rgb(P.woodLt));
+  if (cloth) {
+    buf.rect(3, buf.h - 17, buf.w - 6, 6, rgb(cloth));
+    for (let x = 3; x < buf.w - 3; x += 4) buf.vline(x, buf.h - 17, 6, rgb(shade(cloth, 0.2)));
+  }
+  outline(buf);
+}
+
+function paintChair(buf, v, col, dir) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 6, 2.2);
+  const c = col || P.wood;
+  const back = dir === 'up';
+  if (!back) buf.rect(3, 2, buf.w - 6, 3, rgb(shade(c, -0.2)));
+  buf.rect(3, buf.h - 12, buf.w - 6, 5, rgb(c));
+  buf.rect(3, buf.h - 12, buf.w - 6, 2, rgb(shade(c, 0.2)));
+  if (back) buf.rect(3, buf.h - 20, buf.w - 6, 9, rgb(shade(c, -0.1)));
+  buf.rect(4, buf.h - 7, 2, 5, rgb(shade(c, -0.3)));
+  buf.rect(buf.w - 6, buf.h - 7, 2, 5, rgb(shade(c, -0.3)));
+  outline(buf);
+}
+
+function paintStool(buf, v, col) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 5, 2);
+  const c = col || P.rug;
+  buf.ellipse(buf.w / 2, buf.h - 10, 6, 3, rgb(c));
+  buf.ellipse(buf.w / 2, buf.h - 11, 5.4, 2.6, rgb(shade(c, 0.2)));
+  buf.rect(buf.w / 2 - 3, buf.h - 9, 2, 7, rgb(P.woodDk));
+  buf.rect(buf.w / 2 + 1, buf.h - 9, 2, 7, rgb(P.woodDk));
+  outline(buf);
+}
+
+function paintSofa(buf, v, col) {
+  groundShadow(buf, buf.w / 2, buf.h - 3, buf.w / 2 - 2, 3.4);
+  const c = col || '#8a72d6';
+  buf.rect(1, buf.h - 20, buf.w - 2, 12, rgb(shade(c, -0.15)));
+  buf.rect(3, buf.h - 14, buf.w - 6, 8, rgb(c));
+  buf.rect(3, buf.h - 14, buf.w - 6, 3, rgb(shade(c, 0.18)));
+  buf.rect(0, buf.h - 18, 5, 13, rgb(shade(c, -0.05)));
+  buf.rect(buf.w - 5, buf.h - 18, 5, 13, rgb(shade(c, -0.05)));
+  buf.rect(2, buf.h - 5, 3, 4, rgb(P.woodDk));
+  buf.rect(buf.w - 5, buf.h - 5, 3, 4, rgb(P.woodDk));
+  outline(buf);
+}
+
+function paintCounterUnit(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 3, buf.w / 2 - 1, 3);
+  buf.rect(0, buf.h - 18, buf.w, 15, rgb(P.wood));
+  buf.rect(0, buf.h - 20, buf.w, 3, rgb(P.woodLt));
+  for (let x = 2; x < buf.w; x += 8) buf.vline(x, buf.h - 17, 13, rgb(P.woodDk));
+  buf.hline(0, buf.h - 4, buf.w, rgb(P.woodDeep));
+  outline(buf);
+}
+
+function paintPastryCase(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 3, buf.w / 2 - 1, 3);
+  buf.rect(0, buf.h - 14, buf.w, 12, rgb(P.wood));
+  buf.rect(1, buf.h - 26, buf.w - 2, 13, rgb(P.glass));
+  buf.rect(1, buf.h - 26, buf.w - 2, 4, rgb(P.glassLt));
+  buf.frame(1, buf.h - 26, buf.w - 2, 13, rgb(P.metalDk));
+  buf.hline(1, buf.h - 20, buf.w - 2, rgb(P.metalDk));
+  // Cakes on the shelves.
+  for (let i = 0; i < 3; i++) {
+    const x = 4 + i * 9;
+    buf.rect(x, buf.h - 24, 6, 3, rgb(P.cake));
+    buf.set(x + 2, buf.h - 25, rgb(P.strawberry));
+    buf.rect(x, buf.h - 18, 6, 3, rgb(i % 2 ? P.matcha : P.coffeeLt));
+  }
+  outline(buf);
+}
+
+function paintRegister(buf, v) {
+  buf.rect(2, buf.h - 12, buf.w - 4, 10, rgb(P.metal));
+  buf.rect(2, buf.h - 12, buf.w - 4, 3, rgb('#dfe3ea'));
+  buf.rect(4, buf.h - 18, buf.w - 8, 7, rgb(P.slateDk));
+  buf.rect(5, buf.h - 17, buf.w - 10, 4, rgb('#8fd3a0'));
+  for (let i = 0; i < 3; i++) buf.rect(4 + i * 4, buf.h - 8, 3, 2, rgb(P.slate));
+  outline(buf);
+}
+
+function paintCoffeeMachine(buf, v) {
+  buf.rect(1, buf.h - 22, buf.w - 2, 20, rgb(P.metal));
+  buf.rect(1, buf.h - 22, buf.w - 2, 4, rgb('#dfe3ea'));
+  buf.rect(3, buf.h - 16, buf.w - 6, 7, rgb(P.slateDk));
+  buf.rect(4, buf.h - 15, 4, 4, rgb('#ff9a5a'));
+  buf.rect(buf.w - 8, buf.h - 15, 4, 4, rgb('#8fd3a0'));
+  buf.rect(buf.w / 2 - 2, buf.h - 9, 4, 4, rgb(P.metalDk));
+  buf.rect(buf.w / 2 - 3, buf.h - 5, 6, 3, rgb(P.cream));
+  outline(buf);
+}
+
+function paintShelf(buf, v, kind) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, buf.w / 2 - 1, 2.4);
+  buf.rect(0, buf.h - 30, buf.w, 28, rgb(P.woodDk));
+  buf.rect(1, buf.h - 29, buf.w - 2, 26, rgb(P.wood));
+  for (let s = 0; s < 3; s++) {
+    const y = buf.h - 26 + s * 8;
+    buf.hline(1, y + 6, buf.w - 2, rgb(P.woodDeep));
+    for (let i = 0; i < 4; i++) {
+      const x = 3 + i * 6;
+      const c = kind === 'books' ? ['#d95f5f', '#5b8fd6', '#7fbe57', '#eec453'][(i + s) % 4]
+        : kind === 'food' ? ['#e0894a', '#8cbf5a', '#f0c184', '#d95f5f'][(i + s) % 4]
+          : ['#c9c2b0', '#8a72d6', '#6b9e8f', '#e6e0cf'][(i + s) % 4];
+      if (n(i, s, v) > 0.2) buf.rect(x, y, 4, 6, rgb(c));
+    }
+  }
+  outline(buf);
+}
+
+function paintPlantPot(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 6, 2.2);
+  buf.rect(3, buf.h - 9, buf.w - 6, 8, rgb(P.terracotta));
+  buf.rect(2, buf.h - 10, buf.w - 4, 2, rgb(P.terracottaLt));
+  buf.rect(3, buf.h - 3, buf.w - 6, 2, rgb(P.terracottaDk));
+  const green = ['#4e9c40', '#3f8a3c', '#6aad4a'][v % 3];
+  // Splayed fronds.
+  for (let i = 0; i < 6; i++) {
+    const a = -Math.PI / 2 + (i - 2.5) * 0.42;
+    const len = 11 + n(i, v, 3) * 6;
+    const ex = buf.w / 2 + Math.cos(a) * len, ey = buf.h - 10 + Math.sin(a) * len;
+    buf.line(buf.w / 2, buf.h - 10, Math.round(ex), Math.round(ey), rgb(green));
+    buf.ellipse(ex, ey, 2.6, 2.2, rgb(shade(green, i % 2 ? 0.15 : -0.1)));
+  }
+  outline(buf);
+}
+
+function paintCatTower(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 11, 3.4);
+  const carpet = ['#b6524f', '#6b9e8f', '#8a72d6'][v % 3];
+  const cx = buf.w / 2;
+  const post = (x, top, bottom, w) => {
+    buf.rect(x - w / 2, top, w, bottom - top, rgb(P.thatch));
+    // Sisal wrapping.
+    for (let y = top; y < bottom; y += 2) buf.hline(x - w / 2, y, w, rgb(P.thatchDk));
+    buf.vline(x - w / 2, top, bottom - top, rgb(P.thatchDk));
+    buf.vline(x + w / 2 - 1, top, bottom - top, rgb(shade(P.thatch, 0.2)));
+  };
+  const platform = (y, w) => {
+    buf.rect(cx - w / 2, y, w, 5, rgb(shade(carpet, -0.2)));
+    buf.rect(cx - w / 2, y, w, 3, rgb(carpet));
+    buf.rect(cx - w / 2 + 1, y, w - 2, 1, rgb(shade(carpet, 0.24)));
+    buf.hline(cx - w / 2, y + 4, w, rgb(shade(carpet, -0.4)));
+  };
+
+  // Base, trunk, mid shelf, a cubby, and a top perch.
+  platform(buf.h - 7, buf.w - 2);
+  post(cx + 3, buf.h - 20, buf.h - 6, 6);
+  platform(buf.h - 24, buf.w - 6);
+
+  // The cubby hole — every cat's preferred address.
+  buf.rect(1, buf.h - 22, 12, 12, rgb(shade(carpet, -0.12)));
+  buf.rect(1, buf.h - 22, 12, 2, rgb(carpet));
+  buf.ellipse(7, buf.h - 15, 4, 4, rgb('#2a2230'));
+  buf.ellipse(7, buf.h - 16, 3.4, 3.2, rgb('#1c1720'));
+
+  post(cx - 1, buf.h - 33, buf.h - 23, 6);
+  platform(buf.h - 36, buf.w - 8);
+
+  // Dangling pompom on a string.
+  buf.vline(buf.w - 4, buf.h - 34, 6, rgb(P.woodDk));
+  buf.ellipse(buf.w - 4, buf.h - 27, 2.6, 2.6, rgb(P.uiPink));
+  buf.set(buf.w - 5, buf.h - 28, rgb('#ffc0dd'));
+  outline(buf);
+}
+
+function paintCatBed(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 9, 2.6);
+  const c = ['#d472b0', '#5b8fd6', '#7fbe57'][v % 3];
+  buf.ellipse(buf.w / 2, buf.h - 5, 10, 5, rgb(shade(c, -0.2)));
+  buf.ellipse(buf.w / 2, buf.h - 6, 8, 3.6, rgb(c));
+  buf.ellipse(buf.w / 2, buf.h - 6, 6, 2.4, rgb(P.cream));
+  outline(buf);
+}
+
+function paintCatBowl(buf, v, food) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 5, 1.8);
+  buf.ellipse(buf.w / 2, buf.h - 4, 6, 3, rgb('#6b9e8f'));
+  buf.ellipse(buf.w / 2, buf.h - 5, 4.6, 2.2, rgb('#4f7d70'));
+  if (food) buf.ellipse(buf.w / 2, buf.h - 5, 3.6, 1.6, rgb('#a3703f'));
+  outline(buf);
+}
+
+function paintScratchPost(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 6, 2.2);
+  buf.rect(2, buf.h - 5, buf.w - 4, 4, rgb(P.wood));
+  buf.rect(buf.w / 2 - 3, buf.h - 22, 6, 17, rgb(P.thatch));
+  for (let y = buf.h - 22; y < buf.h - 5; y += 2) buf.hline(buf.w / 2 - 3, y, 6, rgb(P.thatchDk));
+  outline(buf);
+}
+
+function paintToy(buf, v, kind) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 4, 1.6);
+  if (kind === 'ball') {
+    buf.ellipse(buf.w / 2, buf.h - 5, 4, 4, rgb('#e8546b'));
+    buf.ellipse(buf.w / 2 - 1, buf.h - 6, 1.6, 1.4, rgb('#ff9aa8'));
+  } else if (kind === 'yarn') {
+    buf.ellipse(buf.w / 2, buf.h - 5, 4.4, 4, rgb('#8a72d6'));
+    for (let i = 0; i < 4; i++) buf.line(buf.w / 2 - 4, buf.h - 7 + i, buf.w / 2 + 4, buf.h - 4 + i, rgb('#a894e8'));
+  } else {
+    buf.vline(buf.w / 2, buf.h - 14, 9, rgb(P.woodDk));
+    buf.ellipse(buf.w / 2, buf.h - 15, 3, 2.4, rgb('#eec453'));
+    for (let i = 0; i < 5; i++) buf.line(buf.w / 2, buf.h - 15, buf.w / 2 - 4 + i * 2, buf.h - 19, rgb('#f0d98a'));
+  }
+  outline(buf);
+}
+
+function paintFireplace(buf, v) {
+  buf.rect(0, buf.h - 30, buf.w, 28, rgb(P.stone));
+  for (let y = buf.h - 30; y < buf.h - 2; y += 4) {
+    for (let x = 0; x < buf.w; x += 7) buf.rect(x + ((y / 4) % 2 ? 3 : 0), y, 6, 3, rgb(n(x, y, v) > 0.5 ? P.stoneLt : P.stone));
+  }
+  buf.rect(4, buf.h - 20, buf.w - 8, 18, rgb('#2a2020'));
+  buf.ellipse(buf.w / 2, buf.h - 5, 7, 4, rgb('#ff8a3a'));
+  buf.ellipse(buf.w / 2, buf.h - 7, 4.4, 4, rgb('#ffc04a'));
+  buf.ellipse(buf.w / 2, buf.h - 8, 2.2, 2.4, rgb('#fff0b0'));
+  buf.rect(2, buf.h - 34, buf.w - 4, 5, rgb(P.wood));
+  outline(buf);
+}
+
+function paintPainting(buf, v) {
+  const frameC = P.gold;
+  buf.rect(0, 0, buf.w, buf.h, rgb(frameC));
+  buf.rect(2, 2, buf.w - 4, buf.h - 4, rgb('#7fb8d6'));
+  // A tiny landscape inside the frame.
+  buf.rect(2, buf.h - 8, buf.w - 4, 6, rgb('#6aad4a'));
+  buf.ellipse(buf.w / 2 + 3, buf.h - 9, 4, 3, rgb('#4e9c40'));
+  buf.ellipse(5, 6, 2.4, 2.4, rgb('#ffe9a0'));
+  outline(buf, '#5b4a2e');
+}
+
+function paintWindowIn(buf, v) {
+  buf.rect(0, 0, buf.w, buf.h, rgb(P.woodDk));
+  buf.rect(2, 2, buf.w - 4, buf.h - 4, rgb(P.glass));
+  buf.rect(2, 2, buf.w - 4, Math.floor((buf.h - 4) / 2), rgb(P.glassLt));
+  buf.vline(buf.w / 2, 2, buf.h - 4, rgb(P.woodDk));
+  buf.hline(2, buf.h / 2, buf.w - 4, rgb(P.woodDk));
+  outline(buf, '#5b4a2e');
+}
+
+function paintBookshelf(buf, v) { paintShelf(buf, v, 'books'); }
+
+function paintPiano(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 3, buf.w / 2 - 1, 3);
+  buf.rect(0, buf.h - 26, buf.w, 24, rgb('#3a2f28'));
+  buf.rect(0, buf.h - 26, buf.w, 4, rgb('#5b4a3c'));
+  buf.rect(2, buf.h - 12, buf.w - 4, 5, rgb('#f6f0e0'));
+  for (let x = 3; x < buf.w - 3; x += 3) buf.vline(x, buf.h - 12, 5, rgb('#2a2420'));
+  for (let x = 4; x < buf.w - 4; x += 6) buf.rect(x, buf.h - 12, 2, 3, rgb('#2a2420'));
+  outline(buf);
+}
+
+function paintLampIn(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 5, 2);
+  buf.rect(buf.w / 2 - 1, buf.h - 18, 3, 16, rgb(P.metalDk));
+  buf.rect(buf.w / 2 - 4, buf.h - 3, 9, 2, rgb(P.metalDk));
+  for (let i = 0; i < 8; i++) buf.hline(Math.round(buf.w / 2 - 4 - i * 0.6), buf.h - 26 + i, Math.round(9 + i * 1.2), rgb(i < 3 ? '#ffe9b8' : '#f0d18a'));
+  outline(buf);
+}
+
+function paintDoorMat(buf, v) {
+  buf.rect(0, 0, buf.w, buf.h, rgb('#a3703f'));
+  buf.frame(0, 0, buf.w, buf.h, rgb('#7d5430'));
+  for (let x = 2; x < buf.w - 2; x += 3) buf.vline(x, 2, buf.h - 4, rgb('#b98a56'));
+}
+
+function paintMenuBoard(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 7, 2.4);
+  buf.rect(2, 0, buf.w - 4, buf.h - 6, rgb(P.woodDk));
+  buf.rect(4, 2, buf.w - 8, buf.h - 12, rgb('#3a3f3a'));
+  for (let i = 0; i < 4; i++) buf.hline(6, 5 + i * 4, buf.w - 12 - (i % 2) * 4, rgb('#e6e0cf'));
+  buf.line(buf.w / 2 - 4, buf.h - 6, buf.w / 2 - 6, buf.h - 1, rgb(P.woodDk));
+  buf.line(buf.w / 2 + 4, buf.h - 6, buf.w / 2 + 6, buf.h - 1, rgb(P.woodDk));
+  outline(buf);
+}
+
+// ---------------------------------------------------------------------------
+// Object registry
+// ---------------------------------------------------------------------------
+
+/**
+ * tw/th  = tile footprint (what blocks movement)
+ * w/h    = sprite size in pixels
+ * solid  = does the footprint block movement
+ * variants = how many random looks exist
+ */
+export const OBJECTS = {
+  oak:        { w: 48, h: 56, tw: 1, th: 1, solid: true, variants: 4, paint: paintOak },
+  pine:       { w: 40, h: 60, tw: 1, th: 1, solid: true, variants: 3, paint: paintPine },
+  birch:      { w: 36, h: 52, tw: 1, th: 1, solid: true, variants: 3, paint: paintBirch },
+  apple:      { w: 44, h: 52, tw: 1, th: 1, solid: true, variants: 3, paint: paintApple },
+  willow:     { w: 52, h: 54, tw: 1, th: 1, solid: true, variants: 2, paint: paintWillow },
+  bush:       { w: 24, h: 22, tw: 1, th: 1, solid: true, variants: 3, paint: (b, v) => paintBush(b, v, false) },
+  berrybush:  { w: 24, h: 22, tw: 1, th: 1, solid: true, variants: 3, paint: (b, v) => paintBush(b, v, true) },
+  stump:      { w: 22, h: 18, tw: 1, th: 1, solid: true, variants: 2, paint: paintStump },
+  reeds:      { w: 20, h: 24, tw: 1, th: 1, solid: false, variants: 3, paint: paintReeds },
+  mushroom:   { w: 14, h: 14, tw: 1, th: 1, solid: false, variants: 3, paint: paintMushroom },
+  rock:       { w: 20, h: 18, tw: 1, th: 1, solid: true, variants: 3, paint: (b, v) => paintRock(b, v, false) },
+  boulder:    { w: 34, h: 30, tw: 2, th: 1, solid: true, variants: 3, paint: (b, v) => paintRock(b, v, true) },
+  fence:      { w: 16, h: 18, tw: 1, th: 1, solid: true, variants: 1, paint: (b, v) => paintFence(b, v, false) },
+  fenceV:     { w: 16, h: 18, tw: 1, th: 1, solid: true, variants: 1, paint: (b, v) => paintFence(b, v, true) },
+  signpost:   { w: 24, h: 26, tw: 1, th: 1, solid: true, variants: 1, paint: paintSignpost },
+  lamppost:   { w: 16, h: 34, tw: 1, th: 1, solid: true, variants: 1, paint: paintLamppost, light: true },
+  well:       { w: 40, h: 44, tw: 2, th: 1, solid: true, variants: 1, paint: paintWell },
+  bench:      { w: 32, h: 20, tw: 2, th: 1, solid: true, variants: 1, paint: paintBench },
+  barrel:     { w: 16, h: 20, tw: 1, th: 1, solid: true, variants: 1, paint: paintBarrel },
+  crate:      { w: 18, h: 18, tw: 1, th: 1, solid: true, variants: 1, paint: paintCrate },
+  haystack:   { w: 32, h: 26, tw: 2, th: 1, solid: true, variants: 2, paint: paintHaystack },
+  mailbox:    { w: 18, h: 26, tw: 1, th: 1, solid: true, variants: 1, paint: paintMailbox },
+  planter:    { w: 20, h: 26, tw: 1, th: 1, solid: true, variants: 3, paint: paintPlanter },
+  dock:       { w: 32, h: 20, tw: 2, th: 1, solid: false, variants: 1, paint: paintDock },
+  stairs:     { w: 16, h: 16, tw: 1, th: 1, solid: false, variants: 3, paint: paintStairs },
+  perch:      { w: 26, h: 34, tw: 1, th: 1, solid: true, variants: 1, paint: paintPerch },
+
+  // interiors
+  tableRound: { w: 28, h: 26, tw: 1, th: 1, solid: true, variants: 1, paint: (b, v) => paintTableRound(b, v, null) },
+  tableCloth: { w: 28, h: 26, tw: 1, th: 1, solid: true, variants: 3, paint: (b, v) => paintTableRound(b, v, ['#d95f5f', '#5b8fd6', '#7fbe57'][v % 3]) },
+  tableSq:    { w: 32, h: 26, tw: 2, th: 1, solid: true, variants: 1, paint: (b, v) => paintTableSquare(b, v, null) },
+  tableSqCl:  { w: 32, h: 26, tw: 2, th: 1, solid: true, variants: 3, paint: (b, v) => paintTableSquare(b, v, ['#e6e0cf', '#c05a7a', '#6b9e8f'][v % 3]) },
+  // Seating is deliberately walkable: customers have to be able to path onto a
+  // chair to sit on it, and it keeps a crowded cafe from becoming a maze.
+  chair:      { w: 16, h: 22, tw: 1, th: 1, solid: false, variants: 3, paint: (b, v) => paintChair(b, v, [P.wood, '#8a72d6', '#6b9e8f'][v % 3], 'down') },
+  chairUp:    { w: 16, h: 22, tw: 1, th: 1, solid: false, variants: 3, paint: (b, v) => paintChair(b, v, [P.wood, '#8a72d6', '#6b9e8f'][v % 3], 'up') },
+  stool:      { w: 16, h: 16, tw: 1, th: 1, solid: false, variants: 3, paint: (b, v) => paintStool(b, v, ['#b6524f', '#5b8fd6', '#eec453'][v % 3]) },
+  sofa:       { w: 48, h: 26, tw: 3, th: 1, solid: false, variants: 3, paint: (b, v) => paintSofa(b, v, ['#8a72d6', '#6b9e8f', '#c05a7a'][v % 3]) },
+  counter:    { w: 32, h: 24, tw: 2, th: 1, solid: true, variants: 1, paint: paintCounterUnit },
+  pastryCase: { w: 32, h: 30, tw: 2, th: 1, solid: true, variants: 1, paint: paintPastryCase },
+  register:   { w: 16, h: 20, tw: 1, th: 1, solid: true, variants: 1, paint: paintRegister },
+  coffeeMachine: { w: 20, h: 24, tw: 1, th: 1, solid: true, variants: 1, paint: paintCoffeeMachine },
+  shelf:      { w: 32, h: 32, tw: 2, th: 1, solid: true, variants: 2, paint: (b, v) => paintShelf(b, v, 'goods') },
+  shelfFood:  { w: 32, h: 32, tw: 2, th: 1, solid: true, variants: 2, paint: (b, v) => paintShelf(b, v, 'food') },
+  bookshelf:  { w: 32, h: 32, tw: 2, th: 1, solid: true, variants: 2, paint: paintBookshelf },
+  plantPot:   { w: 20, h: 30, tw: 1, th: 1, solid: true, variants: 3, paint: paintPlantPot },
+  catTower:   { w: 26, h: 42, tw: 1, th: 1, solid: true, variants: 3, paint: paintCatTower },
+  catBed:     { w: 22, h: 14, tw: 1, th: 1, solid: false, variants: 3, paint: paintCatBed },
+  catBowl:    { w: 14, h: 10, tw: 1, th: 1, solid: false, variants: 1, paint: (b, v) => paintCatBowl(b, v, true) },
+  catBowlEmpty: { w: 14, h: 10, tw: 1, th: 1, solid: false, variants: 1, paint: (b, v) => paintCatBowl(b, v, false) },
+  scratchPost:{ w: 18, h: 24, tw: 1, th: 1, solid: true, variants: 1, paint: paintScratchPost },
+  toyBall:    { w: 12, h: 10, tw: 1, th: 1, solid: false, variants: 1, paint: (b, v) => paintToy(b, v, 'ball') },
+  toyYarn:    { w: 12, h: 10, tw: 1, th: 1, solid: false, variants: 1, paint: (b, v) => paintToy(b, v, 'yarn') },
+  toyWand:    { w: 14, h: 22, tw: 1, th: 1, solid: false, variants: 1, paint: (b, v) => paintToy(b, v, 'wand') },
+  fireplace:  { w: 44, h: 38, tw: 3, th: 1, solid: true, variants: 1, paint: paintFireplace, light: true },
+  painting:   { w: 24, h: 20, tw: 1, th: 1, solid: true, variants: 3, paint: paintPainting, wall: true },
+  windowIn:   { w: 24, h: 22, tw: 1, th: 1, solid: true, variants: 1, paint: paintWindowIn, wall: true },
+  piano:      { w: 48, h: 30, tw: 3, th: 1, solid: true, variants: 1, paint: paintPiano },
+  lampIn:     { w: 18, h: 28, tw: 1, th: 1, solid: true, variants: 1, paint: paintLampIn, light: true },
+  doormat:    { w: 24, h: 12, tw: 1, th: 1, solid: false, variants: 1, paint: paintDoorMat },
+  menuBoard:  { w: 22, h: 28, tw: 1, th: 1, solid: true, variants: 1, paint: paintMenuBoard },
+};
+
+const cache = new SpriteCache();
+
+/** Get the baked sprite for an object type + variant. */
+export function objSprite(type, variant = 0) {
+  const def = OBJECTS[type];
+  if (!def) return null;
+  const v = variant % (def.variants || 1);
+  return cache.get(`o|${type}|${v}`, () => {
+    const buf = new PixBuf(def.w, def.h);
+    def.paint(buf, v);
+    return buf.toCanvas();
+  });
+}
+
+/** Buildings are parameterised rather than enumerated, so they cache by config. */
+export function buildingSprite(cfg) {
+  const key = `b|${cfg.tw}|${cfg.wall}|${cfg.roof}|${cfg.roofStyle}|${cfg.timbered ? 1 : 0}|${cfg.wallH}|${cfg.roofH}|${cfg.signKey || ''}|${cfg.awning || ''}|${cfg.v || 0}|${cfg.windows ?? 2}`;
+  return cache.get(key, () => {
+    const w = cfg.tw * TILE + 16;
+    const h = (cfg.wallH || 26) + (cfg.roofH || 22) + 16;
+    const buf = new PixBuf(w, h);
+    paintBuilding(buf, {
+      ...cfg,
+      sign: cfg.signKey ? { icon: SIGN_ICONS[cfg.signKey], bg: cfg.signBg || P.plaster, side: cfg.signSide || 0 } : null,
+    });
+    return buf.toCanvas();
+  });
+}
+
+export function objectDef(type) { return OBJECTS[type]; }

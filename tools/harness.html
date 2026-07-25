@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cat Cafe smoke test</title>
+<link rel="stylesheet" href="../styles.css">
+<script>
+// Collect anything that goes wrong before the game module loads.
+window.__errors = [];
+window.addEventListener('error', (e) => {
+  window.__errors.push(`ERROR: ${e.message} @ ${e.filename}:${e.lineno}:${e.colno}`);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  window.__errors.push(`REJECT: ${e.reason && e.reason.stack ? e.reason.stack : e.reason}`);
+});
+const _err = console.error;
+console.error = (...a) => {
+  window.__errors.push('CONSOLE: ' + a.map((x) => (x && x.stack ? x.stack : String(x))).join(' '));
+  _err.apply(console, a);
+};
+const _warn = console.warn;
+console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.apply(console, a); };
+</script>
+</head>
+<body>
+  <div id="frame">
+    <canvas id="screen" width="480" height="270"></canvas>
+  </div>
+  <pre id="out" style="position:absolute;left:0;top:0;color:#0f0;font:12px monospace;z-index:99;background:#000;max-width:100%;white-space:pre-wrap"></pre>
+  <script type="module">
+    // Drive the game for a while, then report.
+    const SCRIPT = (window.location.hash || '#walk').slice(1);
+    const t0 = performance.now();
+    try {
+      await import('../src/main.js');
+      window.__importMs = Math.round(performance.now() - t0);
+    } catch (e) {
+      window.__errors.push('IMPORT: ' + (e && e.stack ? e.stack : e));
+    }
+
+    function key(code, down) {
+      window.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { code, bubbles: true }));
+    }
+
+    async function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+    (async () => {
+      await wait(400);
+      const g = window.game;
+      if (!g) {
+        report(['game never constructed', ...window.__errors]);
+        return;
+      }
+
+      if (SCRIPT === 'walk') {
+        // Walk around outdoors for a bit.
+        for (const code of ['ArrowDown', 'ArrowLeft', 'ArrowUp', 'ArrowRight']) {
+          key(code, true); await wait(500); key(code, false);
+        }
+      } else if (SCRIPT === 'cafe') {
+        g.enterInterior('cafe', g.state.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        await wait(1200);
+        g.state.shopOpen = true;
+        g.state.clock.t = 11 * (1200 / 24);
+        // Force a few customers through the door.
+        for (let i = 0; i < 4; i++) { g.state.cafeSim.trySpawn(g.state.cafeMap); await wait(300); }
+        await wait(2500);
+      } else if (SCRIPT === 'build') {
+        g.state.workers = 2; g.state.materials = 3; g.state.money = 5000;
+        g.openBuildMode();
+        await wait(600);
+        for (const code of ['ArrowRight', 'ArrowRight', 'ArrowDown']) { key(code, true); await wait(160); key(code, false); }
+        key('Space', true); await wait(120); key('Space', false);
+        for (const code of ['ArrowRight', 'ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowDown']) { key(code, true); await wait(140); key(code, false); }
+        key('Space', true); await wait(160); key('Space', false);
+        await wait(600);
+      } else if (SCRIPT === 'shop') {
+        const door = g.doorByShop.get('grocer');
+        g.state.clock.t = 10 * (1200 / 24);
+        g.player.x = door.x * 16 + 8; g.player.y = (door.y + 1) * 16 - 2;
+        g.openDoor({ kind: 'door', shop: 'grocer', name: 'grocer' }, door);
+        await wait(1400);
+        g.openShopCounter('grocer');
+        await wait(300);
+        key('Space', true); await wait(150); key('Space', false);
+        await wait(900);
+      } else if (SCRIPT === 'menus') {
+        g.push(new (Object.getPrototypeOf(g.screens[0] || {}).constructor || Object)());
+        await wait(200);
+      } else if (SCRIPT === 'night') {
+        g.state.clock.t = 22 * (1200 / 24);
+        await wait(1200);
+      } else if (SCRIPT === 'town') {
+        const t = g.towns.hollowdown.hub;
+        g.player.x = t.x * 16 + 8; g.player.y = t.y * 16;
+        g.cam.follow(g.overworld, g.player.x, g.player.y, true);
+        await wait(900);
+      } else if (SCRIPT === 'coast') {
+        const t = g.towns.saltmere.hub;
+        g.player.x = t.x * 16 + 8; g.player.y = t.y * 16;
+        g.cam.follow(g.overworld, g.player.x, g.player.y, true);
+        await wait(900);
+      } else if (SCRIPT.startsWith('systems')) {
+        const only = SCRIPT.slice(7);   // '', '1' or '2'
+        const st = g.state;
+        window.__step = 'start';
+        if (only !== '2') {
+          // Quests: accept and satisfy.
+          window.__step = 'quests';
+          st.quests.first_beans = 'active';
+          st.give('house_coffee', 10);
+          g.refreshQuestMarks();
+          // Economy: run a day's trading in the cafe.
+          window.__step = 'trading';
+          st.shopOpen = true;
+          st.clock.t = 12 * (1200 / 24);
+          g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+          await wait(900);
+          for (let i = 0; i < 6; i++) { st.cafeSim.trySpawn(st.cafeMap); await wait(200); }
+          await wait(7000);   // long enough for orders to be served and paid for
+          window.__customers = st.cafeSim.customers.length;
+          window.__revenue = st.cafeSim.todayRevenue;
+        }
+        if (only !== '1') {
+          // Cats and the overnight roll.
+          window.__step = 'rollover';
+          if (st.cats[0]) st.cats[0].sick = true;
+          st.give('good_food', 4);
+          st.clock.t = 1199.2;   // the clock runs at 1:1 with real time
+          await wait(1600);
+          window.__summaryShown = g.screens.length > 0;
+          g.screens.length = 0;
+          window.__step = 'save';
+          const okSave = st.save();
+          const cash = st.money;
+          st.money = 12345;
+          const okLoad = st.load();
+          window.__saveOk = okSave && okLoad && st.money === cash;
+          if (!window.__saveOk) window.__errors.push('save/load round trip failed');
+          if (!window.__summaryShown) window.__errors.push('no day summary appeared');
+        }
+        window.__step = 'done';
+        await wait(300);
+      } else if (SCRIPT === 'map') {
+        g.state.visit('a', 'Brambleford', 96, 168);
+        g.state.visit('b', 'Saltmere', 52, 254);
+        g.state.visit('c', 'Hollowdown', 208, 68);
+        await wait(200);
+        key('KeyM', true); await wait(150); key('KeyM', false);
+        await wait(600);
+      }
+
+      await wait(600);
+      report(window.__errors);
+    })();
+
+    function report(errs) {
+      const out = document.getElementById('out');
+      const g = window.game;
+      const extra = window.__step ? ` step=${window.__step} customers=${window.__customers} revenue=${window.__revenue} summary=${window.__summaryShown} save=${window.__saveOk}` : '';
+      const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';
+      out.textContent = `RESULT ${errs.length ? 'FAIL' : 'OK'} (${errs.length} issues)\n${info}\n` + errs.slice(0, 25).join('\n');
+      document.title = errs.length ? `FAIL ${errs.length}` : 'OK';
+      if (window.location.search.includes('hideout')) out.style.display = 'none';
+    }
+  </script>
+</body>
+</html>
