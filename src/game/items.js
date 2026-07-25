@@ -118,8 +118,20 @@ export const FLEA_POOL = [
   'f_piano', 'f_fireplace', 'f_cattower', 'valley_map', 'rope', 'toy_wand', 'bell',
 ];
 
-export const item = (id) => ITEMS[id];
-export const itemName = (id) => (ITEMS[id] ? ITEMS[id].name : id);
+// Furniture is carried in the bag as "id#variant" so a green chair and an oak
+// one can sit side by side. Anything without a '#' is variant 0.
+export const baseId = (key) => {
+  const i = String(key).indexOf('#');
+  return i < 0 ? key : key.slice(0, i);
+};
+export const variantOf = (key) => {
+  const i = String(key).indexOf('#');
+  return i < 0 ? 0 : Number(key.slice(i + 1)) || 0;
+};
+export const invKey = (id, variant = 0) => (variant ? `${id}#${variant}` : id);
+
+export const item = (key) => ITEMS[baseId(key)];
+export const itemName = (key) => (item(key) ? item(key).name : key);
 export const isMenuItem = (id) => ITEMS[id] && (ITEMS[id].cat === CAT.DRINK || ITEMS[id].cat === CAT.FOOD);
 
 /** Buy price at a given shop, with weekend flea discounts folded in. */

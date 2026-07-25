@@ -47,8 +47,8 @@ export class Input {
 
     const touch = document.getElementById('touch');
     if (touch) {
-      const isTouch = matchMedia('(hover: none)').matches || 'ontouchstart' in window;
-      if (isTouch) touch.hidden = false;
+      // Display sets `has-touch` on the body once it knows; CSS does the rest.
+      touch.hidden = false;
       for (const btn of touch.querySelectorAll('[data-key]')) {
         const b = TOUCHMAP[btn.dataset.key];
         if (!b) continue;

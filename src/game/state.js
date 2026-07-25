@@ -4,7 +4,7 @@
 import { Clock } from './time.js';
 import { Cafe } from './cafe.js';
 import { Cat } from './entities.js';
-import { ITEMS } from './items.js';
+import { ITEMS, item, baseId } from './items.js';
 import { CAT_BREEDS } from '../art/chars.js';
 import { startingCafe, buildCafeMap } from '../world/interiors.js';
 import { VILLAGERS } from '../world/places.js';
@@ -52,13 +52,16 @@ export class GameState {
 
   // ------------------------------------------------------------ inventory
 
-  give(id, qty = 1) {
-    const it = ITEMS[id];
+  /**
+   * `key` may carry a furniture variant ("f_chair#2"); stock items never do.
+   */
+  give(key, qty = 1) {
+    const it = item(key);
     if (!it) return;
     if (it.cat === 'drink' || it.cat === 'food' || it.cat === 'catfood') {
-      this.cafeSim.addStock(id, qty, this.clock.day);
+      this.cafeSim.addStock(baseId(key), qty, this.clock.day);
     } else {
-      this.inventory[id] = (this.inventory[id] || 0) + qty;
+      this.inventory[key] = (this.inventory[key] || 0) + qty;
     }
   }
 
@@ -72,7 +75,7 @@ export class GameState {
 
   has(id, qty = 1) { return (this.inventory[id] || 0) >= qty; }
 
-  itemName(id) { return ITEMS[id] ? ITEMS[id].name : id; }
+  itemName(key) { return item(key) ? item(key).name : key; }
   breedInfo(b) { return CAT_BREEDS[b]; }
   villagerName(id) { const v = VILLAGERS.find((x) => x.id === id); return v ? v.name : id; }
 

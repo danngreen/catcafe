@@ -2,9 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Cat Cafe</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🐈</text></svg>">
+<!-- Added to the Home Screen on iOS, this runs without any browser chrome —
+     which is the only way to get true fullscreen there. -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cat Cafe">
+<meta name="theme-color" content="#2a2438">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -17,12 +26,15 @@
       </div>
     </div>
   </div>
+
+  <button id="fsbtn" hidden aria-label="Fullscreen">⛶</button>
+
   <div id="touch" hidden>
     <div class="dpad">
-      <button data-key="ArrowUp" class="tb up">▲</button>
-      <button data-key="ArrowLeft" class="tb left">◀</button>
-      <button data-key="ArrowRight" class="tb right">▶</button>
-      <button data-key="ArrowDown" class="tb down">▼</button>
+      <button data-key="ArrowUp" class="tb up" aria-label="Up">▲</button>
+      <button data-key="ArrowLeft" class="tb left" aria-label="Left">◀</button>
+      <button data-key="ArrowRight" class="tb right" aria-label="Right">▶</button>
+      <button data-key="ArrowDown" class="tb down" aria-label="Down">▼</button>
     </div>
     <div class="abtns">
       <button data-key="Escape" class="tb menu">MENU</button>
@@ -30,6 +42,7 @@
       <button data-key=" " class="tb act">ACT</button>
     </div>
   </div>
+
   <script type="module" src="src/main.js"></script>
 </body>
 </html>

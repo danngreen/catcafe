@@ -15,7 +15,7 @@ const PORT = 9333 + (process.pid % 200);
 const BASE = process.env.BASE || 'http://localhost:8080';
 
 const args = process.argv.slice(2);
-const flagsWithValue = new Set(['--shot', '--ms', '--url', '--eval', '--shotdir']);
+const flagsWithValue = new Set(['--shot', '--ms', '--url', '--eval', '--shotdir', '--mobile']);
 const scenarios = args.filter((a, i) => !a.startsWith('--') && !flagsWithValue.has(args[i - 1]));
 if (!scenarios.length) scenarios.push('walk');
 const shotIdx = args.indexOf('--shot');
@@ -95,6 +95,18 @@ async function main() {
     pending.set(id, (r) => { clearTimeout(timer); res(r); });
     ws.send(JSON.stringify({ id, method, params }));
   });
+
+  // Phone emulation, so the touch layout can actually be inspected.
+  const mobileIdx = args.indexOf('--mobile');
+  if (mobileIdx >= 0) {
+    const spec = args[mobileIdx + 1] && !args[mobileIdx + 1].startsWith('--') ? args[mobileIdx + 1] : '390x844';
+    const [mw, mh] = spec.split('x').map(Number);
+    await send('Emulation.setDeviceMetricsOverride', {
+      width: mw, height: mh, deviceScaleFactor: 2, mobile: true,
+    });
+    await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+    await send('Emulation.setEmitTouchEventsForMouse', { enabled: true, configuration: 'mobile' });
+  }
 
   await send('Runtime.enable');
   await send('Log.enable');

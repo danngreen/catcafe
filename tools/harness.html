@@ -180,6 +180,21 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await wait(700);
         const sc = g.screens[g.screens.length - 1];
         window.__shop = sc ? sc.constructor.name : 'none';
+        // Pick the third colourway of the chair, buy two, and check the bag.
+        if (sc && sc.colours) {
+          key('ArrowRight', true); await wait(200); key('ArrowRight', false);
+          key('ArrowRight', true); await wait(200); key('ArrowRight', false);
+          window.__variant = sc.variant;
+          key('Space', true); await wait(220); key('Space', false);   // qty prompt
+          key('ArrowUp', true); await wait(200); key('ArrowUp', false);
+          key('Space', true); await wait(250); key('Space', false);   // buy
+          await wait(500);
+          const keys = Object.keys(st.inventory).filter((k) => k.startsWith('f_chair'));
+          window.__bagKeys = keys.join(',') + '=' + keys.map((k) => st.inventory[k]).join(',');
+          if (!keys.some((k) => k.includes('#'))) {
+            window.__errors.push('colour choice was not recorded in the bag: ' + window.__bagKeys);
+          }
+        }
         window.__stockIcons = sc && sc.items
           ? sc.items.map((id) => (window.game ? id : id)).length + ' items' : 'none';
         if (window.__shop !== 'ShopScreen') window.__errors.push('furniture shop did not open: ' + window.__shop);
@@ -409,7 +424,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__ext ? ` ${window.__ext}` : '')
         + (window.__bookTreat ? ` book[${window.__bookTreat}] pet[${window.__petTreat}] choices=${window.__choices}` : '')
         + (window.__mapSel ? ` mapSel=${window.__mapSel}` : '')
-        + (window.__shop ? ` shop=${window.__shop} ${window.__stockIcons}` : '')
+        + (window.__shop ? ` shop=${window.__shop} ${window.__stockIcons} variant=${window.__variant} bag=${window.__bagKeys}` : '')
         + (window.__cut ? ` hover=${window.__hover} cut=${window.__cut}->${window.__cut2} landed=${window.__landed}` : '')
         + (window.__walk ? ` inn=${window.__innMap} stairs=${window.__stairs} walk=${window.__walk} summary=${window.__summary} slept=${window.__slept}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');

@@ -5,11 +5,11 @@
 import { panel, panelTitle, bar, cursor, dim, drawText, drawTextCentered, drawTextRight, textWidth, LINE_H } from './core.js';
 import { VIEW_W, VIEW_H } from '../engine/display.js';
 import { P } from '../art/palette.js';
-import { ITEMS, CAT as ICAT } from '../game/items.js';
+import { ITEMS, CAT as ICAT, baseId, variantOf, invKey } from '../game/items.js';
 import { CAT_BREEDS } from '../art/chars.js';
 import { TOWNS } from '../world/places.js';
 import { iconSprite } from '../art/icons.js';
-import { objSprite } from '../art/objects.js';
+import { objSprite, VARIANT_SWATCHES, VARIANT_NAMES } from '../art/objects.js';
 import { catSprite, playerCatSprite } from '../art/chars.js';
 import { audio } from '../engine/audio.js';
 import { clamp, money, wrapText } from '../engine/util.js';
@@ -65,11 +65,18 @@ export class ShopScreen extends ListScreen {
     this.title = opts.title || shop.name;
     this.qtyMode = false;
     this.qty = 1;
+    this.variant = 0;
     this.msg = '';
     this.msgT = 0;
   }
 
   price(id) { return Math.max(1, Math.round((ITEMS[id]?.cost || 0) * this.priceMult)); }
+
+  /** The placeable type of the highlighted row, if it is furniture. */
+  colours(id) {
+    const place = ITEMS[id] && ITEMS[id].place;
+    return place ? (VARIANT_SWATCHES[place] || null) : null;
+  }
 
   update(dt, input) {
     this.t += dt;
@@ -82,14 +89,30 @@ export class ShopScreen extends ListScreen {
       const maxQ = Math.max(1, Math.min(99, Math.floor(st.money / Math.max(1, unit))));
       if (input.repeat('up', dt)) { this.qty = clamp(this.qty + 1, 1, maxQ); audio.sfx('ui_move', { gain: 0.5 }); }
       if (input.repeat('down', dt)) { this.qty = clamp(this.qty - 1, 1, maxQ); audio.sfx('ui_move', { gain: 0.5 }); }
-      if (input.repeat('right', dt)) { this.qty = clamp(this.qty + 5, 1, maxQ); audio.sfx('ui_move', { gain: 0.5 }); }
-      if (input.repeat('left', dt)) { this.qty = clamp(this.qty - 5, 1, maxQ); audio.sfx('ui_move', { gain: 0.5 }); }
+      const cols = this.colours(id);
+      if (cols) {
+        if (input.repeat('right', dt)) { this.variant = (this.variant + 1) % cols.length; audio.sfx('ui_move', { gain: 0.5 }); }
+        if (input.repeat('left', dt)) { this.variant = (this.variant - 1 + cols.length) % cols.length; audio.sfx('ui_move', { gain: 0.5 }); }
+      } else {
+        if (input.repeat('right', dt)) { this.qty = clamp(this.qty + 5, 1, maxQ); audio.sfx('ui_move', { gain: 0.5 }); }
+        if (input.repeat('left', dt)) { this.qty = clamp(this.qty - 5, 1, maxQ); audio.sfx('ui_move', { gain: 0.5 }); }
+      }
       if (input.hit('use')) { this.buy(id, this.qty); this.qtyMode = false; }
       if (input.hit('cancel') || input.hit('menu')) { this.qtyMode = false; audio.sfx('ui_back'); }
       return;
     }
 
+    const before = this.index;
     this.navigate(dt, input);
+    if (this.index !== before) this.variant = 0;      // each row starts on its first colour
+
+    // Furniture that comes in colourways: browse them with left/right.
+    const cols = this.colours(this.items[this.index]);
+    if (cols) {
+      if (input.repeat('right', dt)) { this.variant = (this.variant + 1) % cols.length; audio.sfx('ui_move', { gain: 0.5 }); }
+      if (input.repeat('left', dt)) { this.variant = (this.variant - 1 + cols.length) % cols.length; audio.sfx('ui_move', { gain: 0.5 }); }
+    }
+
     if (input.hit('use') && this.items.length) {
       const id = this.items[this.index];
       if (st.money < this.price(id)) { this.flash("You can't afford that."); audio.sfx('error'); }
@@ -105,9 +128,11 @@ export class ShopScreen extends ListScreen {
     const cost = this.price(id) * qty;
     if (st.money < cost) { this.flash("You can't afford that."); audio.sfx('error'); return; }
     st.money -= cost;
-    st.give(id, qty);
+    const cols = this.colours(id);
+    st.give(cols ? invKey(id, this.variant) : id, qty);
     audio.sfx('buy', { gain: 0.8 });
-    this.flash(`Bought ${qty} x ${ITEMS[id].name}.`);
+    const shade = cols ? ` (${(VARIANT_NAMES[ITEMS[id].place] || [])[this.variant] || ''})` : '';
+    this.flash(`Bought ${qty} x ${ITEMS[id].name}${shade}.`);
     st.onPurchase?.(id, qty);
   }
 
@@ -166,6 +191,27 @@ export class ShopScreen extends ListScreen {
       } else if (it.cat === ICAT.FURNITURE) {
         if (it.appeal) { drawText(ctx, `Charm +${it.appeal.toFixed(1)}`, dx + 8, ly, { color: P.uiPink, shadow: P.uiShadow }); ly += LINE_H; }
         if (it.seats) { drawText(ctx, `Seats ${it.seats}`, dx + 8, ly, { color: P.uiBlue, shadow: P.uiShadow }); ly += LINE_H; }
+        const cols = this.colours(id);
+        // Show the actual piece, in the colour you're about to buy.
+        const spr = objSprite(it.place, cols ? this.variant : 0);
+        if (spr) {
+          const Z = spr.width * 2 <= dw - 20 && spr.height * 2 < 56 ? 2 : 1;
+          ctx.drawImage(spr, 0, 0, spr.width, spr.height,
+            Math.round(dx + dw / 2 - (spr.width * Z) / 2), ly + 4, spr.width * Z, spr.height * Z);
+          ly += Math.min(60, spr.height * Z) + 8;
+        }
+        if (cols) {
+          const name = (VARIANT_NAMES[it.place] || [])[this.variant] || `Colour ${this.variant + 1}`;
+          drawText(ctx, `< ${name} >`, dx + 8, ly, { color: P.uiGold, shadow: P.uiShadow });
+          cols.forEach((c, i) => {
+            const sx = dx + dw - 16 - (cols.length - i) * 14;
+            ctx.fillStyle = c;
+            ctx.fillRect(sx, ly - 1, 11, 9);
+            ctx.strokeStyle = i === this.variant ? P.uiGold : P.uiEdgeDk;
+            ctx.strokeRect(sx - 0.5, ly - 1.5, 12, 10);
+          });
+          ly += LINE_H + 2;
+        }
         drawText(ctx, 'Place it from the Build menu.', dx + 8, ly, { color: P.uiTextDim, shadow: P.uiShadow }); ly += LINE_H;
       } else {
         drawText(ctx, `You have: ${st.inventory[id] || 0}`, dx + 8, ly, { color: P.uiTextDim, shadow: P.uiShadow }); ly += LINE_H;
@@ -186,7 +232,9 @@ export class ShopScreen extends ListScreen {
     if (this.msgT > 0) {
       drawTextCentered(ctx, this.msg, VIEW_W / 2, y + h - 16, { color: P.uiGold, shadow: P.uiShadow });
     } else {
-      drawTextCentered(ctx, this.qtyMode ? 'Up/Down qty   Space buy   X back' : 'Space to buy    X to leave', VIEW_W / 2, y + h - 16, { color: P.uiTextDim, shadow: P.uiShadow });
+      drawTextCentered(ctx, this.qtyMode ? 'Up/Down qty   Space buy   X back'
+        : (this.colours(this.items[this.index]) ? 'Left/Right colour   Space to buy   X to leave' : 'Space to buy    X to leave'),
+        VIEW_W / 2, y + h - 16, { color: P.uiTextDim, shadow: P.uiShadow });
     }
   }
 }
@@ -656,8 +704,8 @@ export class CafeScreen extends Screen {
     ly += 18;
 
     // The way into build mode.
-    const waiting = Object.keys(st.inventory).filter((id) => ITEMS[id]?.place && st.inventory[id] > 0)
-      .reduce((s, id) => s + st.inventory[id], 0);
+    const waiting = Object.keys(st.inventory).filter((k) => ITEMS[baseId(k)]?.place && st.inventory[k] > 0)
+      .reduce((n, k) => n + st.inventory[k], 0);
     const bw = 208;
     ctx.fillStyle = 'rgba(255,207,107,0.16)';
     ctx.fillRect(x + 10, ly - 3, bw, 16);
@@ -686,7 +734,7 @@ export class CafeScreen extends Screen {
   advice() {
     const st = this.game.state;
     const sim = st.cafeSim;
-    const unplaced = Object.keys(st.inventory).some((id) => ITEMS[id]?.place && st.inventory[id] > 0);
+    const unplaced = Object.keys(st.inventory).some((k) => ITEMS[baseId(k)]?.place && st.inventory[k] > 0);
     if (unplaced) return 'You have furniture in your bag. Press Space here to arrange it.';
     if (!sim.availableMenu().length) return 'Your menu board is empty. Buy coffee or cake from a shop.';
     if (sim.seats().length < 3) return 'Only a seat or two. More chairs means more customers at once — buy them at Velvet & Oak in Thistlewick.';
@@ -927,17 +975,19 @@ export class BagScreen extends ListScreen {
     for (let i = 0; i < Math.min(this.visible, this.items.length); i++) {
       const idx = this.scroll + i;
       const id = this.items[idx];
-      const it = ITEMS[id] || { name: id, icon: 'bag', desc: '' };
+      const base = baseId(id);
+      const it = ITEMS[base] || { name: id, icon: 'bag', desc: '' };
+      const shade = it.place && VARIANT_NAMES[it.place] ? (VARIANT_NAMES[it.place][variantOf(id)] || '') : '';
       const ry = listY + i * 18;
       const sel = idx === this.index;
       if (sel) { ctx.fillStyle = 'rgba(255,207,107,0.12)'; ctx.fillRect(x + 8, ry - 2, w - 20, 17); }
       ctx.drawImage(iconSprite(it.icon), x + 14, ry - 2);
-      drawText(ctx, it.name, x + 34, ry + 3, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
+      drawText(ctx, shade ? `${it.name} (${shade})` : it.name, x + 34, ry + 3, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
       drawText(ctx, `x${this.game.state.inventory[id]}`, x + 190, ry + 3, { color: P.uiText, shadow: P.uiShadow });
     }
     const id = this.items[this.index];
     if (id) {
-      const it = ITEMS[id];
+      const it = ITEMS[baseId(id)];
       let ly = y + h - 44;
       for (const line of wrapText(it?.desc || '', 70)) {
         drawText(ctx, line, x + 12, ly, { color: P.uiTextDim, shadow: P.uiShadow });
@@ -1263,7 +1313,7 @@ export class PauseScreen extends ListScreen {
 
 export class SoundScreen extends ListScreen {
   constructor(game) {
-    super(['Master', 'Music', 'Effects', 'Back'], 6);
+    super(['Master', 'Music', 'Effects', 'Fullscreen', 'Back'], 6);
     this.game = game;
   }
   update(dt, input) {
@@ -1274,12 +1324,13 @@ export class SoundScreen extends ListScreen {
       if (input.repeat('left', dt)) { audio.setVolume(keys[this.index], audio.volumes[keys[this.index]] - 0.1); audio.sfx('ui_move'); }
       if (input.repeat('right', dt)) { audio.setVolume(keys[this.index], audio.volumes[keys[this.index]] + 0.1); audio.sfx('ui_move'); }
     }
-    if (input.hit('use') && this.index === 3) this.close();
+    if (input.hit('use') && this.index === 3) { this.game.requestFullscreen(); audio.sfx('ui_ok'); }
+    if (input.hit('use') && this.index === 4) this.close();
     if (input.hit('cancel') || input.hit('menu')) this.close();
   }
   draw(ctx) {
     dim(ctx, 0.6);
-    const w = 190, h = 96;
+    const w = 200, h = 116;
     const x = (VIEW_W - w) / 2, y = (VIEW_H - h) / 2;
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, 'Sound');

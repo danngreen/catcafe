@@ -7,7 +7,7 @@ import { panel, panelTitle, drawText, drawTextCentered, drawTextRight, textWidth
 import { VIEW_W, VIEW_H } from '../engine/display.js';
 import { P } from '../art/palette.js';
 import { TILE, T } from '../art/tiles.js';
-import { ITEMS } from '../game/items.js';
+import { ITEMS, baseId, variantOf, invKey } from '../game/items.js';
 import { buildCafeMap } from '../world/interiors.js';
 import { Renderer, Camera } from '../world/render.js';
 import { audio } from '../engine/audio.js';
@@ -76,10 +76,11 @@ export class BuildScreen extends Screen {
 
   // -------------------------------------------------------------- helpers
 
+  /** Bag keys that are placeable furniture, e.g. 'f_chair' or 'f_chair#2'. */
   get furnitureStock() {
     const st = this.game.state;
     return Object.keys(st.inventory)
-      .filter((id) => st.inventory[id] > 0 && ITEMS[id] && ITEMS[id].place)
+      .filter((k) => st.inventory[k] > 0 && ITEMS[baseId(k)] && ITEMS[baseId(k)].place)
       .sort();
   }
 
@@ -203,7 +204,9 @@ export class BuildScreen extends Screen {
   returnFurniture(f) {
     const st = this.game.state;
     const id = Object.keys(ITEMS).find((k) => ITEMS[k].place === f.type);
-    if (id) st.inventory[id] = (st.inventory[id] || 0) + 1;
+    if (!id) return;
+    const key = invKey(id, f.variant || 0);
+    st.inventory[key] = (st.inventory[key] || 0) + 1;
   }
 
   takeFurniture(id) {
@@ -227,13 +230,12 @@ export class BuildScreen extends Screen {
       const existing = this.draft.furniture.find((f) => f.x === this.cur.x && f.y === this.cur.y);
       if (existing) { this.flash('Something is already there.', true); return; }
       if (!this.roomAt(this.cur.x, this.cur.y)) { this.flash('That is outside the building.', true); return; }
-      const id = stock[this.palette];
-      if (!id) { this.flash('Nothing left to place. Buy furniture from Velvet & Oak.', true); return; }
-      const def = ITEMS[id];
-      // Variant 0 is what the shop and the placement ghost both show. Rolling
-      // a random one here meant a wooden chair could come out purple.
-      this.draft.furniture.push({ type: def.place, x: this.cur.x, y: this.cur.y, variant: 0 });
-      this.takeFurniture(id);
+      const key = stock[this.palette];
+      if (!key) { this.flash('Nothing left to place. Buy furniture from Velvet & Oak.', true); return; }
+      const def = ITEMS[baseId(key)];
+      // Whatever colourway you bought is the one that goes down.
+      this.draft.furniture.push({ type: def.place, x: this.cur.x, y: this.cur.y, variant: variantOf(key) });
+      this.takeFurniture(key);
       if (this.palette >= this.furnitureStock.length) this.palette = Math.max(0, this.furnitureStock.length - 1);
       this.rebuild();
       audio.sfx('place', { gain: 0.9 });
@@ -346,9 +348,9 @@ export class BuildScreen extends Screen {
     // Ghost of the furniture about to be placed.
     if (this.modeName === 'Furnish') {
       const stock = this.furnitureStock;
-      const id = stock[this.palette];
-      if (id) {
-        const spr = objSprite(ITEMS[id].place, 0);
+      const key = stock[this.palette];
+      if (key) {
+        const spr = objSprite(ITEMS[baseId(key)].place, variantOf(key));
         if (spr) {
           ctx.globalAlpha = 0.6;
           ctx.drawImage(spr, Math.round(sx(this.cur.x) + (TILE - spr.width) / 2), Math.round(sy(this.cur.y) + TILE - spr.height));
@@ -408,20 +410,20 @@ export class BuildScreen extends Screen {
         drawText(ctx, 'Nothing to place. Buy furniture at Velvet & Oak in Thistlewick.', 10, VIEW_H - 34, { color: P.uiTextDim, shadow: P.uiShadow });
       } else {
         for (let i = 0; i < Math.min(stock.length, 12); i++) {
-          const id = stock[(this.palette + i) % stock.length];
+          const key = stock[(this.palette + i) % stock.length];
           const px = 8 + i * 22;
           const sel = i === 0;
           ctx.fillStyle = sel ? 'rgba(255,207,107,0.25)' : 'rgba(255,255,255,0.06)';
           ctx.fillRect(px, VIEW_H - 38, 20, 20);
-          const spr = objSprite(ITEMS[id].place, 0);
+          const spr = objSprite(ITEMS[baseId(key)].place, variantOf(key));
           if (spr) {
             const s = Math.min(18 / spr.width, 18 / spr.height, 1);
             ctx.drawImage(spr, px + 10 - (spr.width * s) / 2, VIEW_H - 20 - spr.height * s, spr.width * s, spr.height * s);
           }
-          drawText(ctx, String(st.inventory[id] || 0), px + 12, VIEW_H - 37, { color: P.uiText, shadow: '#000000' });
+          drawText(ctx, String(st.inventory[key] || 0), px + 12, VIEW_H - 37, { color: P.uiText, shadow: '#000000' });
         }
         const cur = stock[this.palette];
-        drawText(ctx, `${ITEMS[cur].name}  [M]/[I] to cycle`, 8 + Math.min(stock.length, 12) * 22 + 8, VIEW_H - 34,
+        drawText(ctx, `${ITEMS[baseId(cur)].name}  [M]/[I] to cycle`, 8 + Math.min(stock.length, 12) * 22 + 8, VIEW_H - 34,
           { color: P.uiGold, shadow: P.uiShadow });
       }
       drawText(ctx, 'Space place   X pick up   Esc done', 10, VIEW_H - 14, { color: P.uiTextDim, shadow: P.uiShadow });

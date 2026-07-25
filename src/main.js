@@ -1,6 +1,9 @@
 // Cat Cafe — entry point. Boots the engine, builds the world, and runs the loop.
 
-import { Display, VIEW_W, VIEW_H } from './engine/display.js';
+import {
+  Display, VIEW_W, VIEW_H,
+  isTouchDevice, fullscreenSupported, isStandalone, toggleFullscreen,
+} from './engine/display.js';
 import { Input } from './engine/input.js';
 import { audio } from './engine/audio.js';
 import { drawText, drawTextCentered, drawTextRight, textWidth, LINE_H } from './engine/font.js';
@@ -19,7 +22,7 @@ import { SHOPS, VILLAGERS, TOWNS, GOSSIP } from './world/places.js';
 
 import { GameState, seedStartingInventory } from './game/state.js';
 import { Player, Villager, canStand } from './game/entities.js';
-import { ITEMS, STOCK, FLEA_POOL } from './game/items.js';
+import { ITEMS, STOCK, FLEA_POOL, baseId } from './game/items.js';
 import { shopOpen, hoursText } from './game/time.js';
 import { QUESTS, QUESTS_BY_GIVER, objectiveMet } from './game/quests.js';
 
@@ -38,6 +41,9 @@ class Game {
     this.display = new Display('screen');
     this.ctx = this.display.ctx;
     this.input = new Input();
+    // Input reveals the touch controls, and their height decides how much room
+    // the game gets — so measure again now that they exist.
+    this.display.resize();
     this.dialogue = new Dialogue();
     this.hud = new Hud();
     this.fader = new Fader();
@@ -120,6 +126,33 @@ class Game {
     };
     window.addEventListener('pointerdown', start);
     window.addEventListener('keydown', start);
+
+    this.setupFullscreenButton();
+  }
+
+  /**
+   * A fullscreen button, but only where it can do something. iPhone Safari has
+   * no Fullscreen API at all — there the answer is Add to Home Screen, so we
+   * say so rather than offering a button that does nothing.
+   */
+  setupFullscreenButton() {
+    const btn = document.getElementById('fsbtn');
+    if (!btn) return;
+    if (!isTouchDevice() || isStandalone()) return;      // desktop / already installed
+    btn.hidden = false;
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.requestFullscreen();
+    });
+  }
+
+  requestFullscreen() {
+    if (fullscreenSupported()) {
+      toggleFullscreen();
+      return true;
+    }
+    this.hud.toast('Add to Home Screen for fullscreen (Share menu).', 'info', 6);
+    return false;
   }
 
   /** Scatter the cast: shopkeepers behind counters, villagers around their town. */
@@ -516,7 +549,7 @@ class Game {
   nudgeFurniture() {
     const st = this.state;
     if (st.flags.nudged_furniture) return;
-    const any = Object.keys(st.inventory).some((id) => ITEMS[id]?.place && st.inventory[id] > 0);
+    const any = Object.keys(st.inventory).some((k) => ITEMS[baseId(k)]?.place && st.inventory[k] > 0);
     if (!any) return;
     st.flags.nudged_furniture = true;
     this.hud.toast('Furniture in your bag — press C, then Space, to place it.', 'good', 7);

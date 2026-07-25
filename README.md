@@ -31,7 +31,15 @@ It does need to be served over HTTP (modules don't load from `file://`).
 Click once anywhere to start the audio (browsers require a gesture).
 
 On a touch device an on-screen d-pad appears alongside **ACT**, **BACK** and
-**MENU** — the same three actions as Space, X and Esc.
+**MENU** — the same three actions as Space, X and Esc. In landscape the controls
+float over the edges of the view; in portrait they take a band under it.
+
+**Fullscreen on mobile.** The ⛶ button (and Menu -> Sound -> Fullscreen) calls
+the Fullscreen API, which works on Android and iPadOS. iPhone Safari has no
+Fullscreen API at all, so there the answer is **Share -> Add to Home Screen**:
+the manifest and `apple-mobile-web-app-capable` make it launch with no browser
+chrome at all. Landscape is the better orientation either way — a 16:9 view in
+portrait is limited by the width of the phone.
 
 ## The loop
 
@@ -64,7 +72,8 @@ The Cats tab of the cafe book does the same thing in one keypress.
 
 **Furnishing and building.** Open the cafe book with **C** and press Space on
 the first page to get a plan of your cafe. Furniture you've bought sits in your
-bag until you place it here — Space to put a piece down, X to pick it back up,
+bag in the colourway you chose at the till — chairs, stools, sofas and dressed
+tables all come in three. Space to put a piece down, X to pick it back up,
 M/I or Shift to change which piece, Esc when you're done. The Style tab changes
 the floor, and the roof, awning and wall colour of the shopfront — it shows a
 live preview of the exterior, since you can't see it from inside.

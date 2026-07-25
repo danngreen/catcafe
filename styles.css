@@ -6,8 +6,10 @@ html, body {
   background: #0e1013;
   overflow: hidden;
   touch-action: none;
+  overscroll-behavior: none;
   -webkit-user-select: none;
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #frame {
@@ -52,43 +54,98 @@ html, body {
 }
 @keyframes blink { 50% { opacity: .25; } }
 
-/* On-screen controls for touch devices */
+/* --------------------------------------------------------------------------
+   Touch controls
+   -------------------------------------------------------------------------- */
+
 #touch {
-  position: absolute;
+  position: fixed;
   inset: auto 0 0 0;
-  height: 190px;
-  display: flex;
+  display: none;
   justify-content: space-between;
   align-items: flex-end;
-  padding: 0 18px 22px;
   z-index: 4;
   pointer-events: none;
+  padding: 0 max(10px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-bottom))
+           max(10px, env(safe-area-inset-right));
 }
-#touch .dpad { position: relative; width: 156px; height: 156px; pointer-events: auto; }
-#touch .abtns { display: flex; gap: 14px; align-items: flex-end; pointer-events: auto; }
+body.has-touch #touch { display: flex; }
+
+#touch .dpad { position: relative; pointer-events: auto; }
+#touch .abtns { display: flex; flex-direction: column-reverse; gap: 10px; align-items: center; pointer-events: auto; }
+
 .tb {
-  background: rgba(45,50,68,.82);
+  background: rgba(45,50,68,.78);
   color: #cfd8ea;
   border: 2px solid rgba(140,156,190,.5);
   border-radius: 12px;
   font-size: 20px;
-  width: 52px; height: 52px;
   touch-action: none;
+  backdrop-filter: blur(2px);
 }
-.tb:active { background: rgba(90,100,132,.95); }
-.tb.up { position: absolute; left: 52px; top: 0; }
-.tb.down { position: absolute; left: 52px; top: 104px; }
-.tb.left { position: absolute; left: 0; top: 52px; }
-.tb.right { position: absolute; left: 104px; top: 52px; }
+.tb:active { background: rgba(105,116,152,.95); transform: scale(0.96); }
 
-/* Action buttons are labelled with what they do, not with letters — "A" would
-   read as the walk-left key to anyone using WASD. */
+/* A compact cross: left and right sit close in so the pad is narrow. */
+.dpad { width: var(--pad); height: var(--pad); --btn: 46px; --pad: 128px; }
+.tb.up, .tb.down, .tb.left, .tb.right { position: absolute; width: var(--btn); height: var(--btn); }
+.tb.up { left: 41px; top: 0; }
+.tb.down { left: 41px; top: 82px; }
+.tb.left { left: 0; top: 41px; }
+.tb.right { left: 82px; top: 41px; }
+
+/* Action buttons stack vertically: ACT lowest and largest, MENU on top. */
 .tb.act, .tb.back, .tb.menu {
   border-radius: 50%;
   font-size: 12px;
   letter-spacing: 0.5px;
   font-family: ui-monospace, Menlo, monospace;
+  display: grid;
+  place-items: center;
 }
-.tb.act { width: 72px; height: 72px; color: #ffd9a0; border-color: rgba(255,207,107,.6); }
+.tb.act { width: 74px; height: 74px; color: #ffd9a0; border-color: rgba(255,207,107,.6); font-size: 14px; }
 .tb.back { width: 56px; height: 56px; }
 .tb.menu { width: 50px; height: 50px; font-size: 10px; }
+
+/* Portrait: the controls get their own band and the game is centred above it.
+   `--band` is measured in JS, since the band's height depends on the buttons. */
+/* Sit the game directly above the controls rather than floating it in the
+   middle: the interactive half of the screen stays together. */
+body.controls-band #frame { bottom: var(--band, 0px); align-items: end; padding-bottom: 6px; }
+body.controls-band #touch {
+  background: linear-gradient(to top, rgba(14,16,19,.94), rgba(14,16,19,0));
+  padding-top: 10px;
+  align-items: center;
+}
+/* A vertical column of three is tall; keep it trim so the game keeps the room. */
+body.controls-band .tb.act { width: 66px; height: 66px; }
+body.controls-band .tb.back { width: 50px; height: 50px; }
+body.controls-band .tb.menu { width: 44px; height: 44px; font-size: 9px; }
+body.controls-band .abtns { gap: 8px; }
+
+/* Landscape: controls float over the game so the view keeps the full height. */
+body.controls-overlay #touch { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+body.controls-overlay .tb { background: rgba(45,50,68,.55); }
+body.controls-overlay .dpad { --btn: 42px; --pad: 118px; }
+body.controls-overlay .tb.up { left: 38px; top: 0; }
+body.controls-overlay .tb.down { left: 38px; top: 76px; }
+body.controls-overlay .tb.left { left: 0; top: 38px; }
+body.controls-overlay .tb.right { left: 76px; top: 38px; }
+body.controls-overlay .tb.act { width: 64px; height: 64px; }
+body.controls-overlay .tb.back { width: 48px; height: 48px; }
+body.controls-overlay .tb.menu { width: 44px; height: 44px; }
+
+/* Fullscreen toggle, top-right, only where it can actually do something. */
+#fsbtn {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top));
+  right: max(8px, env(safe-area-inset-right));
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  background: rgba(45,50,68,.7);
+  border: 2px solid rgba(140,156,190,.45);
+  color: #cfd8ea;
+  font-size: 18px;
+  z-index: 6;
+  touch-action: manipulation;
+}
+#fsbtn:active { background: rgba(105,116,152,.95); }

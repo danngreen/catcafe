@@ -682,9 +682,17 @@ function paintChair(buf, v, col, dir) {
   groundShadow(buf, buf.w / 2, buf.h - 2, 6, 2.2);
   const c = col || P.wood;
   const back = dir === 'up';
-  if (!back) buf.rect(3, 2, buf.w - 6, 3, rgb(shade(c, -0.2)));
-  buf.rect(3, buf.h - 12, buf.w - 6, 5, rgb(c));
-  buf.rect(3, buf.h - 12, buf.w - 6, 2, rgb(shade(c, 0.2)));
+  const seatY = buf.h - 12;
+  if (!back) {
+    // Top rail plus the two uprights that carry it — without them the rail
+    // floats above the seat with nothing holding it up.
+    buf.rect(3, 2, buf.w - 6, 3, rgb(shade(c, -0.2)));
+    buf.rect(3, 5, 2, seatY - 5, rgb(shade(c, -0.28)));
+    buf.rect(buf.w - 5, 5, 2, seatY - 5, rgb(shade(c, -0.28)));
+    buf.vline(3, 5, seatY - 5, rgb(shade(c, -0.12)));
+  }
+  buf.rect(3, seatY, buf.w - 6, 5, rgb(c));
+  buf.rect(3, seatY, buf.w - 6, 2, rgb(shade(c, 0.2)));
   if (back) buf.rect(3, buf.h - 20, buf.w - 6, 9, rgb(shade(c, -0.1)));
   buf.rect(4, buf.h - 7, 2, 5, rgb(shade(c, -0.3)));
   buf.rect(buf.w - 6, buf.h - 7, 2, 5, rgb(shade(c, -0.3)));
@@ -1058,6 +1066,41 @@ export const OBJECTS = {
   doormat:    { w: 24, h: 12, tw: 1, th: 1, solid: false, variants: 1, paint: paintDoorMat },
   menuBoard:  { w: 22, h: 28, tw: 1, th: 1, solid: true, variants: 1, paint: paintMenuBoard },
 };
+
+/**
+ * The colours each variant of a piece is painted in, so the shop can offer a
+ * real choice and show a swatch. Keys are object types; anything missing here
+ * has variants that differ in shape rather than colour, and isn't offered.
+ */
+export const VARIANT_SWATCHES = {
+  chair: [P.wood, '#8a72d6', '#6b9e8f'],
+  chairUp: [P.wood, '#8a72d6', '#6b9e8f'],
+  stool: ['#b6524f', '#5b8fd6', '#eec453'],
+  barStool: ['#c9863f', '#b6524f', '#5b8fd6'],
+  sofa: ['#8a72d6', '#6b9e8f', '#c05a7a'],
+  tableCloth: ['#d95f5f', '#5b8fd6', '#7fbe57'],
+  tableSqCl: ['#e6e0cf', '#c05a7a', '#6b9e8f'],
+  catTower: ['#b6524f', '#6b9e8f', '#8a72d6'],
+  catBed: ['#d472b0', '#5b8fd6', '#7fbe57'],
+};
+
+export const VARIANT_NAMES = {
+  chair: ['Oak', 'Violet', 'Sage'],
+  chairUp: ['Oak', 'Violet', 'Sage'],
+  stool: ['Rust', 'Blue', 'Butter'],
+  barStool: ['Tan', 'Rust', 'Blue'],
+  sofa: ['Violet', 'Sage', 'Rose'],
+  tableCloth: ['Red check', 'Blue check', 'Green check'],
+  tableSqCl: ['Cream', 'Rose', 'Sage'],
+  catTower: ['Rust', 'Sage', 'Violet'],
+  catBed: ['Pink', 'Blue', 'Green'],
+};
+
+/** How many colourways a placeable type offers (1 = no choice). */
+export function variantCount(type) {
+  const sw = VARIANT_SWATCHES[type];
+  return sw ? sw.length : 1;
+}
 
 const cache = new SpriteCache();
 
