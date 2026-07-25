@@ -141,6 +141,33 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
         window.__step = 'done';
         await wait(300);
+      } else if (SCRIPT === 'door') {
+        // Enter and leave a building repeatedly from the doorstep itself. The
+        // trap only appeared when you pressed Space while standing on the mat.
+        const st = g.state;
+        const door = g.doorByShop.get('cafe');
+        const results = [];
+        for (let round = 0; round < 3; round++) {
+          g.player.x = door.x * 16 + 8;
+          g.player.y = (door.y + 1) * 16 - 2;
+          g.player.dir = 'up';
+          g.interact();
+          await wait(1100);
+          const inside = g.state.mapId;
+          key('ArrowDown', true); await wait(1000); key('ArrowDown', false);
+          await wait(1100);
+          const before = { x: g.player.x, y: g.player.y };
+          let moved = false;
+          for (const k of ['ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp']) {
+            key(k, true); await wait(280); key(k, false);
+            if (Math.hypot(g.player.x - before.x, g.player.y - before.y) > 3) { moved = true; break; }
+          }
+          results.push(`${round}:${inside}->${g.state.mapId}:${moved ? 'free' : 'STUCK'}`);
+        }
+        window.__door = results.join(' ');
+        if (results.some((r) => r.includes('STUCK'))) {
+          window.__errors.push('trapped after leaving a building: ' + window.__door);
+        }
       } else if (SCRIPT === 'map') {
         g.state.visit('a', 'Brambleford', 96, 168);
         g.state.visit('b', 'Saltmere', 52, 254);
@@ -157,7 +184,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
     function report(errs) {
       const out = document.getElementById('out');
       const g = window.game;
-      const extra = window.__step ? ` step=${window.__step} customers=${window.__customers} revenue=${window.__revenue} summary=${window.__summaryShown} save=${window.__saveOk}` : '';
+      const extra = (window.__step ? ` step=${window.__step} customers=${window.__customers} revenue=${window.__revenue} summary=${window.__summaryShown} save=${window.__saveOk}` : '')
+        + (window.__door ? ` door=[${window.__door}]` : '');
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';
       out.textContent = `RESULT ${errs.length ? 'FAIL' : 'OK'} (${errs.length} issues)\n${info}\n` + errs.slice(0, 25).join('\n');
       document.title = errs.length ? `FAIL ${errs.length}` : 'OK';

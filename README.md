@@ -30,6 +30,9 @@ It does need to be served over HTTP (modules don't load from `file://`).
 
 Click once anywhere to start the audio (browsers require a gesture).
 
+On a touch device an on-screen d-pad appears alongside **ACT**, **BACK** and
+**MENU** — the same three actions as Space, X and Esc.
+
 ## The loop
 
 **Earning.** Customers come in, queue at the counter, order, take a seat and
@@ -112,9 +115,13 @@ There's a headless smoke test that drives the game through scenarios in a real
 browser and reports console errors:
 
 ```bash
-node tools/check.js walk cafe shop build map night systems1 systems2 --clean
+node tools/check.js walk cafe shop build map night door systems1 systems2 --clean
 node tools/check.js town --shotdir /tmp/shots      # also writes screenshots
 ```
+
+Scenarios cover walking the overworld, the cafe trading loop, entering shops,
+build mode, the map, night lighting, door round-trips, and a full day rollover
+with a save/load check.
 
 It pre-enables the debugger, so if the page ever wedges it interrupts V8 and
 prints the stack rather than hanging silently.

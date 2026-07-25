@@ -18,7 +18,7 @@ import { buildShopInterior, buildSpecialInterior } from './world/interiors.js';
 import { SHOPS, VILLAGERS, TOWNS, GOSSIP } from './world/places.js';
 
 import { GameState, seedStartingInventory } from './game/state.js';
-import { Player, Villager, moveActor } from './game/entities.js';
+import { Player, Villager, canStand } from './game/entities.js';
 import { ITEMS, STOCK, FLEA_POOL } from './game/items.js';
 import { shopOpen, hoursText } from './game/time.js';
 import { QUESTS, QUESTS_BY_GIVER, objectiveMet } from './game/quests.js';
@@ -392,12 +392,34 @@ class Game {
       this.state.mapId = 'overworld';
       this.state.inCafe = false;
       this.currentMap = this.overworld;
-      this.player.x = back.x * TILE + TILE / 2;
-      this.player.y = (back.y + 1) * TILE - 2;
+      this.placeOn(this.overworld, back.x, back.y);
       this.player.dir = 'down';
       this.cam.follow(this.overworld, this.player.x, this.player.y, true);
       this.renderer.invalidateAll();
     });
+  }
+
+  /**
+   * Stand the player on a tile, stepping to the nearest clear one if that tile
+   * turns out to be blocked. Nothing should ever strand you inside a wall.
+   */
+  placeOn(map, tx, ty) {
+    const set = (x, y) => {
+      this.player.x = x * TILE + TILE / 2;
+      this.player.y = (y + 1) * TILE - 2;
+    };
+    set(tx, ty);
+    if (canStand(map, this.player.x, this.player.y)) return;
+    // Search outward, preferring straight down — you've just come out of a door.
+    for (let r = 1; r <= 4; r++) {
+      for (const [dx, dy] of [[0, r], [0, -r], [r, 0], [-r, 0], [r, r], [-r, r], [r, -r], [-r, -r]]) {
+        const nx = tx + dx, ny = ty + dy;
+        if (!map.inBounds(nx, ny)) continue;
+        set(nx, ny);
+        if (canStand(map, this.player.x, this.player.y)) return;
+      }
+    }
+    set(tx, ty);
   }
 
   enterInterior(mapId, map, fromX, fromY) {
@@ -407,8 +429,7 @@ class Game {
       this.state.mapId = mapId;
       this.state.inCafe = mapId === 'cafe';
       this.currentMap = map;
-      this.player.x = map.spawn.x * TILE + TILE / 2;
-      this.player.y = (map.spawn.y + 1) * TILE - 2;
+      this.placeOn(map, map.spawn.x, map.spawn.y);
       this.player.dir = 'up';
       this.cam.follow(map, this.player.x, this.player.y, true);
       this.renderer.invalidateAll();
@@ -436,9 +457,16 @@ class Game {
     }
     if (best) { this.talkTo(best); return; }
 
-    // Then whatever tile we're facing, or standing on.
-    const it = map.interactAt(f.x, f.y) || map.interactAt(this.player.tx, this.player.ty);
-    if (it) { this.handleInteract(it, f); return; }
+    // Then whatever tile we're facing, or the one we're standing on. Pass the
+    // tile the trigger was actually found on — doors record it as the spot to
+    // put you back on when you come out, and the facing tile is the wall.
+    let tile = f;
+    let it = map.interactAt(f.x, f.y);
+    if (!it) {
+      tile = { x: this.player.tx, y: this.player.ty };
+      it = map.interactAt(tile.x, tile.y);
+    }
+    if (it) { this.handleInteract(it, tile); return; }
 
     // Cats respond to being greeted.
     if (st.inCafe) {
@@ -660,8 +688,7 @@ class Game {
             audio.sfx('wing', { gain: 0.9 });
             this.fader.out(() => {
               if (st.mapId !== 'overworld') this.enterOverworld();
-              this.player.x = p.x * TILE + TILE / 2;
-              this.player.y = (p.y + 2) * TILE - 2;
+              this.placeOn(this.overworld, p.x, p.y + 1);
               this.cam.follow(this.overworld, this.player.x, this.player.y, true);
               this.hud.showLocation(p.name);
               st.clock.t += 60 * 6;   // the flight takes a little while
@@ -871,16 +898,28 @@ class Game {
       }
     }
     if (!label) return;
-    const w = textWidth(label) + 24;
+    // Name the key the player actually presses. A lettered gamepad-style badge
+    // would collide with WASD, where A already means "walk left".
+    const KEY = 'SPACE';
+    const kw = textWidth(KEY) + 8;
+    const w = kw + textWidth(label) + 20;
     const x = Math.round(VIEW_W / 2 - w / 2);
-    const y = VIEW_H - 40;
-    ctx.fillStyle = 'rgba(20,17,32,0.82)';
-    ctx.fillRect(x, y, w, 15);
+    const y = VIEW_H - 42;
+    ctx.fillStyle = 'rgba(20,17,32,0.86)';
+    ctx.fillRect(x, y, w, 17);
     ctx.fillStyle = P.uiGoldDk;
     ctx.fillRect(x, y, w, 1);
-    ctx.fillRect(x, y + 14, w, 1);
-    drawText(ctx, 'A', x + 6, y + 4, { color: P.uiGold, shadow: P.uiShadow });
-    drawText(ctx, label, x + 18, y + 4, { color: P.uiText, shadow: P.uiShadow });
+    ctx.fillRect(x, y + 16, w, 1);
+    // Little keycap.
+    ctx.fillStyle = P.uiBg2;
+    ctx.fillRect(x + 5, y + 3, kw, 11);
+    ctx.fillStyle = P.uiGoldDk;
+    ctx.fillRect(x + 5, y + 3, kw, 1);
+    ctx.fillRect(x + 5, y + 13, kw, 1);
+    ctx.fillRect(x + 5, y + 3, 1, 11);
+    ctx.fillRect(x + 4 + kw, y + 3, 1, 11);
+    drawText(ctx, KEY, x + 9, y + 5, { color: P.uiGold, shadow: P.uiShadow });
+    drawText(ctx, label, x + kw + 12, y + 5, { color: P.uiText, shadow: P.uiShadow });
   }
 
   drawCrash(err) {

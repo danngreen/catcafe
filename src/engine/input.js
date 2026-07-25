@@ -10,7 +10,10 @@ const KEYMAP = {
 };
 
 // Touch buttons report key names rather than codes.
-const TOUCHMAP = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', ' ': 'use', Escape: 'menu' };
+const TOUCHMAP = {
+  ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+  ' ': 'use', x: 'cancel', Escape: 'menu',
+};
 
 export class Input {
   constructor() {
