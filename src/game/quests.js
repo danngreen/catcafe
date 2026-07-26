@@ -62,18 +62,21 @@ export const QUESTS = [
     id: 'clear_the_path',
     giver: 'gorse',
     title: 'The Fallen Chalk',
-    desc: 'A slab of chalk is blocking the direct road south-east to Thistlewick. Gorse says the right tool would shift it.',
+    desc: 'A slab of chalk is blocking the river bridge on the short road to Thistlewick. Gorse says the right tool would shift it.',
     objective: { type: 'flag', flag: 'barrier_eastpass' },
     reward: { money: 260, rep: 0.05 },
-    offer: "The direct path south-east has been shut since the storm. Great lump of chalk across it.\n\n"
-      + "You can still get to Thistlewick the long way, round by Oakhollow, but it's an hour "
-      + "of walking nobody should have to do twice.\n\n"
+    offer: "The river bridge south-east of here has been shut since the storm. Great lump of "
+      + "chalk came down right across the middle of the deck, and it is deep water either side.\n\n"
+      + "You can still get to Thistlewick the long way, round by Oakhollow, but it is the best "
+      + "part of an hour nobody should have to walk twice.\n\n"
       + "Get a pick from the Chalk Pit Store and shift it. Everyone in this town will be quietly "
       + "grateful and not one of them will say so.",
-    progress: 'A chalk pick, from the Chalk Pit Store here in Hollowdown. Then take the road '
-      + 'south-east out of town — you will not miss it, the path stops.',
-    complete: "You shifted it? On your own?\n\nRight. That's the short way to Thistlewick "
-      + "open again — no more trailing round by Oakhollow every time.\n\nTake this, and don't argue.",
+    progress: 'A chalk pick, from the Chalk Pit Store here in Hollowdown. Then follow the road '
+      + 'south-east out of town until you reach the river. You will not miss it: the bridge is '
+      + 'there, and so is the chalk.',
+    complete: "You shifted it? On your own?\n\nRight. That is the bridge open again, and the "
+      + "short way to Thistlewick with it — no more trailing round by Oakhollow every time.\n\n"
+      + "Take this, and don't argue.",
   },
   {
     id: 'bramble_path',

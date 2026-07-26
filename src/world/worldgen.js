@@ -118,6 +118,18 @@ export function generateWorld(seed = 20240724) {
   link('hollowdown', 'oakhollow');
   link('thistlewick', 'oakhollow');
   link('thistlewick', 'hollowdown');
+
+  // The eastern pass: a second, shorter road from Hollowdown down to
+  // Thistlewick, forced across the river at a narrow point so that there is
+  // one tile of it worth blocking. Carving it in two halves through a fixed
+  // waypoint is what puts the bridge where we want it — left to itself the
+  // road would go round the water rather than over it, since crossing costs a
+  // great deal more than walking.
+  const pass = findRiverCrossing(map, 256, 109);
+  if (pass) {
+    carveRoad(map, elev, reserved, towns.hollowdown.hub, pass, seed);
+    carveRoad(map, elev, reserved, pass, towns.thistlewick.hub, seed);
+  }
   tidyBridges(map);
 
   // Where a road notches through a terrace, drop steps in so it reads as a climb.
@@ -139,7 +151,7 @@ export function generateWorld(seed = 20240724) {
   scatterNature(map, elev, moist, inland, reserved, rng, seed);
 
   // ------------------------------------------------------ blocked shortcuts
-  const barriers = placeBarriers(map, reserved, rng);
+  const barriers = placeBarriers(map, reserved, rng, pass);
 
   map.indexObjects();
 
@@ -822,16 +834,90 @@ function scatterNature(map, elev, moist, inland, reserved, rng, seed) {
 }
 
 /** Boulders and thickets that seal off shortcuts until you have the right kit. */
-function placeBarriers(map, reserved, rng) {
+/**
+ * Somewhere to put a bridge: the narrowest run of water on a horizontal line
+ * near (nearX, nearY). Returns the midpoint of that run, or null if there is
+ * no river hereabouts — the coastline comes out of noise, so nothing about the
+ * geography can be taken on trust.
+ */
+function findRiverCrossing(map, nearX, nearY) {
+  let best = null;
+  for (let y = nearY - 10; y <= nearY + 10; y++) {
+    let x = nearX - 34;
+    while (x < nearX + 34) {
+      if (!map.inBounds(x, y) || !isWater(map.ground[y * WORLD_W + x])) { x++; continue; }
+      const from = x;
+      while (x < nearX + 44 && map.inBounds(x, y) && isWater(map.ground[y * WORLD_W + x])) x++;
+      const width = x - from;
+      // Wide enough to be a river worth bridging, narrow enough to bridge.
+      if (width >= 3 && width <= 14) {
+        const score = width * 3 + Math.abs(y - nearY);
+        if (!best || score < best.score) {
+          best = { x: Math.round((from + x - 1) / 2), y, score, width };
+        }
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * The line of deck to block, across the bridge rather than along it. A bridge
+ * is the one place a boulder actually stops anyone: everywhere else you walk
+ * round it, which is what the eastern pass used to be — three stones sitting
+ * in open grass with clearance on every side.
+ */
+function bridgeBlockLine(map, near) {
+  const tiles = [];
+  for (let y = near.y - 7; y <= near.y + 7; y++) {
+    for (let x = near.x - 12; x <= near.x + 12; x++) {
+      if (map.inBounds(x, y) && map.ground[y * WORLD_W + x] === T.BRIDGE) tiles.push({ x, y });
+    }
+  }
+  if (!tiles.length) return null;
+  const xs = tiles.map((t) => t.x), ys = tiles.map((t) => t.y);
+  const loX = Math.min(...xs), hiX = Math.max(...xs);
+  const loY = Math.min(...ys), hiY = Math.max(...ys);
+  // The deck runs whichever way it is longer; block the short way across.
+  const eastWest = hiX - loX >= hiY - loY;
+  const mid = eastWest ? Math.round((loX + hiX) / 2) : Math.round((loY + hiY) / 2);
+  const line = tiles.filter((t) => (eastWest ? t.x : t.y) === mid);
+  if (!line.length) return null;
+  // Stand to read the sign one step back along the deck, not on the stones.
+  const approach = eastWest ? { x: mid - 1, y: line[0].y } : { x: line[0].x, y: mid - 1 };
+  return { line, approach, eastWest, mid };
+}
+
+function placeBarriers(map, reserved, rng, pass) {
   const spots = [
-    { id: 'eastpass', x: 244, y: 108, need: 'pickaxe',
-      text: 'A slab of chalk the size of a cart has come down across the path.\n\nYou would need proper tools to shift this.' },
     { id: 'millpath', x: 168, y: 136, need: 'shears',
       text: 'Brambles have swallowed the path to the mill entirely.\n\nYou would need something sharp.' },
     { id: 'cliffsteps', x: 84, y: 214, need: 'rope',
       text: 'The old steps down the cliff have crumbled away.\n\nA rope would make this climbable.' },
   ];
   const out = [];
+
+  // The eastern pass sits on the bridge, right across the deck.
+  const block = pass ? bridgeBlockLine(map, pass) : null;
+  if (block) {
+    const text = 'A slab of chalk the size of a cart has come down across the bridge.\n\n'
+      + 'There is deep water either side of it. You would need proper tools to shift this.';
+    for (const t of block.line) {
+      const o = map.addObject('boulder', t.x, t.y, { variant: rng.int(3), id: 'eastpass' });
+      if (o) out.push(o);
+    }
+    // Readable from either side, so you can find out what it wants whichever
+    // way you arrived.
+    const along = block.eastWest ? [[-1, 0], [1, 0]] : [[0, -1], [0, 1]];
+    for (const t of block.line) {
+      for (const [dx, dy] of along) {
+        map.setInteract(t.x + dx, t.y + dy,
+          { kind: 'barrier', barrier: 'eastpass', need: 'pickaxe', text });
+      }
+    }
+    out.push({ id: 'eastpass', x: block.approach.x, y: block.approach.y, need: 'pickaxe', text });
+  }
+
   for (const s of spots) {
     for (let k = -1; k <= 1; k++) {
       const x = s.x + k, y = s.y;

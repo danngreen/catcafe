@@ -239,6 +239,112 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         window.__pos = `slab=${bx},${by} standing=${Math.floor(p.x / 16)},${Math.floor(p.y / 16)} map=${p.map}`;
         if (Math.floor(p.x / 16) !== bx) window.__errors.push('position is wrong: ' + window.__pos);
         await wait(700);
+      } else if (SCRIPT === 'passlook') {
+        const stones = g.overworld.objects.filter((o) => o.id === 'eastpass');
+        const cx = stones.reduce((a, o) => a + o.tx, 0) / stones.length;
+        const cy = stones.reduce((a, o) => a + o.ty, 0) / stones.length;
+        g.player.x = cx * 16 + 8; g.player.y = (cy - 2) * 16;
+        g.cam.follow(g.overworld, g.player.x, g.player.y, true);
+        await wait(1400);
+      } else if (SCRIPT === 'eastpass') {
+        // The blocked shortcut has to be three things at once: actually
+        // blocked, actually a shortcut, and actually blocking — a boulder in
+        // open grass is none of them, which is what this used to be.
+        const { T } = await import('../src/art/tiles.js');
+        const map = g.overworld;
+        const W = map.w, H = map.h;
+        const stones = map.objects.filter((o) => o.id === 'eastpass');
+        const bx = Math.round(stones.reduce((a, o) => a + o.tx, 0) / Math.max(1, stones.length));
+        const by = Math.round(stones.reduce((a, o) => a + o.ty, 0) / Math.max(1, stones.length));
+
+        // Shortest walk between the two towns, optionally with the slab gone.
+        const walk = (from, to, open) => {
+          const seen = new Uint8Array(W * H);
+          const dist = new Int32Array(W * H).fill(-1);
+          const s0 = from.y * W + from.x;
+          const q = [s0];
+          seen[s0] = 1; dist[s0] = 0;
+          for (let h = 0; h < q.length; h++) {
+            const cur = q[h];
+            if (cur === to.y * W + to.x) return dist[cur];
+            const cxx = cur % W, cyy = (cur / W) | 0;
+            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+              const nx = cxx + dx, ny = cyy + dy;
+              if (nx < 1 || ny < 1 || nx >= W - 1 || ny >= H - 1) continue;
+              const ni = ny * W + nx;
+              if (seen[ni]) continue;
+              const isStone = open && stones.some((o) => o.tx === nx && o.ty === ny);
+              if (map.solid(nx, ny) && !isStone) continue;
+              seen[ni] = 1; dist[ni] = dist[cur] + 1; q.push(ni);
+            }
+          }
+          return -1;
+        };
+
+        const hub = (id) => g.towns[id].hub;
+        const shut = walk(hub('hollowdown'), hub('thistlewick'), false);
+        const open = walk(hub('hollowdown'), hub('thistlewick'), true);
+        const onDeck = stones.filter((o) => {
+          // A stone counts as on the crossing if there is deck under or beside it.
+          for (const [dx, dy] of [[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]]) {
+            if (map.get(o.tx + dx, o.ty + dy) === T.BRIDGE) return true;
+          }
+          return false;
+        }).length;
+
+        window.__pass = `stones=${stones.length}@${bx},${by} onDeck=${onDeck}`
+          + ` route shut=${shut} open=${open} saving=${shut - open}`;
+        if (!stones.length) window.__errors.push('no eastern pass at all: ' + window.__pass);
+        if (onDeck < stones.length) {
+          window.__errors.push('stones are not on the crossing: ' + window.__pass);
+        }
+        if (shut < 0 || open < 0) window.__errors.push('a town is unreachable: ' + window.__pass);
+        // Both halves matter. Equal distances mean the stones block nothing;
+        // a short `shut` would mean there was never a long way round to save.
+        if (shut - open < 40) {
+          window.__errors.push('clearing it saves nothing worth the walk: ' + window.__pass);
+        }
+        if (open > 240) window.__errors.push('the shortcut is not short: ' + window.__pass);
+      } else if (SCRIPT.startsWith('terrain')) {
+        // An ASCII dump of a patch of the valley, for working out what is
+        // actually where. `#terrain:x,y,w,h`.
+        const [, spec] = SCRIPT.split(':');
+        const [cx, cy, w, h] = (spec || '250,109,44,26').split(',').map(Number);
+        const { T, isWater } = await import('../src/art/tiles.js');
+        const map = g.overworld;
+        const CH = {
+          [T.WATER_DEEP]: '#', [T.WATER_MID]: '~', [T.WATER]: '~', [T.WATER_SHOAL]: '-',
+          [T.BRIDGE]: '=', [T.SAND]: '.', [T.DIRT]: '+', [T.GRAVEL]: '+', [T.COBBLE]: '+',
+          [T.GRASS]: ',', [T.MEADOW]: ',', [T.FOREST_FLOOR]: 'f', [T.STONE]: 's',
+          [T.CLIFF]: 'C', [T.CLIFF_TOP]: 'c', [T.DECK]: '=', [T.HEDGE]: 'H', [T.FARM]: 'F',
+        };
+        const rows = [];
+        const x0 = cx - (w >> 1), y0 = cy - (h >> 1);
+        rows.push('      ' + Array.from({ length: w }, (_, i) =>
+          ((x0 + i) % 10 === 0 ? '|' : ' ')).join(''));
+        for (let y = y0; y < y0 + h; y++) {
+          let row = '';
+          for (let x = x0; x < x0 + w; x++) {
+            const it = map.interactAt(x, y);
+            if (it && it.kind === 'barrier') { row += 'X'; continue; }
+            if (map.blocked[y * map.w + x]) { row += 'O'; continue; }
+            row += CH[map.get(x, y)] || '?';
+          }
+          rows.push(String(y).padStart(5) + ' ' + row);
+        }
+        // Positions, not eyeballing: the summary gets trimmed, which shifts any
+        // ruler line relative to the rows underneath it.
+        const marks = [];
+        for (const [k, v] of map.interacts) {
+          if (v.kind === 'barrier') marks.push('bar@' + k);
+        }
+        const stones = map.objects
+          .filter((o) => o.id === 'eastpass')
+          .map((o) => `${o.tx},${o.ty}`);
+        window.__terrain = `x0=${x0} y0=${y0}\nstones ${stones.join(' ')}\n`
+          + `barrier tiles ${marks.slice(0, 12).join(' ')}\n` + rows.join('\n')
+          + '\nkey: ~ water  = bridge/deck  + road  , grass  f forest  c chalk'
+          + '  C cliff  s stone  O blocked  X barrier';
       } else if (SCRIPT === 'furnkeys') {
         // Build mode's keys. X picks up whatever is under the cursor from any
         // of its tiles, and never drops you out of the screen.
@@ -1076,9 +1182,13 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         };
         await wait(900);
         const before = st.money;
+        const drops0 = g.net.dropCount;
         g.net.link.ws.close();                 // the connection drops under us
         await wait(600);
-        const dropped = g.net.connected;
+        // Count the drop rather than sampling `connected`: reconnection can be
+        // quicker than the sample, and "came back before we looked" is a pass,
+        // not a failure to notice.
+        const dropped = g.net.dropCount > drops0;
         // While we're away the other player spends; we must not miss it.
         bot.send(JSON.stringify({ t: 'op', op: 'money', d: -100 }));
         let waited = 0;
@@ -1086,7 +1196,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await wait(1500);
         window.__drop = `dropped=${dropped} back=${g.net.connected}/${g.net.joined}`
           + ` after=${waited}ms money ${before}->${st.money}`;
-        if (dropped) window.__errors.push('the drop was not noticed: ' + window.__drop);
+        if (!dropped) window.__errors.push('the drop was not noticed: ' + window.__drop);
         if (!g.net.connected || !g.net.joined) window.__errors.push('never came back: ' + window.__drop);
         if (st.money !== before - 100) window.__errors.push('missed what happened while away: ' + window.__drop);
         bot.close();
@@ -1768,8 +1878,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__repair ? ` ${window.__repair}` : '')
         + (window.__keys ? ` ${window.__keys}` : '')
         + (window.__furn ? ` ${window.__furn}` : '')
+        + (window.__pass ? ` ${window.__pass}` : '')
         + (window.__ghost ? ` ${window.__ghost}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
+      if (window.__terrain) { out.textContent = window.__terrain; document.title = 'OK'; window.__done = true; return; }
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';
       out.textContent = `RESULT ${errs.length ? 'FAIL' : 'OK'} (${errs.length} issues)\n${info}\n` + errs.slice(0, 25).join('\n');
       document.title = errs.length ? `FAIL ${errs.length}` : 'OK';
