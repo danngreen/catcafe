@@ -627,10 +627,11 @@ class Game {
     if (net.simOwner) return st.cafeSim.serveNearest(this.player.x, this.player.y);
     const c = st.cafeSim.waitingNear(this.player.x, this.player.y);
     if (!c) return false;
-    // The answer is worked out on whoever runs the room, so play the "we're out
-    // of that" note here from our own copy of the pantry, which is the same
-    // pantry. Waiting for the round trip would put the sound after the shrug.
-    if (c.order && st.cafeSim.stockCount(c.order) <= 0) audio.sfx('outof', { gain: 0.6 });
+    // The answer is worked out on whoever runs the room, so make the noise here
+    // from our own copy of the pantry — which is the same pantry. Waiting for
+    // the round trip would put the sound after the shrug.
+    const have = c.order && st.cafeSim.stockCount(c.order) > 0;
+    audio.sfx(have ? 'cash' : 'outof', { gain: 0.6 });
     net.askServe(this.player.x, this.player.y);
     return true;
   }
@@ -853,10 +854,10 @@ class Game {
     const f = this.player.facingTile();
 
     // Serving a waiting customer takes priority — it's time-sensitive.
-    if (st.inCafe && this.tryServe()) {
-      audio.sfx('ui_ok', { gain: 0.5 });
-      return;
-    }
+    // No confirmation blip here. Answering an ask has two outcomes and they
+    // are supposed to sound different; a cheerful "click" on the way in made
+    // both of them sound the same.
+    if (st.inCafe && this.tryServe()) return;
 
     // Someone to talk to?
     const list = (st.mapId === 'overworld' ? this.villagers : (map.villagers || []))
@@ -1490,6 +1491,7 @@ class Game {
 
   /** A small floating prompt when something is within reach. */
   drawInteractPrompt(ctx) {
+    this.promptLabel = null;
     if (this.dialogue.active || this.screens.length) return;
     const st = this.state;
     const map = this.currentMap;
@@ -1498,10 +1500,14 @@ class Game {
 
     if (st.inCafe) {
       for (const c of st.cafeSim.customers) {
-        if (c.state === 'waiting' && !c.served && Math.hypot(c.x - this.player.x, c.y - this.player.y) < 34) {
-          label = `Serve ${ITEMS[c.order]?.name || 'them'}`;
-          break;
-        }
+        if (c.state !== 'waiting' || c.served) continue;
+        if (Math.hypot(c.x - this.player.x, c.y - this.player.y) >= 34) continue;
+        // Say which it's going to be. You can see the icon over their head, but
+        // you can't see the pantry from here, and that is the whole decision.
+        const want = ITEMS[c.order]?.name;
+        label = !want ? 'Serve them'
+          : st.cafeSim.stockCount(c.order) > 0 ? `Serve ${want}` : `Out of ${want}`;
+        break;
       }
     }
     if (!label) {
@@ -1522,6 +1528,7 @@ class Game {
                   : it.kind === 'barrier' ? 'Examine' : null;
       }
     }
+    this.promptLabel = label;
     if (!label) return;
     // Name the key the player actually presses. A lettered gamepad-style badge
     // would collide with WASD, where A already means "walk left".

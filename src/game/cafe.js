@@ -200,7 +200,16 @@ export class Cafe {
         c.puppet = true;
       }
       c.goalX = x; c.goalY = y;
-      c.dir = dir; c.frame = frame; c.state = state; c.order = order;
+      c.dir = dir; c.frame = frame; c.state = state;
+      // The bubble is drawn from the emote, not from `order`, and only the
+      // client running the room ever calls showAsk — so without this the other
+      // players could see everybody queueing and nothing anybody wanted.
+      if (order !== c.order || state !== c.shownFor) {
+        c.order = order;
+        c.shownFor = state;
+        if (order && state === 'waiting' && ITEMS[order]) c.showItemEmote(ITEMS[order].icon, 999);
+        else c.clearEmote();
+      }
       return c;
     });
   }

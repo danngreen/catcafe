@@ -250,6 +250,25 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (st.quests.lane_end_hedge !== 'done') window.__errors.push('job never finished: ' + window.__ghost);
         if (st.money - money0 < 300) window.__errors.push('no reward: ' + window.__ghost);
         if (st.has('golden_collar')) window.__errors.push('kept the collar: ' + window.__ghost);
+      } else if (SCRIPT === 'promptlook') {
+        const st = g.state;
+        const sim = st.cafeSim;
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        st.shopOpen = true;
+        st.clock.t = 11 * (1200 / 24);
+        st.stock = {};
+        sim.addStock('black_tea', 20, st.clock.day);
+        await wait(900);
+        for (let i = 0; i < 3; i++) { sim.trySpawn(st.cafeMap); await wait(260); }
+        await wait(2600);
+        for (const k of sim.customers) {
+          if (k.state !== 'waiting') continue;
+          k.wish = ['pie', 'black_tea']; k.wishIndex = 1; k.order = 'pie';
+          k.stateT = 0; k.clearEmote(); sim.showAsk(k);
+        }
+        const c = sim.customers.find((k) => k.state === 'waiting');
+        if (c) { g.player.x = c.x; g.player.y = c.y + 10; }
+        await wait(900);
       } else if (SCRIPT === 'wishlist') {
         // Customers arrive wanting three or four particular things and ask for
         // them in turn. Each press of Space answers one ask: in stock they buy
@@ -301,6 +320,29 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             window.__errors.push('missed asks not recorded: ' + window.__asked);
           }
           if (sim.walkedOut !== 1) window.__errors.push('walkout not counted: ' + window.__asked);
+        }
+
+        // --- the prompt says which of the two it will be ---
+        // You can see the icon over their head, but not the pantry from where
+        // you're standing, and that is the whole decision.
+        const p = sim.customers.find((c) => c.state === 'waiting');
+        if (p) {
+          p.wish = ['pie', 'black_tea'];
+          p.wishIndex = 0;
+          p.order = 'pie';
+          g.player.x = p.x; g.player.y = p.y + 8;
+          await wait(300);
+          const outLabel = g.promptLabel;
+          p.order = 'black_tea';
+          await wait(300);
+          const haveLabel = g.promptLabel;
+          window.__prompt = `out="${outLabel}" have="${haveLabel}"`;
+          if (!/^Out of /.test(outLabel || '')) {
+            window.__errors.push('prompt did not warn we are out: ' + window.__prompt);
+          }
+          if (!/^Serve /.test(haveLabel || '')) {
+            window.__errors.push('prompt did not offer to serve: ' + window.__prompt);
+          }
         }
 
         // --- mid-list, they wait for you rather than rattling on ---
@@ -990,9 +1032,15 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           let waited = 0;
           while (st.money === money0 && waited < 9000) { await wait(250); waited += 250; }
           const cs = st.cafeSim.customers;
+          // Everybody in the room should see what everybody is asking for.
+          const waiting = cs.filter((c) => c.state === 'waiting');
+          const bubbles = waiting.filter((c) => c.emoteIcon).length;
           window.__sim = `owner=${g.net.simOwner} seen=${cs.length}`
             + ` puppets=${cs.filter((c) => c.puppet).length} moved=${cs.filter((c) => c.x !== c.goalX).length}`
-            + ` till=${money0}->${st.money}`;
+            + ` bubbles=${bubbles}/${waiting.length} till=${money0}->${st.money}`;
+          if (waiting.length && bubbles < waiting.length) {
+            window.__errors.push('the guest cannot see what they want: ' + window.__sim);
+          }
           if (g.net.simOwner) window.__errors.push('the guest is simulating too: ' + window.__sim);
           if (!cs.length) window.__errors.push('the guest sees an empty room: ' + window.__sim);
           if (cs.some((c) => !c.puppet)) window.__errors.push('the guest spawned its own: ' + window.__sim);
@@ -1390,7 +1438,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__shop ? ` shop=${window.__shop} ${window.__stockIcons} variant=${window.__variant} bag=${window.__bagKeys}` : '')
         + (window.__cut ? ` hover=${window.__hover} cut=${window.__cut}->${window.__cut2} landed=${window.__landed}` : '')
         + (window.__walk ? ` inn=${window.__innMap} stairs=${window.__stairs} walk=${window.__walk} summary=${window.__summary} slept=${window.__slept}` : '')
-        + (window.__wish ? ` ${window.__wish} | ${window.__asked || ''} | ${window.__waited || ''} | ${window.__settle || ''}` : '')
+        + (window.__wish ? ` ${window.__wish} | ${window.__asked || ''} | ${window.__prompt || ''} | ${window.__waited || ''} | ${window.__settle || ''}` : '')
         + (window.__sum ? ` ${window.__sum}` : '')
         + (window.__night ? ` ${window.__night}` : '')
         + (window.__places ? ` ${window.__places}` : '')
