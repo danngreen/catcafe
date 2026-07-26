@@ -25,7 +25,18 @@ const PAIRS = [
   // Both halves sit on the title screen for a minute doing nothing, which is
   // the whole point: neither should be hung up on.
   { id: 'netidle', first: 'netidletitle', second: 'netidletitle', gap: 2000 },
+  // Two groups, two valleys, one server. Needs a second game to exist first.
+  { id: 'netgames', first: 'netgameone', second: 'netgametwo', gap: 2000,
+    setup: 'newgame', firstGame: '001', secondGame: '002' },
 ];
+
+const SETUP = {
+  // Ask the server for another valley, so there is a 002 to point at.
+  async newgame() {
+    const res = await fetch(`http://localhost:${process.env.PORT || 8080}/games/new`, { method: 'POST' });
+    return res.json();
+  },
+};
 
 const wanted = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const pairs = wanted.length ? PAIRS.filter((p) => wanted.includes(p.id)) : PAIRS;
@@ -35,9 +46,10 @@ if (!pairs.length) {
 }
 
 /** One check.js run, its output captured rather than interleaved. */
-function run(scenario, hold = 0) {
+function run(scenario, hold = 0, game = null) {
   return new Promise((resolve) => {
     const argv = [`${HERE}check.js`, scenario, '--clean'];
+    if (game) argv.push('--game', game);
     if (hold) argv.push('--hold', String(hold));
     const p = spawn(process.execPath, argv, { stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
@@ -55,15 +67,16 @@ for (const pair of pairs) {
     env: { ...process.env, SESSION_SAVE: '0' },
   });
   await sleep(1500);
+  if (pair.setup) await SETUP[pair.setup]();
 
   // The first browser has to still be connected while the second does its
   // checks, so hold it open past the second's finish rather than letting it
   // close the moment its own scenario is done.
   // Ten seconds covers the gap between the halves finishing in every pair
   // here; the long ones overlap by themselves.
-  const a = run(pair.first, pair.hold ?? 10000);
+  const a = run(pair.first, pair.hold ?? 10000, pair.firstGame);
   await sleep(pair.gap);
-  const b = run(pair.second);
+  const b = run(pair.second, 0, pair.secondGame);
   const [outA, outB] = await Promise.all([a, b]);
 
   server.kill();

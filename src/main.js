@@ -24,7 +24,7 @@ import { GameState, seedStartingInventory } from './game/state.js';
 import { Player, Villager, RemotePlayer, Employee, canStand } from './game/entities.js';
 import { HIRE_BY_ID } from './game/cafe.js';
 import { ITEMS, STOCK, FLEA_POOL, baseId } from './game/items.js';
-import { shopOpen, hoursText } from './game/time.js';
+import { shopOpen, hoursText, HOUR_SECONDS, DAY_FULL } from './game/time.js';
 import { BOOK_BY_ID } from './world/places.js';
 import { QUESTS, QUESTS_BY_GIVER, objectiveMet, questSteps, currentStep,
   stepIndex, isLastStep, progressText, objectiveText, repairAllSteps } from './game/quests.js';
@@ -37,7 +37,7 @@ import {
 } from './ui/menus.js';
 import { BuildScreen } from './ui/build.js';
 import { TaxiFlight, StairWalk } from './ui/cutscene.js';
-import { net } from './net/client.js';
+import { net, NetClient } from './net/client.js';
 
 const WORLD_SEED = 20260724;
 
@@ -170,12 +170,45 @@ class Game {
    */
   async start() {
     let seed = WORLD_SEED;
-    try {
-      const ok = await net.connect(1500);
-      if (ok && Number.isFinite(net.seed)) seed = net.seed;
-    } catch { /* solo */ }
+    // Ask what is on offer before opening any socket: the list is plain HTTP,
+    // so reading it doesn't put anyone in a valley.
+    let list = null;
+    try { list = await NetClient.listGames(2000); } catch { /* solo */ }
+    // `?game=002` skips the lobby: a direct link to one valley, which is also
+    // how a test says which of several it means.
+    const wanted = new URLSearchParams(location.search).get('game');
+    if (wanted) net.gameId = wanted;
+    // One game, or one named, and there is nothing to choose between.
+    if (wanted || !list || list.length <= 1) {
+      try {
+        const ok = await net.connect(1500);
+        if (ok && Number.isFinite(net.seed)) seed = net.seed;
+      } catch { /* solo */ }
+    } else {
+      this.lobbyGames = list;
+      seed = list[0].seed;              // something to stand in until they pick
+    }
     this.wireNet();
     this.boot(seed);
+  }
+
+  /**
+   * Join the valley chosen in the lobby: connect to that game, rebuild the
+   * world for its seed if it differs from the one we booted with, then hand
+   * over to the usual title screen, which already knows how to tell a cafe
+   * that is open from one that isn't.
+   */
+  async enterGame(id) {
+    net.gameId = id;
+    let ok = false;
+    try { ok = await net.connect(2500); } catch { /* fall through */ }
+    if (ok && Number.isFinite(net.seed) && net.seed !== this.worldSeed) {
+      this.buildWorld(net.seed);
+    }
+    this.titleScreen = new TitleScreen(this);
+    this.screens.length = 0;
+    this.screens.push(this.titleScreen);
+    return ok;
   }
 
   wireNet() {
@@ -241,18 +274,21 @@ class Game {
 
   // ------------------------------------------------------------------ boot
 
-  boot(seed = WORLD_SEED) {
+  /**
+   * Build the valley for one seed. Split out of boot because choosing which
+   * game to join happens after the game is running: a fresh world costs well
+   * under a tenth of a second, so switching to the one you picked in the lobby
+   * is cheaper than restructuring startup around it.
+   */
+  buildWorld(seed) {
     this.worldSeed = seed;
-    this.tileset = new Tileset();
-    this.renderer = new Renderer(this.tileset);
-    this.cam = new Camera();
-
     const world = generateWorld(seed);
     this.overworld = world.map;
     this.towns = world.towns;
     this.doors = world.doors;
     this.landmarks = world.landmarks;
 
+    // Interiors are built on demand and belong to the world we just replaced.
     this.maps = new Map();
     this.maps.set('overworld', this.overworld);
 
@@ -273,10 +309,29 @@ class Game {
     // The player starts on the doorstep of their own cafe.
     const cafeDoor = this.doorByShop.get('cafe');
     this.homeDoor = cafeDoor || { x: this.towns.brambleford.hub.x, y: this.towns.brambleford.hub.y };
-    this.player = new Player(this.homeDoor.x * TILE + TILE / 2, (this.homeDoor.y + 1) * TILE - 2, this.state.playerLook);
+    const hx = this.homeDoor.x * TILE + TILE / 2;
+    const hy = (this.homeDoor.y + 1) * TILE - 2;
+    if (this.player) { this.player.x = hx; this.player.y = hy; }
+    else this.player = new Player(hx, hy, this.state.playerLook);
+    this.currentMap = this.overworld;
+    if (this.renderer) this.renderer.invalidateAll();
+  }
 
-    this.titleScreen = new TitleScreen(this);
-    this.screens.push(this.titleScreen);
+  boot(seed = WORLD_SEED) {
+    this.tileset = new Tileset();
+    this.renderer = new Renderer(this.tileset);
+    this.cam = new Camera();
+    this.buildWorld(seed);
+
+    // Several valleys on one server means choosing which before anything else.
+    // With no server, or only one game, there is nothing to choose and the
+    // lobby would just be a door to open on the way to the door.
+    if (this.lobbyGames && this.lobbyGames.length) {
+      this.screens.push(new LobbyScreen(this, this.lobbyGames));
+    } else {
+      this.titleScreen = new TitleScreen(this);
+      this.screens.push(this.titleScreen);
+    }
     this.markReady(this);
 
     this.last = performance.now();
@@ -1710,6 +1765,177 @@ function saveMe(name, look) {
   } catch { /* private browsing; not worth mentioning */ }
 }
 
+/** The sky-to-meadow backdrop with drifting clouds, behind title and lobby. */
+function drawSky(ctx, t) {
+  const grad = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+  grad.addColorStop(0, '#8fd3f0');
+  grad.addColorStop(0.55, '#c9e9f2');
+  grad.addColorStop(0.56, '#7ac457');
+  grad.addColorStop(1, '#3f8236');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  for (let i = 0; i < 5; i++) {
+    const cx = ((t * (6 + i * 3) + i * 137) % (VIEW_W + 90)) - 45;
+    const cy = 18 + i * 16;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 9 + i, 0, Math.PI * 2);
+    ctx.arc(cx + 12, cy + 2, 7 + i, 0, Math.PI * 2);
+    ctx.arc(cx - 12, cy + 3, 6 + i, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Lobby
+// ---------------------------------------------------------------------------
+
+/** "three days ago", "20 minutes ago" — how long since anyone was in there. */
+function agoText(ms) {
+  if (!ms) return 'never played';
+  const s = Math.max(0, (Date.now() - ms) / 1000);
+  if (s < 90) return 'just now';
+  const m = s / 60;
+  if (m < 60) return `${Math.round(m)} minutes ago`;
+  const h = m / 60;
+  if (h < 24) return `${Math.round(h)} hour${Math.round(h) === 1 ? '' : 's'} ago`;
+  const d = Math.round(h / 24);
+  return `${d} day${d === 1 ? '' : 's'} ago`;
+}
+
+/** The in-world clock as a person would say it. */
+function worldTime(day, t) {
+  const hour = Math.floor(t / HOUR_SECONDS) % 24;
+  const min = Math.floor((t % HOUR_SECONDS) / HOUR_SECONDS * 60);
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${DAY_FULL[day % 7]} ${h12}:${String(min).padStart(2, '0')}${hour < 12 ? 'am' : 'pm'}`;
+}
+
+/**
+ * Which valley to walk into. Shown only when the server is offering more than
+ * one, since a lobby in front of a single game is a door to open on the way to
+ * a door.
+ *
+ * The stats belong to the highlighted row rather than to whatever the mouse is
+ * over: this is played on a keyboard and on a phone, and neither of those has
+ * a hover.
+ */
+class LobbyScreen extends Screen {
+  constructor(game, games) {
+    super();
+    this.game = game;
+    this.games = games;
+    this.index = 0;
+    this.busy = false;
+    this.msg = '';
+  }
+
+  get rows() { return [...this.games, { newGame: true }]; }
+
+  update(dt, input) {
+    this.t += dt;
+    if (this.busy) return;
+    const rows = this.rows;
+    if (input.repeat('up', dt)) { this.index = (this.index - 1 + rows.length) % rows.length; audio.sfx('ui_move'); }
+    if (input.repeat('down', dt)) { this.index = (this.index + 1) % rows.length; audio.sfx('ui_move'); }
+    if (!input.hit('use')) return;
+
+    const row = rows[this.index];
+    audio.sfx('ui_ok');
+    this.busy = true;
+    if (row.newGame) {
+      this.msg = 'Making a new valley...';
+      NetClient.newGame().then((made) => {
+        if (!made) { this.busy = false; this.msg = 'The server would not make one.'; return; }
+        this.enter(made.id);
+      });
+    } else {
+      this.enter(row.id);
+    }
+  }
+
+  enter(id) {
+    this.msg = 'Joining...';
+    this.game.enterGame(id).then((ok) => {
+      if (ok) { this.done = true; return; }
+      this.busy = false;
+      this.msg = 'Could not join that one. Try another.';
+    });
+  }
+
+  draw(ctx) {
+    drawSky(ctx, this.t);
+    drawTextCentered(ctx, 'CAT CAFE', VIEW_W / 2, 26, { color: '#3d2a1c', scale: 4 });
+    drawTextCentered(ctx, 'CAT CAFE', VIEW_W / 2, 24, { color: '#ffd9a0', scale: 4 });
+
+    const rows = this.rows;
+    const w = 340, h = 150;
+    const x = Math.round((VIEW_W - w) / 2), y = 62;
+    panel(ctx, x, y, w, h);
+    panelTitle(ctx, x, y, w, 'Which valley?');
+
+    const listW = 160;
+    const VIS = 6;
+    const scroll = Math.max(0, Math.min(this.index - 2, rows.length - VIS));
+    for (let i = 0; i < Math.min(VIS, rows.length); i++) {
+      const idx = scroll + i;
+      const row = rows[idx];
+      if (!row) break;
+      const ry = y + 22 + i * 16;
+      const sel = idx === this.index;
+      if (sel) {
+        ctx.fillStyle = 'rgba(255,207,107,0.14)';
+        ctx.fillRect(x + 8, ry - 3, listW, 15);
+        cursor(ctx, x + 10, ry + 1, this.t);
+      }
+      const full = row.newGame ? 'New valley' : (row.cafe || `Game ${row.id}`);
+      // Two dots rather than an ellipsis: the font is hand-authored and has no
+      // such glyph, so it would draw nothing at all. The panel beside it has
+      // the whole name in any case.
+      const label = full.length > 23 ? `${full.slice(0, 21)}..` : full;
+      drawText(ctx, label, x + 22, ry + 1,
+        { color: sel ? P.uiGold : (row.newGame ? P.uiGreen : P.uiText), shadow: P.uiShadow });
+      if (!row.newGame && row.playing) {
+        drawText(ctx, '\u25cf', x + 8 + listW - 8, ry + 1, { color: P.uiGreen, shadow: P.uiShadow });
+      }
+    }
+
+    // What the highlighted one is, always on show.
+    const dx = x + listW + 22, dw = w - listW - 32;
+    const row = rows[this.index];
+    panel(ctx, dx, y + 20, dw, h - 34, { fill: P.uiBg2 });
+    let ly = y + 30;
+    const line = (text, col = P.uiTextDim) => {
+      drawText(ctx, text, dx + 8, ly, { color: col, shadow: P.uiShadow });
+      ly += LINE_H;
+    };
+    if (row && row.newGame) {
+      line('A brand new valley,', P.uiText);
+      line('a new seed, and an', P.uiText);
+      line('empty cafe.', P.uiText);
+    } else if (row) {
+      line(row.cafe || `Game ${row.id}`, P.uiGold);
+      ly += 2;
+      if (!row.started) {
+        line('Not started yet.');
+        line('Nobody has opened');
+        line('the cafe.');
+      } else {
+        line(worldTime(row.day, row.t));
+        line(`Day ${row.daysPlayed + 1}`);
+        line(`${money(row.money)}   ${row.cats} cat${row.cats === 1 ? '' : 's'}`);
+        ly += 2;
+        line(agoText(row.lastPlayed));
+      }
+      if (row.playing) line(`${row.playing} playing now`, P.uiGreen);
+      else if (row.here) line(`${row.here} in the lobby`, P.uiGreen);
+    }
+
+    drawTextCentered(ctx, this.msg || 'Up / Down to choose    Space to join',
+      VIEW_W / 2, y + h + 10, { color: this.msg ? P.uiGold : '#2f3d22' });
+  }
+}
+
 class TitleScreen extends Screen {
   constructor(game) {
     super();
@@ -1794,24 +2020,7 @@ class TitleScreen extends Screen {
   }
 
   draw(ctx) {
-    // A soft sky-to-meadow backdrop with drifting clouds.
-    const grad = ctx.createLinearGradient(0, 0, 0, VIEW_H);
-    grad.addColorStop(0, '#8fd3f0');
-    grad.addColorStop(0.55, '#c9e9f2');
-    grad.addColorStop(0.56, '#7ac457');
-    grad.addColorStop(1, '#3f8236');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    for (let i = 0; i < 5; i++) {
-      const cx = ((this.t * (6 + i * 3) + i * 137) % (VIEW_W + 90)) - 45;
-      const cy = 18 + i * 16;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 9 + i, 0, Math.PI * 2);
-      ctx.arc(cx + 12, cy + 2, 7 + i, 0, Math.PI * 2);
-      ctx.arc(cx - 12, cy + 3, 6 + i, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    drawSky(ctx, this.t);
 
     if (this.stage === 'title') {
       drawTextCentered(ctx, 'CAT CAFE', VIEW_W / 2, 52, { color: '#3d2a1c', scale: 6 });
@@ -1967,9 +2176,13 @@ window.game = new Game();
 if (location.search.includes('autostart')) {
   const g = window.game;
   await g.ready;
+  // Nothing to skip past if a valley still has to be chosen: autostart means
+  // "don't make me press Space through the title", not "pick for me".
+  if (!g.lobbyGames || !g.lobbyGames.length) {
   g.screens.length = 0;
   g.startNewGame({ species: 'cat', coat: 'ginger', cloth: CLOTHES[5] },
     { wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], awning: AWNING_CHOICES[0],
       floor: T.FLOOR_WOOD, name: CAFE_NAMES[0] });
   g.dialogue.active = false;
+  }
 }

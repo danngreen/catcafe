@@ -18,6 +18,7 @@ const RETRY_SECONDS = 3;
 
 export class NetClient {
   constructor() {
+    this.gameId = null;       // which valley; null takes the server's default
     this.link = null;         // WsLink or PollLink
     this.transport = null;    // 'ws' | 'poll'
     this.forcePoll = false;
@@ -116,12 +117,39 @@ export class NetClient {
     return !!location.host;                          // false when opened from file://
   }
 
-  static wsUrl() {
+  /** Which valley to join. Set before connecting; null means the server's default. */
+  static gameParam(id) { return id ? `?game=${encodeURIComponent(id)}` : ''; }
+
+  wsUrl() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${proto}//${location.host}/ws`;
+    return `${proto}//${location.host}/ws${NetClient.gameParam(this.gameId)}`;
   }
 
-  static pollUrl() { return `${location.protocol}//${location.host}/poll`; }
+  pollUrl() {
+    return `${location.protocol}//${location.host}/poll${NetClient.gameParam(this.gameId)}`;
+  }
+
+  /** The lobby list, over plain HTTP — no socket, so no valley is entered. */
+  static async listGames(timeoutMs = 2500) {
+    if (!NetClient.available() || typeof fetch === 'undefined') return null;
+    try {
+      const ac = new AbortController();
+      const t = setTimeout(() => ac.abort(), timeoutMs);
+      const res = await fetch('/games', { cache: 'no-store', signal: ac.signal });
+      clearTimeout(t);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return Array.isArray(data.games) ? data.games : null;
+    } catch { return null; }
+  }
+
+  static async newGame() {
+    try {
+      const res = await fetch('/games/new', { method: 'POST', cache: 'no-store' });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch { return null; }
+  }
 
   /**
    * Which transport to reach for first. Sockets unless we've learnt otherwise
@@ -200,8 +228,8 @@ export class NetClient {
 
       let link;
       try {
-        link = kind === 'ws' ? new WsLink(NetClient.wsUrl(), handlers)
-          : new PollLink(NetClient.pollUrl(), handlers);
+        link = kind === 'ws' ? new WsLink(this.wsUrl(), handlers)
+          : new PollLink(this.pollUrl(), handlers);
       } catch {
         return done(false);
       }

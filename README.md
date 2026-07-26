@@ -69,9 +69,18 @@ matters: if every client simulated the room, the same cup of coffee would be sol
 once per player. Anyone can still serve — a press of Space asks whoever is
 running the room to take the order.
 
-The server keeps the shared cafe in `valley.json` beside `server.js`, so closing
-the laptop doesn't cost anyone their afternoon. `SESSION_SAVE=0 npm start` plays
-without saving; `SESSION_SAVE=/some/path.json` puts it elsewhere.
+**Several valleys at once.** One server can host as many games as you like, and
+two groups can play different ones side by side without seeing each other. When
+there is more than one to choose from you get a lobby first, listing each game
+with its cafe name, the day and time in there, how much money and how many cats,
+and when anybody last played it — for whichever row is highlighted, since this
+is played on a keyboard and on a phone and neither has a hover. "New valley"
+makes another, with its own seed.
+
+Games are kept in `saves/valley-NNN.json`. A single `valley.json` from before
+this existed becomes game 001 on first run, so nothing is lost. `?game=002` in
+the URL is a direct link that skips the lobby. `SESSION_SAVE=0 npm start` plays
+without saving anything; `SESSION_SAVE=/some/dir` keeps them elsewhere.
 
 Clients say hello every few seconds and reconnect on their own, so standing
 still, reading the title screen, closing a lid or restarting the server doesn't

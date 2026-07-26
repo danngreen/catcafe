@@ -20,7 +20,7 @@ const PORT = 9333 + (process.pid % 200);
 const BASE = process.env.BASE || 'http://localhost:8080';
 
 const args = process.argv.slice(2);
-const flagsWithValue = new Set(['--shot', '--ms', '--url', '--eval', '--shotdir', '--mobile', '--hold']);
+const flagsWithValue = new Set(['--shot', '--ms', '--url', '--eval', '--shotdir', '--mobile', '--hold', '--game']);
 const named = args.filter((a, i) => !a.startsWith('--') && !flagsWithValue.has(args[i - 1]));
 if (!named.length) named.push('walk');
 const shotIdx = args.indexOf('--shot');
@@ -66,6 +66,9 @@ const BUDGET = {
   netclock: 16000,
   netmapplayers: 20000,
   nettitleme: 18000,
+  netlobby: 26000,
+  netgameone: 20000,
+  netgametwo: 18000,
   titleme: 20000,
   netlivesave: 22000,
   // Halves of a pair: they wait for the other browser to turn up.
@@ -97,7 +100,7 @@ const GROUPS = {
   // Single-process networked runs. The paired ones need two browsers at once
   // and are listed in the README rather than here.
   net: ['net', 'netmobile', 'netbooks', 'netclock', 'netdrop', 'netforget',
-    'netpollbooks', 'netfallback', 'netmapplayers', 'solo'],
+    'netpollbooks', 'netfallback', 'netmapplayers', 'netlobby', 'solo'],
   slow: ['netidle', 'netping', 'netmute', 'netpollquiet', 'netidletitle'],
 };
 GROUPS.all = [...new Set([
@@ -217,6 +220,9 @@ async function main() {
     // A scenario named ...poll... runs over the HTTP transport instead of a
     // socket, which is what a machine behind a content filter ends up using.
     if (sc.includes('poll')) params.push('poll');
+    // --game names one valley, for the scenarios about having several.
+    const gameIdx = args.indexOf('--game');
+    if (gameIdx >= 0) params.push(`game=${args[gameIdx + 1]}`);
     const url = urlIdx >= 0 ? args[urlIdx + 1]
       : `${BASE}/tools/harness.html${params.length ? '?' + params.join('&') : ''}#${sc}`;
     // A hard reload guarantees a clean world for each scenario.

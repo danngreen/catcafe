@@ -447,6 +447,71 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           }
           try { localStorage.removeItem('catcafe.me'); } catch (e) {}
         }
+      } else if (SCRIPT === 'netlobbylook') {
+        await wait(400);
+        const scr = g.screens[g.screens.length - 1];
+        if (scr && scr.rows) { scr.index = 0; }
+        await wait(900);
+      } else if (SCRIPT === 'netlobby') {
+        // With more than one valley on the server you get asked which. The
+        // stats belong to the highlighted row and are always on show, because
+        // this is played on a keyboard and on a phone and neither has a hover.
+        const { NetClient } = await import('../src/net/client.js');
+        const before = (await NetClient.listGames()) || [];
+        if (before.length < 2) await NetClient.newGame();
+        // The lobby is decided at boot, so reload now that there are two.
+        if (!g.lobbyGames) {
+          if (!sessionStorage.getItem('lobbyReload')) {
+            sessionStorage.setItem('lobbyReload', '1');
+            location.reload();
+            await wait(20000);
+          }
+        }
+        sessionStorage.removeItem('lobbyReload');
+        const scr = g.screens[g.screens.length - 1];
+        const kind = scr && scr.constructor.name;
+        const rows = scr && scr.rows ? scr.rows.length : 0;
+        window.__lobby = `screen=${kind} games=${g.lobbyGames ? g.lobbyGames.length : 0} rows=${rows}`;
+        if (kind !== 'LobbyScreen') {
+          window.__errors.push('no lobby with several valleys: ' + window.__lobby);
+        } else {
+          // Every game, plus New valley on the end.
+          if (rows !== g.lobbyGames.length + 1) {
+            window.__errors.push('lobby is missing rows: ' + window.__lobby);
+          }
+          // Join the first one and end up in the game proper.
+          key('Space', true); await wait(200); key('Space', false);
+          let w = 0;
+          while (!g.titleScreen && w < 12000) { await wait(250); w += 250; }
+          await wait(600);
+          const now = g.screens[g.screens.length - 1];
+          window.__lobby += ` joined=${g.net.gameId} then=${now && now.constructor.name}`
+            + ` connected=${g.net.connected} seed=${g.worldSeed}`;
+          if (!g.net.connected) window.__errors.push('did not connect: ' + window.__lobby);
+          if (!now || now.constructor.name !== 'TitleScreen') {
+            window.__errors.push('did not reach the title: ' + window.__lobby);
+          }
+        }
+      } else if (SCRIPT === 'netgameone' || SCRIPT === 'netgametwo') {
+        // Two groups, two valleys, one server. Neither should see the other,
+        // and neither should be spending the other's money.
+        const st = g.state;
+        const mine = SCRIPT === 'netgameone' ? '001' : '002';
+        await wait(SCRIPT === 'netgameone' ? 1500 : 3500);
+        st.earn(SCRIPT === 'netgameone' ? 111 : 222);
+        await wait(3500);
+        window.__two = `game=${g.net.gameId} seed=${g.worldSeed} money=${st.money}`
+          + ` others=${g.net.remotes.size} here=${g.net.here}`;
+        if (g.net.gameId !== mine) window.__errors.push('joined the wrong valley: ' + window.__two);
+        if (!g.net.connected) window.__errors.push('not connected: ' + window.__two);
+        // 480 to start. Seeing the other group's money means one shared room.
+        const want = 480 + (SCRIPT === 'netgameone' ? 111 : 222);
+        if (st.money !== want) {
+          window.__errors.push(`money leaked between valleys (wanted ${want}): ` + window.__two);
+        }
+        if (g.net.remotes.size) {
+          window.__errors.push('can see somebody from the other valley: ' + window.__two);
+        }
       } else if (SCRIPT === 'nettitleme') {
         // Two people cannot be the same person. Only the server can enforce
         // this: a client choosing from the list has no idea who else is here.
@@ -2154,6 +2219,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__emp ? ` ${window.__emp}` : '')
         + (window.__mapp ? ` ${window.__mapp}` : '')
         + (window.__me ? ` ${window.__me}` : '')
+        + (window.__lobby ? ` ${window.__lobby}` : '')
+        + (window.__two ? ` ${window.__two}` : '')
         + (window.__live ? ` ${window.__live}` : '')
         + (window.__ghost ? ` ${window.__ghost}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
