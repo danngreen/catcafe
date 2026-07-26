@@ -239,6 +239,80 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         window.__pos = `slab=${bx},${by} standing=${Math.floor(p.x / 16)},${Math.floor(p.y / 16)} map=${p.map}`;
         if (Math.floor(p.x / 16) !== bx) window.__errors.push('position is wrong: ' + window.__pos);
         await wait(700);
+      } else if (SCRIPT === 'netlivesave') {
+        // Join whatever the server is actually holding and report the state of
+        // the pass. Pointed at a real save, this says whether that save is
+        // playable — which is the only question that matters about it.
+        const st = g.state;
+        const map = g.overworld;
+        let w = 0;
+        while (!g.net.joined && w < 8000) { await wait(250); w += 250; }
+        await wait(1500);
+        const stones = map.objects.filter((o) => o.id === 'eastpass');
+        const flag = !!st.flags.barrier_eastpass;
+        // Can you actually walk it? Flood from one bank to the other.
+        const W = map.w, H = map.h;
+        const reach = (from, to) => {
+          const seen = new Uint8Array(W * H);
+          const q = [from.y * W + from.x];
+          seen[q[0]] = 1;
+          for (let h = 0; h < q.length; h++) {
+            const cur = q[h];
+            if (cur === to.y * W + to.x) return true;
+            const cx = cur % W, cy = (cur / W) | 0;
+            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+              const nx = cx + dx, ny = cy + dy;
+              if (nx < 1 || ny < 1 || nx >= W - 1 || ny >= H - 1) continue;
+              const ni = ny * W + nx;
+              if (seen[ni] || map.solid(nx, ny)) continue;
+              seen[ni] = 1; q.push(ni);
+            }
+          }
+          return false;
+        };
+        const open = reach(g.towns.hollowdown.hub, g.towns.thistlewick.hub);
+        window.__live = `day=${st.clock.day} money=${st.money} flag=${flag}`
+          + ` stonesStanding=${stones.length} townsConnected=${open}`
+          + ` quest=${st.quests.clear_the_path || 'not taken'}`;
+        if (flag && stones.length) window.__errors.push('cleared pass is still blocked: ' + window.__live);
+        if (!open) window.__errors.push('cannot get between the towns at all: ' + window.__live);
+      } else if (SCRIPT === 'netpasscleared') {
+        // The real case: joining a valley whose books already say the pass was
+        // cleared. The stones must not be standing when you arrive.
+        const st = g.state;
+        const map = g.overworld;
+        const before = map.objects.filter((o) => o.id === 'eastpass').length;
+        // Whoever runs the room clears it; everybody else finds out by sync.
+        st.flags.barrier_eastpass = true;
+        st.touch('flags');
+        let w = 0;
+        while (map.objects.filter((o) => o.id === 'eastpass').length && w < 8000) {
+          await wait(250); w += 250;
+        }
+        const after = map.objects.filter((o) => o.id === 'eastpass').length;
+        window.__cleared = `via=${g.net.transport} stones ${before}->${after} in ${w}ms`;
+        if (after) window.__errors.push('the pass stayed shut for the other player: ' + window.__cleared);
+      } else if (SCRIPT === 'passcleared') {
+        // A barrier you have already cleared has to stay cleared. The world is
+        // rebuilt from the seed every time the game starts, so the stones come
+        // back while the flag saying they are gone persists — which walls you
+        // in behind rubble the game believes it has already removed.
+        const st = g.state;
+        const map = g.overworld;
+        const before = map.objects.filter((o) => o.id === 'eastpass').length;
+        st.flags.barrier_eastpass = true;
+        // Exactly what happens on load, on joining, or when the other player
+        // clears it while you are stood next to it.
+        g.applyClearedBarriers();
+        await wait(400);
+        const after = map.objects.filter((o) => o.id === 'eastpass').length;
+        const stillSolid = [];
+        for (const o of map.objects) {
+          if (o.id === 'eastpass') stillSolid.push(`${o.tx},${o.ty}`);
+        }
+        window.__cleared = `stones ${before}->${after} left=[${stillSolid.join(' ')}]`;
+        if (!before) window.__errors.push('no stones to begin with: ' + window.__cleared);
+        if (after) window.__errors.push('cleared stones came back: ' + window.__cleared);
       } else if (SCRIPT === 'passlook') {
         const stones = g.overworld.objects.filter((o) => o.id === 'eastpass');
         const cx = stones.reduce((a, o) => a + o.tx, 0) / stones.length;
@@ -1879,6 +1953,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__keys ? ` ${window.__keys}` : '')
         + (window.__furn ? ` ${window.__furn}` : '')
         + (window.__pass ? ` ${window.__pass}` : '')
+        + (window.__cleared ? ` ${window.__cleared}` : '')
+        + (window.__live ? ` ${window.__live}` : '')
         + (window.__ghost ? ` ${window.__ghost}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       if (window.__terrain) { out.textContent = window.__terrain; document.title = 'OK'; window.__done = true; return; }

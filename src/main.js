@@ -192,12 +192,17 @@ class Game {
 
     // The shared books. Every one of these arrives because somebody — possibly
     // us — changed something, and the server's copy is the one that counts.
-    net.on('sync', (k, v) => st.applySync(k, v));
+    net.on('sync', (k, v) => {
+      st.applySync(k, v);
+      // Somebody else may have just shifted the chalk. Open our copy too.
+      if (k === 'flags' && this.overworld) this.applyClearedBarriers();
+    });
     // The authoritative books, sent when we join and whenever a cafe is opened.
     // On the title screen we only file it away; `announce` adopts it on start.
     net.on('world', (world, clock) => {
       if (this.mode !== 'play') return;
       st.adopt(world, clock);
+      this.applyClearedBarriers();
       this.repairQuests();
     });
     net.on('clock', (c) => { st.clock.day = c.day; st.clock.t = c.t; });
@@ -500,6 +505,7 @@ class Game {
     this.cam.follow(this.currentMap, this.player.x, this.player.y, true);
     this.announce();
     this.hud.toast('Welcome back.', 'good');
+    this.applyClearedBarriers();
     this.repairQuests();
   }
 
@@ -516,6 +522,7 @@ class Game {
       st.adopt(net.world, net.clock);
       this.maps.set('cafe', st.cafeMap);
       this.joinedExisting = true;
+      this.applyClearedBarriers();
       this.repairQuests();
     } else {
       net.seedWorld(st.snapshot(), st.clock.save());
@@ -1449,6 +1456,31 @@ class Game {
    * world has just changed, so a job can't sit stuck behind a step you have
    * demonstrably finished.
    */
+  /**
+   * Take every barrier that has already been cleared back out of the world.
+   *
+   * Clearing one removes its boulders there and then, which is right for the
+   * moment it happens and no use whatsoever afterwards: the valley is rebuilt
+   * from the seed every time the game starts, so the stones come back while
+   * the flag saying they are gone persists. The result is a pass permanently
+   * shut by rubble the game believes it has already cleared — `tryBarrier`
+   * sees the flag and returns without doing anything.
+   *
+   * The same gap shuts out anyone joining a shared valley after somebody else
+   * cleared it, and anyone standing there when they do.
+   */
+  applyClearedBarriers() {
+    const st = this.state;
+    let removed = 0;
+    for (const o of [...this.overworld.objects]) {
+      if (!o.id || !st.flags[`barrier_${o.id}`]) continue;
+      this.overworld.removeObject(o);
+      removed++;
+    }
+    if (removed) this.renderer.invalidateAll();
+    return removed;
+  }
+
   repairQuests() {
     const moved = repairAllSteps(this.state);
     if (!moved) return;

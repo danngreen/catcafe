@@ -63,6 +63,7 @@ const BUDGET = {
   netpollbooks: 24000,
   netbooks: 20000,
   netclock: 16000,
+  netlivesave: 22000,
   // Halves of a pair: they wait for the other browser to turn up.
   netwalkhost: 62000,
   netwalkguest: 58000,
@@ -84,7 +85,7 @@ const GROUPS = {
     'barriers', 'nightfolk', 'nightplaces'],
   cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers'],
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',
-    'barriers', 'eastpass', 'debugpos'],
+    'barriers', 'eastpass', 'passcleared', 'debugpos'],
   ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'exterior',
     'summarylines', 'journalstep'],
   cutscene: ['taxi', 'sleep', 'door'],
