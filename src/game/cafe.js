@@ -18,8 +18,9 @@ const rng = makeRng(0x0cafe);
 // for. Built once: the menu doesn't change while the game is running.
 const MENU_IDS = Object.keys(ITEMS).filter((id) => isMenuItem(id));
 const STAPLE_IDS = MENU_IDS.filter((id) => ITEMS[id].appeal <= 1.05);
-// How long an unstaffed "sorry, none of that either" takes to come back.
-const MISS_DELAY = 1.1;
+// How long somebody stands there mid-list waiting for you to answer the next
+// thing they asked for, before giving up on you.
+const ASK_PATIENCE = 16;
 
 /** How busy the valley is at a given hour — two humps, lunch and early evening. */
 function hourDemand(h) {
@@ -341,22 +342,32 @@ export class Cafe {
       case 'waiting': {
         c.stateT += dt;
         c.moving = false;
-        const staffed = this.minded || (st.employee && st.employee.onDuty);
+        const onDuty = !!(st.employee && st.employee.onDuty);
+        const staffed = this.minded || onDuty;
         // Serving them yourself is faster and they like you more for it.
-        const autoDelay = st.employee && st.employee.onDuty ? 4.5 - st.employee.quality * 2 : 5;
-        // Saying "no, sorry" is quick — you know what's on the shelf. Only
-        // actually making the thing takes the full serving beat, which is why
-        // a customer working down a long list isn't four times the wait.
-        const delay = c.wishIndex === 0 ? autoDelay : MISS_DELAY;
+        const autoDelay = onDuty ? 4.5 - st.employee.quality * 2 : 5;
         if (c.served) {
           this.answerAsk(c, c.servedByPlayer);
           break;
         }
         if (!staffed) {
           if (c.stateT > 8) { c.satisfaction = 0.1; c.state = 'leaving'; c.showEmote('alert', 2); st.toast('A customer waited, gave up, and left.', 'bad'); }
-        } else if (c.stateT > delay) {
-          // Staff work down the same list, a beat per item.
-          this.answerAsk(c, false);
+          break;
+        }
+        // An employee works the whole list on their own. You don't: once you've
+        // had to tell somebody you're out of something, the next thing they ask
+        // for is yours to answer. Rattling through the rest of their list by
+        // itself takes away both the moment and the chance to note it down.
+        if (onDuty || c.wishIndex === 0) {
+          if (c.stateT > autoDelay) this.answerAsk(c, false);
+        } else if (c.stateT > ASK_PATIENCE) {
+          // Left standing at the counter mid-list.
+          c.satisfaction = clamp(c.satisfaction * 0.4, 0, 1.6);
+          c.state = 'leaving';
+          c.path = null;
+          c.showEmote('alert', 2);
+          this.walkedOut++;
+          st.toast('Somebody gave up waiting to be served.', 'warn');
         }
         break;
       }

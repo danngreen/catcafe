@@ -40,6 +40,12 @@ buy it and sit down; don't and they shrug, you hear it, and they ask for the
 next thing on the list. Get to the end of their list and they leave without
 buying anything.
 
+Every ask is a press of Space. Once you have had to tell somebody you're out
+of something, the next thing they ask for is yours to answer — they stand there
+waiting rather than working down the rest of the list on their own, which is
+both the moment and your chance to note the item down. An employee on duty does
+work the whole list by themselves; that is what you pay them for.
+
 That is what makes the pantry a decision rather than a chore. Basics sell to
 almost everyone but cheaply; the expensive things are what people ask for first,
 and are worth stocking precisely because that is where the money is. Not

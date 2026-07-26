@@ -163,6 +163,29 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           if (sim.walkedOut !== 1) window.__errors.push('walkout not counted: ' + window.__asked);
         }
 
+        // --- mid-list, they wait for you rather than rattling on ---
+        // Each ask is a press. Working down the rest of the list by itself
+        // takes away the moment and the chance to note the item down.
+        const w = sim.customers.find((c) => c.state === 'waiting');
+        if (!w) window.__errors.push('nobody left at the counter to wait');
+        else {
+          w.wish = ['pie', 'cake', 'parfait'];
+          w.wishIndex = 0;
+          w.order = 'pie';
+          w.stateT = 0;
+          w.served = true; w.servedByPlayer = true;
+          await wait(400);
+          const afterOne = w.order;
+          await wait(7000);                    // long past the serving beat
+          window.__waited = `afterOnePress=${afterOne} sevenSecondsLater=${w.order}`
+            + ` state=${w.state}`;
+          if (afterOne !== 'cake') window.__errors.push('first press did not advance: ' + window.__waited);
+          if (w.order !== afterOne) {
+            window.__errors.push('it moved on without me: ' + window.__waited);
+          }
+          if (w.state !== 'waiting') window.__errors.push('did not keep waiting: ' + window.__waited);
+        }
+
         // --- and one who settles for the thing we do have ---
         const b = sim.customers.find((c) => c.state === 'waiting');
         if (!b) window.__errors.push('no second customer at the counter');
@@ -804,8 +827,15 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (SCRIPT === 'netcafehost') {
           const money0 = st.money;
           for (let i = 0; i < 4; i++) { st.cafeSim.trySpawn(st.cafeMap); await wait(300); }
+          // Answer asks the way a player at the counter would: customers work
+          // down their list a press at a time and won't move on by themselves.
+          const counter = setInterval(() => {
+            const c = st.cafeSim.customers.find((k) => k.state === 'waiting' && !k.served);
+            if (c) { c.served = true; c.servedByPlayer = true; }
+          }, 600);
           let waited = 0;
           while (st.money === money0 && waited < 12000) { await wait(250); waited += 250; }
+          clearInterval(counter);
           window.__sim = `owner=${g.net.simOwner} mine=${st.cafeSim.customers.length}`
             + ` puppets=${st.cafeSim.customers.filter((c) => c.puppet).length}`
             + ` till=${money0}->${st.money}`;
@@ -1220,7 +1250,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__shop ? ` shop=${window.__shop} ${window.__stockIcons} variant=${window.__variant} bag=${window.__bagKeys}` : '')
         + (window.__cut ? ` hover=${window.__hover} cut=${window.__cut}->${window.__cut2} landed=${window.__landed}` : '')
         + (window.__walk ? ` inn=${window.__innMap} stairs=${window.__stairs} walk=${window.__walk} summary=${window.__summary} slept=${window.__slept}` : '')
-        + (window.__wish ? ` ${window.__wish} | ${window.__asked || ''} | ${window.__settle || ''}` : '')
+        + (window.__wish ? ` ${window.__wish} | ${window.__asked || ''} | ${window.__waited || ''} | ${window.__settle || ''}` : '')
         + (window.__sum ? ` ${window.__sum}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';

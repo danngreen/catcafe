@@ -1,13 +1,20 @@
-// Generates the PWA / home-screen icons. Like everything else in this project
-// the art is drawn in code — this just needs a PNG encoder, since a manifest
-// can't point at a canvas.
+// Generates the PWA / home-screen icons.
 //
 //   node tools/make-icons.js
 //
 // Writes icons/icon-192.png, icons/icon-512.png and icons/apple-touch-icon.png.
+//
+// The cat is not drawn here: it is the game's own sprite, pulled straight out of
+// the art module and blown up with square pixels, so the face on the home screen
+// is the face you play as rather than a second cat drawn to look like it. The
+// art code is plain JS until the moment it touches a canvas, which is why this
+// can run in node. Only the PNG encoder below is icon-specific — a manifest
+// can't point at a canvas.
 
 import { deflateSync } from 'node:zlib';
 import { writeFileSync, mkdirSync } from 'node:fs';
+import { charBuf } from '../src/art/chars.js';
+import { iconBuf } from '../src/art/icons.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 
@@ -62,82 +69,83 @@ function encodePng(w, h, rgba) {
 
 // ---- the icon --------------------------------------------------------------
 
-/** A ginger cat face on a warm background, drawn at any size. */
+// The design is laid out on a coarse grid and every square is a whole block of
+// pixels, so the result reads as pixel art at any size instead of as a smooth
+// drawing that happens to be small.
+const GRID = 24;
+const HEAD_ROWS = 12;          // rows 0..11 of the character sprite: ears to chin
+const SKY = '#8fd3f0';
+const SKY_LO = '#a8dff3';
+const GRASS = '#5da845';
+const GRASS_LO = '#4b8f39';
+
+/** The player cat's face and a cup of coffee, both taken from the game. */
 function drawIcon(S) {
   const px = Buffer.alloc(S * S * 4);
-  const put = (x, y, hex, a = 255) => {
-    if (x < 0 || y < 0 || x >= S || y >= S) return;
-    const n = parseInt(hex.slice(1), 16);
-    const i = (y * S + x) * 4;
-    const t = a / 255;
-    px[i] = Math.round(((n >> 16) & 255) * t + px[i] * (1 - t));
-    px[i + 1] = Math.round(((n >> 8) & 255) * t + px[i + 1] * (1 - t));
-    px[i + 2] = Math.round((n & 255) * t + px[i + 2] * (1 - t));
-    px[i + 3] = 255;
-  };
-  const disc = (cx, cy, rx, ry, hex) => {
-    for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) {
-      for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
-        const dx = (x - cx) / rx, dy = (y - cy) / ry;
-        if (dx * dx + dy * dy <= 1) put(x, y, hex);
+  const edge = (i) => Math.round((i * S) / GRID);
+
+  /** Fill one grid square. Edges are shared, so blocks tile with no seams. */
+  const block = (gx, gy, r, g, b) => {
+    const x0 = edge(gx), x1 = edge(gx + 1);
+    const y0 = edge(gy), y1 = edge(gy + 1);
+    for (let y = Math.max(0, y0); y < Math.min(S, y1); y++) {
+      for (let x = Math.max(0, x0); x < Math.min(S, x1); x++) {
+        const i = (y * S + x) * 4;
+        px[i] = r; px[i + 1] = g; px[i + 2] = b; px[i + 3] = 255;
       }
     }
   };
-  const rect = (x, y, w, h, hex) => {
-    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) put(x + i, y + j, hex);
+  const hexBlock = (gx, gy, hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    block(gx, gy, (n >> 16) & 255, (n >> 8) & 255, n & 255);
   };
 
-  // Background: a soft vertical wash, sky into meadow.
-  for (let y = 0; y < S; y++) {
-    const t = y / S;
-    const hex = t < 0.62 ? '#8fd3f0' : '#5da845';
-    rect(0, y, S, 1, hex);
-  }
-  // Rounded corners knocked out to transparent.
-  const r = S * 0.22;
-  for (let y = 0; y < S; y++) {
-    for (let x = 0; x < S; x++) {
-      const cx = x < r ? r : x > S - r ? S - r : x;
-      const cy = y < r ? r : y > S - r ? S - r : y;
-      if ((x - cx) ** 2 + (y - cy) ** 2 > r * r) px[(y * S + x) * 4 + 3] = 0;
+  /** Stamp a PixBuf onto the grid, skipping transparent pixels. */
+  const stamp = (buf, ox, oy, rows = buf.h) => {
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < buf.w; x++) {
+        const p = buf.get(x, y);
+        if (!((p >>> 24) & 255)) continue;
+        block(ox + x, oy + y, p & 255, (p >>> 8) & 255, (p >>> 16) & 255);
+      }
+    }
+  };
+
+  // Sky over meadow, with one lighter band in each so it isn't flat. Full
+  // bleed: iOS rounds the corners itself, and a maskable icon wants no gaps.
+  const HORIZON = 17;
+  for (let gy = 0; gy < GRID; gy++) {
+    for (let gx = 0; gx < GRID; gx++) {
+      const below = gy >= HORIZON;
+      hexBlock(gx, gy, below ? (gy === HORIZON ? GRASS : GRASS_LO) : (gy < 3 ? SKY_LO : SKY));
     }
   }
 
-  const u = S / 32;                                  // one "pixel" of the design
-  const cx = S / 2, cy = S * 0.54;
-  // Ears.
-  for (const s of [-1, 1]) {
-    const ex = cx + s * 8.2 * u;
-    for (let i = 0; i < 6 * u; i++) {
-      const wdt = Math.max(1, Math.round(5 * u - i * 0.8));
-      rect(Math.round(ex - wdt / 2), Math.round(cy - 10 * u + i), wdt, 1, '#e08a4a');
+  // The cat: the game's own sprite, ears to chin, standing on the horizon.
+  const head = charBuf('cat', 'ginger', '#5b8fd6', 'down', 0);
+  stamp(head, Math.round((GRID - head.w) / 2), HORIZON - HEAD_ROWS + 1, HEAD_ROWS);
+
+  // And a coffee, because it is a cafe. Drawn here rather than borrowed: the
+  // game's mug icon is sized to fill an item slot and at this scale it would
+  // sit in front of the cat like a wardrobe.
+  // No steam: at this size two white blocks above the rim read as a second
+  // pair of ears rather than as anything rising.
+  const CUP = [
+    'RRRRR.',
+    'CCCCCh',
+    'MMMMMh',
+    'DDDDD.',
+  ];
+  const CUP_COLS = {
+    R: '#fdf6e6', C: '#6b432a', M: '#f3e3c6', D: '#b9a888', h: '#f3e3c6',
+  };
+  CUP.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      const col = CUP_COLS[row[x]];
+      if (col) hexBlock(GRID - row.length - 1 + x, GRID - CUP.length - 1 + y, col);
     }
-    disc(ex, cy - 7.6 * u, 1.5 * u, 1.9 * u, '#e8a9a0');
-  }
-  // Head.
-  disc(cx, cy, 10 * u, 9.2 * u, '#e08a4a');
-  disc(cx - 2.4 * u, cy - 2.6 * u, 5.4 * u, 4.4 * u, '#efa063');
-  // Eyes.
-  for (const s of [-1, 1]) {
-    disc(cx + s * 4.2 * u, cy - 0.8 * u, 1.5 * u, 2.1 * u, '#2f2a3d');
-    disc(cx + s * 4.2 * u - 0.5 * u, cy - 1.6 * u, 0.6 * u, 0.7 * u, '#ffffff');
-  }
-  // Muzzle, nose, mouth.
-  disc(cx, cy + 4 * u, 5.4 * u, 3.4 * u, '#f7ecd8');
-  disc(cx, cy + 2.6 * u, 1.3 * u, 1 * u, '#d9737e');
-  rect(Math.round(cx - 0.5 * u), Math.round(cy + 3.2 * u), Math.max(1, Math.round(u)), Math.round(1.6 * u), '#b95c66');
-  // Whiskers.
-  for (const s of [-1, 1]) {
-    for (let k = 0; k < 2; k++) {
-      rect(Math.round(cx + s * 6 * u - (s < 0 ? 4 * u : 0)),
-        Math.round(cy + 3 * u + k * 2 * u), Math.round(4 * u), Math.max(1, Math.round(u * 0.6)), '#fdf6e6');
-    }
-  }
-  // A steaming cup at the bottom corner, because it is a cafe.
-  const bx = S * 0.72, by = S * 0.83;
-  rect(Math.round(bx - 4 * u), Math.round(by - 3 * u), Math.round(8 * u), Math.round(6 * u), '#fdf6e6');
-  rect(Math.round(bx - 3 * u), Math.round(by - 2 * u), Math.round(6 * u), Math.round(2 * u), '#6b432a');
-  rect(Math.round(bx + 4 * u), Math.round(by - 2 * u), Math.round(1.6 * u), Math.round(2.4 * u), '#fdf6e6');
+  });
+
   return px;
 }
 

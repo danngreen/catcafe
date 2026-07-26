@@ -259,14 +259,17 @@ export const ICONS = {
 
 const cache = new SpriteCache();
 
+/** Raw pixels rather than a baked canvas — see `charBuf` for why. */
+export function iconBuf(name) {
+  const buf = new PixBuf(16, 16);
+  const fn = ICONS[name] || ICONS.coin;
+  fn(buf);
+  outline(buf);
+  return buf;
+}
+
 export function iconSprite(name) {
-  return cache.get(`i|${name}`, () => {
-    const buf = new PixBuf(16, 16);
-    const fn = ICONS[name] || ICONS.coin;
-    fn(buf);
-    outline(buf);
-    return buf.toCanvas();
-  });
+  return cache.get(`i|${name}`, () => iconBuf(name).toCanvas());
 }
 
 export const ICON_NAMES = Object.keys(ICONS);

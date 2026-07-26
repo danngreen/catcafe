@@ -639,15 +639,22 @@ function paintCatEars(buf, cx, cy, rx, F, pink) {
 const cache = new SpriteCache();
 
 /** Villager sprite. dir: down|up|left|right. */
+/**
+ * The same art as `charSprite`, but left as raw pixels instead of baked onto a
+ * canvas. The home-screen icon is built from this: it runs in node, where there
+ * is no canvas, and drawing the cat twice would mean two cats to keep in step.
+ */
+export function charBuf(speciesKey, coatKey, clothHex, dir, frame) {
+  const c = makePalette(coatKey, clothHex);
+  const base = dir === 'right' || dir === 'left' ? 'side' : dir;
+  const buf = new PixBuf(CHAR_W, CHAR_H);
+  paintChar(buf, speciesKey, c, base, frame);
+  return dir === 'right' ? mirror(buf) : buf;
+}
+
 export function charSprite(speciesKey, coatKey, clothHex, dir, frame) {
   const key = `c|${speciesKey}|${coatKey}|${clothHex}|${dir}|${frame}`;
-  return cache.get(key, () => {
-    const c = makePalette(coatKey, clothHex);
-    const base = dir === 'right' ? 'side' : dir === 'left' ? 'side' : dir;
-    const buf = new PixBuf(CHAR_W, CHAR_H);
-    paintChar(buf, speciesKey, c, base, frame);
-    return (dir === 'right' ? mirror(buf) : buf).toCanvas();
-  });
+  return cache.get(key, () => charBuf(speciesKey, coatKey, clothHex, dir, frame).toCanvas());
 }
 
 /** Cat sprite. pose defaults to 'walk'. */
