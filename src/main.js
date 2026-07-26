@@ -1307,10 +1307,10 @@ class Game {
         speaker: def.name,
         onDone: () => {
           finish();
-          st.quests[q.id] = 'active';
-          st.questStep[q.id] = 0;
-          st.touch('quests');
-          st.touch('questStep');
+          // Somebody else may have taken this on in the time it took to read
+          // the offer. Accepting again would hand out a second parcel and put
+          // the step count back to the start for both of you.
+          if (!st.startQuest(q.id)) { this.refreshQuestMarks(); return; }
           // Deliver-type errands hand you the parcel there and then.
           const first = questSteps(q)[0].objective;
           if (first.type === 'deliver' && first.give !== false) st.give(first.item, 1);
@@ -1376,8 +1376,7 @@ class Game {
     const st = this.state;
     if (isLastStep(q, st)) { this.completeQuest(q, v, finish); return; }
 
-    st.questStep[q.id] = stepIndex(q, st) + 1;
-    st.touch('questStep');
+    st.setQuestStep(q.id, stepIndex(q, st) + 1);
     if (step.gives) for (const [id, n] of step.gives) st.give(id, n);
     if (step.flags) { for (const f of step.flags) st.flags[f] = true; st.touch('flags'); }
     const next = currentStep(q, st);
@@ -1397,7 +1396,7 @@ class Game {
 
   completeQuest(q, v, finish) {
     const st = this.state;
-    st.quests[q.id] = 'done';
+    st.finishQuest(q.id);
     const r = q.reward || {};
     if (r.money) st.earn(r.money);
     if (r.items) for (const [id, n] of r.items) st.give(id, n);
@@ -1405,7 +1404,7 @@ class Game {
     if (r.rep) st.reputation = clamp(st.reputation + r.rep, 0, 1);
     if (r.friendship) for (const f of r.friendship) st.friends[f] = clamp((st.friends[f] || 0) + 0.4, 0, 1);
     if (r.hint) st.flags[`hint_${r.hint}`] = true;
-    for (const k of ['quests', 'flags', 'reputation', 'friends']) st.touch(k);
+    for (const k of ['flags', 'reputation', 'friends']) st.touch(k);
     audio.sfx('fanfare', { gain: 0.7 });
     const rewardLine = r.money ? `\n\n(+${money(r.money)})` : '';
     this.dialogue.say(q.complete + rewardLine, {

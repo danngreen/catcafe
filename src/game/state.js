@@ -74,6 +74,31 @@ export class GameState {
   /** Re-publish a field we just edited in place (flags, quests, hours...). */
   touch(k) { this.pub({ op: 'set', k, v: this[k] }); }
 
+  /**
+   * Take a job on. Returns false if it was already taken — possibly by
+   * somebody else a second ago, in which case we must not hand out a second
+   * parcel or reset how far along everyone is.
+   */
+  startQuest(id) {
+    if (this.quests[id]) return false;
+    this.quests[id] = 'active';
+    this.questStep[id] = this.questStep[id] || 0;
+    this.pub({ op: 'quest', id, state: 'active' });
+    return true;
+  }
+
+  finishQuest(id) {
+    this.quests[id] = 'done';
+    this.pub({ op: 'quest', id, state: 'done' });
+  }
+
+  /** Move a job on. Never backwards, whoever asks. */
+  setQuestStep(id, n) {
+    if ((this.questStep[id] || 0) >= n) return;
+    this.questStep[id] = n;
+    this.pub({ op: 'step', id, n });
+  }
+
   touchCats() { this.pub({ op: 'set', k: 'cats', v: this.cats.map((c) => c.save()) }); }
 
   /** Take the server's value for one field without echoing it back. */

@@ -62,12 +62,18 @@ export const QUESTS = [
     id: 'clear_the_path',
     giver: 'gorse',
     title: 'The Fallen Chalk',
-    desc: 'A slab of chalk is blocking the eastern pass. Gorse says the right tool would shift it.',
+    desc: 'A slab of chalk is blocking the direct road south-east to Thistlewick. Gorse says the right tool would shift it.',
     objective: { type: 'flag', flag: 'barrier_eastpass' },
     reward: { money: 260, rep: 0.05 },
-    offer: "That path east has been shut since the storm. Great lump of chalk across it.\n\nGet a pick from the Chalk Pit Store and shift it. Everyone in this town will be quietly grateful and nobody will say so.",
-    progress: 'A chalk pick, from the Chalk Pit Store here in Hollowdown. Then the eastern pass.',
-    complete: "You shifted it? On your own?\n\nRight. That's the road to Thistlewick open again. Take this, and don't argue.",
+    offer: "The direct path south-east has been shut since the storm. Great lump of chalk across it.\n\n"
+      + "You can still get to Thistlewick the long way, round by Oakhollow, but it's an hour "
+      + "of walking nobody should have to do twice.\n\n"
+      + "Get a pick from the Chalk Pit Store and shift it. Everyone in this town will be quietly "
+      + "grateful and not one of them will say so.",
+    progress: 'A chalk pick, from the Chalk Pit Store here in Hollowdown. Then take the road '
+      + 'south-east out of town — you will not miss it, the path stops.',
+    complete: "You shifted it? On your own?\n\nRight. That's the short way to Thistlewick "
+      + "open again — no more trailing round by Oakhollow every time.\n\nTake this, and don't argue.",
   },
   {
     id: 'bramble_path',

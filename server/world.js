@@ -60,6 +60,27 @@ export function applyOp(world, op) {
       if (!world.stock[id].length) delete world.stock[id];
       return ['stock'];
     }
+    // Taking a job on, idempotently. Two people can be stood in front of the
+    // same villager reading the same offer; whoever finishes reading second
+    // must not start it again, because starting again hands out a second
+    // parcel and puts the step count back to the beginning.
+    case 'quest': {
+      const id = String(op.id || '');
+      if (!id || !op.state) return [];
+      if (op.state === 'active' && world.quests[id]) return [];
+      world.quests[id] = op.state;
+      return ['quests'];
+    }
+    // Steps only ever go forward. A client that is a moment behind must not be
+    // able to drag everybody back to where it thinks they are.
+    case 'step': {
+      const id = String(op.id || '');
+      const n = Math.round(Number(op.n));
+      if (!id || !Number.isFinite(n)) return [];
+      if ((world.questStep[id] || 0) >= n) return [];
+      world.questStep[id] = n;
+      return ['questStep'];
+    }
     case 'set': {
       const k = String(op.k || '');
       if (!FIELDS.has(k) || op.v === undefined) return [];

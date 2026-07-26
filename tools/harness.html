@@ -190,6 +190,95 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         window.__journal += ` lines=${wrapped.length} widest=${widest}px`;
         if (widest > 200) window.__errors.push('objective still runs off the panel: ' + window.__journal);
         await wait(600);
+      } else if (SCRIPT === 'netquesthost' || SCRIPT === 'netquestguest') {
+        // Two people in front of the same villager, both reading the same
+        // offer. Taking it on twice used to hand out a second parcel and put
+        // the step count back to zero for both of them.
+        const st = g.state;
+        const host = SCRIPT === 'netquesthost';
+        await wait(host ? 1500 : 5000);
+
+        // Whoever actually takes it on is the only one who gets the parcel.
+        const mine = st.startQuest('lost_bell');
+        if (mine) st.give('lost_bell', 1);
+        await wait(2500);
+
+        if (host) {
+          st.startQuest('lane_end_hedge');
+          st.setQuestStep('lane_end_hedge', 3);
+        }
+        await wait(3500);
+        if (!host) {
+          // A client a moment behind must not drag the job back to the start.
+          st.startQuest('lane_end_hedge');
+          st.setQuestStep('lane_end_hedge', 0);
+        }
+        await wait(3500);
+
+        window.__q = `tookIt=${mine} bell=${st.quests.lost_bell}`
+          + ` parcels=${st.inventory.lost_bell || 0}`
+          + ` hedge=${st.quests.lane_end_hedge}@${st.questStep.lane_end_hedge || 0}`;
+        if (st.quests.lost_bell !== 'active') window.__errors.push('nobody took the job: ' + window.__q);
+        if ((st.inventory.lost_bell || 0) !== 1) {
+          window.__errors.push('wrong number of parcels handed out: ' + window.__q);
+        }
+        if ((st.questStep.lane_end_hedge || 0) !== 3) {
+          window.__errors.push('the job went backwards: ' + window.__q);
+        }
+      } else if (SCRIPT === 'barriers') {
+        // Where the blocked shortcuts actually are, and what they actually
+        // block. A barrier that only shortens a trip is fine; a quest that
+        // claims it opened the only road is not.
+        const st = g.state;
+        const lines = [];
+        for (const [key, v] of g.overworld.interacts) {
+          if (v.kind !== 'barrier') continue;
+          const [bx, by] = key.split(',').map(Number);
+          const towns = Object.entries(g.towns)
+            .map(([id, t]) => [id, Math.round(Math.hypot(t.hub.x - bx, t.hub.y - by))])
+            .sort((a, b) => a[1] - b[1]).slice(0, 2);
+          lines.push(`${v.barrier}@${bx},${by} needs ${v.need}`
+            + ` (${towns.map(([id, d]) => id + ' ' + d).join(', ')})`);
+        }
+        window.__bar = lines.join(' | ');
+        if (!lines.length) window.__errors.push('no barriers in the world');
+      } else if (SCRIPT === 'deliverquest') {
+        // Take a parcel job, carry the parcel, hand it over. The parcel should
+        // not still be in the bag afterwards.
+        const st = g.state;
+        const clear = async () => {
+          for (let i = 0; i < 12 && g.dialogue.active; i++) {
+            key('Space', true); await wait(90); key('Space', false); await wait(160);
+          }
+        };
+        const talk = async (id) => {
+          const v = g.villagers.find((k) => k.def.id === id);
+          if (!v) { window.__errors.push('no such villager: ' + id); return; }
+          v.shift = 'here'; v.alpha = 1;
+          g.talkTo(v);
+          await wait(300); await clear(); await wait(300);
+        };
+        st.clock.t = 12 * (1200 / 24);
+        g.updateVillagerShift();
+        await wait(300);
+
+        // Marigold keeps a shop, so take the job the way accepting one does:
+        // the quest goes active and the parcel goes in the bag.
+        st.quests.lost_bell = 'active';
+        st.questStep.lost_bell = 0;
+        st.give('lost_bell', 1);
+        await wait(200);
+        const carrying = st.has('lost_bell');
+        const money0 = st.money;
+
+        await talk('shrimp');                       // hand it over
+        await wait(400);
+        window.__deliver = `taken=${st.quests.lost_bell} carried=${carrying}`
+          + ` afterwards=${st.has('lost_bell')} bag=${st.inventory.lost_bell || 0}`
+          + ` paid=${st.money - money0}`;
+        if (st.quests.lost_bell !== 'done') window.__errors.push('delivery never completed: ' + window.__deliver);
+        if (!carrying) window.__errors.push('never given the parcel: ' + window.__deliver);
+        if (st.has('lost_bell')) window.__errors.push('parcel still in the bag: ' + window.__deliver);
       } else if (SCRIPT === 'ghoststuck') {
         // Everybody who comes out at night has to actually finish coming out.
         // Somebody you can see but can't talk to is the worst kind of bug: it
@@ -1497,6 +1586,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__places ? ` ${window.__places}` : '')
         + (window.__stuck ? ` ${window.__stuck}` : '')
         + (window.__journal ? ` ${window.__journal}` : '')
+        + (window.__deliver ? ` ${window.__deliver}` : '')
+        + (window.__q ? ` ${window.__q}` : '')
+        + (window.__bar ? ` ${window.__bar}` : '')
         + (window.__ghost ? ` ${window.__ghost}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';
