@@ -320,8 +320,14 @@ class Game {
       // Some of the cast belong somewhere in particular — a ghost is only
       // interesting if it is haunting the hedge somebody complained about.
       if (def.spot) {
+        // Beside the thing, not on it. A hedge is solid, and standing somebody
+        // inside one leaves them unable to reach their own spot ever again.
         const l = this.landmarks.find((k) => k.id === def.spot);
-        if (l) { x = l.x; y = l.y - 1; }
+        if (l) {
+          for (const [ox, oy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [1, 1], [-1, 1], [2, 0], [-2, 0]]) {
+            if (!this.overworld.solid(l.x + ox, l.y + oy)) { x = l.x + ox; y = l.y + oy; break; }
+          }
+        }
       }
       if (x === undefined && def.town && this.towns[def.town]) {
         const tw = this.towns[def.town];

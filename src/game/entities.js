@@ -322,8 +322,27 @@ export class Villager extends Actor {
     const before = { x: this.x, y: this.y };
     moveActor(map, this, (dx / dist) * step, (dy / dist) * step);
     this.moving = Math.hypot(this.x - before.x, this.y - before.y) > 0.05;
-    // Walls happen. Rather than get stuck halfway, finish the trip out of sight.
-    if (!this.moving && !arriving) this.alpha = Math.max(0, this.alpha - dt * 1.4);
+
+    // Walls happen — this walk is a straight line, not a path. Rather than stand
+    // against a hedge forever, take what we've got: on the way out, finish
+    // fading where we are; on the way in, simply be here.
+    //
+    // The second half matters more than it looks. Somebody stuck mid-arrival is
+    // drawn but can't be talked to, which from the outside is indistinguishable
+    // from being stuck on the quest they're part of.
+    if (!this.moving) {
+      this.stuckT = (this.stuckT || 0) + dt;
+      if (arriving && this.stuckT > 1.2) {
+        this.shift = 'here';
+        this.alpha = 1;
+        this.target = null;
+        this.stuckT = 0;
+        return;
+      }
+      if (!arriving) this.alpha = Math.max(0, this.alpha - dt * 1.4);
+    } else {
+      this.stuckT = 0;
+    }
     if (Math.abs(dx) > Math.abs(dy)) this.dir = dx > 0 ? 'right' : 'left';
     else this.dir = dy > 0 ? 'down' : 'up';
     this.animate(dt);

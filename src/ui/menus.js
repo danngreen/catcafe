@@ -14,7 +14,7 @@ import { objSprite, VARIANT_SWATCHES, VARIANT_NAMES } from '../art/objects.js';
 import { catSprite, playerCatSprite } from '../art/chars.js';
 import { audio } from '../engine/audio.js';
 import { clamp, money, wrapText } from '../engine/util.js';
-import { QUESTS, objectiveText } from '../game/quests.js';
+import { QUESTS, objectiveText, progressText } from '../game/quests.js';
 import { HIRE_POOL } from '../game/cafe.js';
 
 export class Screen {
@@ -963,9 +963,16 @@ export class JournalScreen extends ListScreen {
       if (st.quests[q.id] === 'done') {
         drawText(ctx, 'Finished.', dx + 8, ly, { color: P.uiGreen, shadow: P.uiShadow });
       } else {
-        drawText(ctx, objectiveText(q, st), dx + 8, ly, { color: P.uiBlue, shadow: P.uiShadow });
-        ly += LINE_H + 4;
-        for (const line of wrapText(q.progress || '', Math.floor((dw - 16) / 6))) {
+        // Wrapped, not clipped: a step of a longer job says where to go and
+        // when, which is a sentence rather than "Clear the way".
+        const cols = Math.floor((dw - 16) / 6);
+        for (const line of wrapText(objectiveText(q, st), cols)) {
+          drawText(ctx, line, dx + 8, ly, { color: P.uiBlue, shadow: P.uiShadow });
+          ly += LINE_H;
+        }
+        ly += 4;
+        // The giver's own nudge for the step in play, not the whole job's.
+        for (const line of wrapText(progressText(q, st), cols)) {
           drawText(ctx, line, dx + 8, ly, { color: P.uiTextDim, shadow: P.uiShadow });
           ly += LINE_H;
         }

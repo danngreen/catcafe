@@ -156,6 +156,59 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const w = g.villagers.find((v) => v.def.id === 'woofers');
         w.shift = 'here'; w.alpha = 1;
         await wait(2500);
+      } else if (SCRIPT === 'journalstep') {
+        // The journal has to say what to do next, or a five-step job is a
+        // guessing game. Esc -> Journal, and read what it says.
+        const st = g.state;
+        const { QUEST_BY_ID, objectiveText } = await import('../src/game/quests.js');
+        st.quests.lane_end_hedge = 'active';
+        st.questStep.lane_end_hedge = 0;
+        key('Escape', true); await wait(140); key('Escape', false);
+        await wait(400);
+        // Arrow down to Journal and open it.
+        const pause = g.screens[g.screens.length - 1];
+        const idx = pause ? pause.items.indexOf('Journal') : -1;
+        for (let i = 0; i < idx; i++) { key('ArrowDown', true); await wait(110); key('ArrowDown', false); }
+        key('Space', true); await wait(160); key('Space', false);
+        await wait(500);
+        const scr = g.screens[g.screens.length - 1];
+        const text = objectiveText(QUEST_BY_ID.lane_end_hedge, st);
+        window.__journal = `screen=${scr && scr.constructor.name} says="${text}"`;
+        if (!scr || scr.constructor.name !== 'JournalScreen') {
+          window.__errors.push('could not open the journal: ' + window.__journal);
+        }
+        if (!/hedge/i.test(text) || !/dark/i.test(text)) {
+          window.__errors.push('journal does not say what to do: ' + window.__journal);
+        }
+        if (!/1\/5/.test(text)) window.__errors.push('journal does not show progress: ' + window.__journal);
+        // A step note is a sentence, so it has to wrap: the panel is about
+        // 210px wide inside its border and an unwrapped line gets clipped.
+        const { textWidth } = await import('../src/engine/font.js');
+        const { wrapText } = await import('../src/engine/util.js');
+        const wrapped = wrapText(text, 32);
+        const widest = Math.max(...wrapped.map((l) => textWidth(l)));
+        window.__journal += ` lines=${wrapped.length} widest=${widest}px`;
+        if (widest > 200) window.__errors.push('objective still runs off the panel: ' + window.__journal);
+        await wait(600);
+      } else if (SCRIPT === 'ghoststuck') {
+        // Everybody who comes out at night has to actually finish coming out.
+        // Somebody you can see but can't talk to is the worst kind of bug: it
+        // reads as "you must be doing the quest wrong".
+        const st = g.state;
+        st.clock.t = 21 * (1200 / 24);
+        g.updateVillagerShift();
+        await wait(14000);
+        const night = g.villagers.filter((v) => v.def.when === 'night');
+        const stuck = night.filter((v) => v.shift !== 'here');
+        const w = g.villagers.find((v) => v.def.id === 'woofers');
+        const b = g.landmarks.find((l) => l.id === 'bushes');
+        const dist = Math.round(Math.hypot(w.x - (b.x * 16 + 8), w.y - ((b.y + 1) * 16 - 2)) / 16);
+        window.__stuck = `night=${night.length} stuck=${stuck.length}`
+          + `[${stuck.map((v) => v.def.id + ':' + v.shift).join(',')}]`
+          + ` ghost=${w.shift} ${dist} tiles from the hedge`;
+        if (stuck.length) window.__errors.push('never finished arriving: ' + window.__stuck);
+        if (w.shift !== 'here') window.__errors.push('the ghost is not talkable: ' + window.__stuck);
+        if (dist > 6) window.__errors.push('the ghost is nowhere near the hedge: ' + window.__stuck);
       } else if (SCRIPT === 'nightplaces') {
         // The trail has to exist in the world, not just in the handlers: a
         // hedge you can reach, a library you can walk into with books on the
@@ -1442,6 +1495,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__sum ? ` ${window.__sum}` : '')
         + (window.__night ? ` ${window.__night}` : '')
         + (window.__places ? ` ${window.__places}` : '')
+        + (window.__stuck ? ` ${window.__stuck}` : '')
+        + (window.__journal ? ` ${window.__journal}` : '')
         + (window.__ghost ? ` ${window.__ghost}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';
