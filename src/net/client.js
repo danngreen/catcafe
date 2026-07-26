@@ -294,6 +294,11 @@ export class NetClient {
         this.playing = msg.playing || 0;
         this.emit('presence', msg);
         break;
+      // The server may have renamed us to keep everyone distinct.
+      case 'youare':
+        this.name = msg.name;
+        this.emit('youare', msg.name);
+        break;
       case 'roster':
         this.remotes.clear();
         for (const p of msg.players || []) this.remotes.set(p.id, { ...p });

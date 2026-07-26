@@ -615,6 +615,60 @@ export class Customer extends Actor {
 }
 
 // ---------------------------------------------------------------------------
+// Your employee
+// ---------------------------------------------------------------------------
+
+/**
+ * The person you pay, standing behind your counter. They don't walk anywhere —
+ * they turn to face whoever they are serving and hand things over — but seeing
+ * them there is most of what you are buying: without it, an employee is a line
+ * item on the morning card and a number in a menu.
+ */
+export class Employee extends Actor {
+  constructor(def, x, y) {
+    super(x, y);
+    this.def = def;
+    this.look = def.look || { species: 'cat', coat: 'cream', cloth: '#5b8fd6' };
+    this.name = def.name;
+    this.home = { x, y };
+    this.busyT = 0;
+  }
+
+  /** `serving` is whoever is at the counter, or null. */
+  update(dt, serving) {
+    this.moving = false;
+    if (serving) {
+      this.faceTowards(serving.x, serving.y);
+      this.busyT = Math.max(this.busyT, 0.6);
+    } else {
+      this.dir = 'down';
+    }
+    // A small shuffle on the spot while there is somebody to deal with, so the
+    // counter doesn't look like a waxwork during a rush.
+    if (this.busyT > 0) {
+      this.busyT -= dt;
+      this.moving = Math.sin(this.bobT * 9) > 0.4;
+    }
+    this.animate(dt);
+  }
+
+  draw(ctx, ox, oy) {
+    const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, this.dir, this.frame);
+    ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - CHAR_H - oy));
+  }
+
+  drawEmote(ctx, ox, oy, topY) {
+    const x = Math.round(this.x - ox);
+    const y = Math.round(topY - 11 - oy);
+    const w = this.name.length * 6 + 6;
+    ctx.fillStyle = 'rgba(20,17,32,0.66)';
+    ctx.fillRect(x - w / 2, y - 1, w, 10);
+    drawTextCentered(ctx, this.name, x, y, { color: '#ffe0a8', shadow: '#000000' });
+    super.drawEmote(ctx, ox, oy, topY - 12);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Other players
 // ---------------------------------------------------------------------------
 

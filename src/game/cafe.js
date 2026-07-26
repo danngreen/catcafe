@@ -777,7 +777,7 @@ export class Cafe {
     // --- spoilage ---
     const lost = this.spoilCheck(st.clock.day);
     for (const l of lost) {
-      summary.lines.push({ text: `${l.qty} x ${ITEMS[l.id]?.name || l.id} went off.`, tone: 'warn' });
+      summary.lines.push({ text: `${l.qty} x ${ITEMS[l.id]?.name || l.id} went bad.`, tone: 'warn' });
     }
 
     st.spend(summary.costs);
@@ -889,8 +889,14 @@ export function fmtHour(h) {
 
 /** Candidates you can hire, once you can afford to. */
 export const HIRE_POOL = [
-  { id: 'saffron', name: 'Saffron', fairWage: 90, blurb: 'Quick, chatty, remembers everyone\'s order.' },
-  { id: 'moss', name: 'Moss', fairWage: 70, blurb: 'Slow but unfailingly kind. Customers relax around him.' },
-  { id: 'thimble', name: 'Thimble', fairWage: 60, blurb: 'Small, tireless, slightly frightened of the espresso machine.' },
-  { id: 'copper', name: 'Copper', fairWage: 120, blurb: 'Worked market stalls for years. Sells like breathing.' },
+  { id: 'saffron', name: 'Saffron', fairWage: 90, blurb: 'Quick, chatty, remembers everyone\'s order.',
+    look: { species: 'fox', coat: 'fox', cloth: '#e08b3f' } },
+  { id: 'moss', name: 'Moss', fairWage: 70, blurb: 'Slow but unfailingly kind. Customers relax around him.',
+    look: { species: 'bear', coat: 'bear', cloth: '#6b9e8f' } },
+  { id: 'thimble', name: 'Thimble', fairWage: 60, blurb: 'Small, tireless, slightly frightened of the espresso machine.',
+    look: { species: 'mouse', coat: 'grey', cloth: '#8fa8c9' } },
+  { id: 'copper', name: 'Copper', fairWage: 120, blurb: 'Worked market stalls for years. Sells like breathing.',
+    look: { species: 'squirrel', coat: 'ginger', cloth: '#c05a7a' } },
 ];
+
+export const HIRE_BY_ID = Object.fromEntries(HIRE_POOL.map((h) => [h.id, h]));

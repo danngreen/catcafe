@@ -1160,14 +1160,56 @@ export class MapScreen extends Screen {
         drawText(ctx, place.name, spot.x, spot.y, { color: P.uiGold, shadow: '#000000' });
       }
 
-      // Where you are now.
+      // Everyone else in the valley, then you on top. Drawn from the roster
+      // rather than from the drawn actors, so somebody on the far side of the
+      // world still shows up — which is the whole point of looking.
+      const spot = (wx, wy) => ({
+        x: mx + Math.round((wx / 16) * scale * (mw / st.worldW)),
+        y: my + Math.round((wy / 16) * scale * (mh / st.worldH)),
+      });
+      // Kept so a test can ask where a given world position ended up on
+      // screen; there is no other way to check a marker was actually drawn
+      // somewhere in particular rather than merely drawn.
+      this.project = spot;
+      const net = this.game.net;
+      const others = [];
+      if (net && net.shared) {
+        for (const r of net.remotes.values()) {
+          const q = spot(r.x, r.y);
+          others.push({ ...q, name: r.n || 'Someone', inside: r.map !== 'overworld' });
+        }
+      }
+
+      // A marker has to read against whatever it lands on, and this map is
+      // mostly green — so a light pip inside a dark ring rather than a colour,
+      // and everybody is named. There are eight players at most.
+      const pin = (p, fill, label, labelCol) => {
+        ctx.fillStyle = '#101018';
+        ctx.fillRect(p.x - 4, p.y - 4, 9, 9);
+        ctx.fillStyle = fill;
+        ctx.fillRect(p.x - 2, p.y - 2, 5, 5);
+        if (!label) return;
+        const lw2 = textWidth(label);
+        // Keep it on the map, flipping to the other side near the edge.
+        const right = mx + mw * scale;
+        let lx2 = p.x + 7;
+        if (lx2 + lw2 + 3 > right) lx2 = p.x - 7 - lw2;
+        const ly2 = Math.max(my + 1, Math.min(p.y - 4, my + mh * scale - 11));
+        ctx.fillStyle = 'rgba(12,10,20,0.85)';
+        ctx.fillRect(lx2 - 2, ly2 - 1, lw2 + 4, 10);
+        drawText(ctx, label, lx2, ly2, { color: labelCol, shadow: '#000000' });
+      };
+
+      for (const o of others.slice(0, 8)) {
+        pin(o, o.inside ? '#c8c2b4' : '#8fe0ff', o.name, o.inside ? P.uiTextDim : '#8fe0ff');
+      }
+
+      // Where you are now, on top of everyone.
       if (this.game.state.mapId === 'overworld') {
         const pl = this.game.player;
-        const px = mx + Math.round((pl.x / 16) * scale * (mw / st.worldW));
-        const py = my + Math.round((pl.y / 16) * scale * (mh / st.worldH));
+        const p = spot(pl.x, pl.y);
         const blink = Math.sin(this.t * 8) > 0;
-        ctx.fillStyle = blink ? '#ffffff' : P.uiBlue;
-        ctx.fillRect(px - 2, py - 2, 4, 4);
+        pin(p, blink ? '#ffffff' : P.uiGold, null);
       }
     }
 

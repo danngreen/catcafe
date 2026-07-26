@@ -303,9 +303,21 @@ export function buildCafeMap(cafe) {
   }
 
   map.indexObjects();
+  // Where an employee stands: behind the counter, on the wall side of it, so
+  // the customer queue forms on the other face as it always did.
+  let staffSpot = null;
+  for (const o of map.objects) {
+    if (o.type !== 'counter' && o.type !== 'register') continue;
+    for (const [dx, dy] of [[0, -1], [1, -1], [-1, -1], [0, -2]]) {
+      const sx = o.tx + dx, sy = o.ty + dy;
+      if (map.inBounds(sx, sy) && !map.solid(sx, sy)) { staffSpot = { x: sx, y: sy }; break; }
+    }
+    if (staffSpot) break;
+  }
   map.meta = {
     cafe: true, seats, tables, rooms, offX, offY,
     door: { x: doorX, y: doorY },
+    staffSpot,
   };
   return map;
 }

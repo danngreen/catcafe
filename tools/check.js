@@ -48,6 +48,7 @@ const BUDGET = {
   deliverquest: 26000,
   wishlist: 30000,
   furncustomers: 24000,
+  employee: 26000,
   furnkeys: 14000,
   nightfolk: 18000,
   ghoststuck: 22000,
@@ -63,6 +64,9 @@ const BUDGET = {
   netpollbooks: 24000,
   netbooks: 20000,
   netclock: 16000,
+  netmapplayers: 20000,
+  nettitleme: 18000,
+  titleme: 20000,
   netlivesave: 22000,
   // Halves of a pair: they wait for the other browser to turn up.
   netwalkhost: 62000,
@@ -83,17 +87,17 @@ const BUDGET = {
 const GROUPS = {
   quests: ['ghostquest', 'deliverquest', 'journalstep', 'questrepair', 'ghoststuck',
     'barriers', 'nightfolk', 'nightplaces'],
-  cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers'],
+  cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers', 'employee'],
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',
     'barriers', 'eastpass', 'passcleared', 'debugpos'],
   ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'exterior',
-    'summarylines', 'journalstep'],
+    'summarylines', 'journalstep', 'titleme'],
   cutscene: ['taxi', 'sleep', 'door'],
   mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile'],
   // Single-process networked runs. The paired ones need two browsers at once
   // and are listed in the README rather than here.
   net: ['net', 'netmobile', 'netbooks', 'netclock', 'netdrop', 'netforget',
-    'netpollbooks', 'netfallback', 'solo'],
+    'netpollbooks', 'netfallback', 'netmapplayers', 'solo'],
   slow: ['netidle', 'netping', 'netmute', 'netpollquiet', 'netidletitle'],
 };
 GROUPS.all = [...new Set([

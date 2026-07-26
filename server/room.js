@@ -102,13 +102,15 @@ export class Room {
   handle(player, msg) {
     switch (msg.t) {
       case 'join': {
-        player.name = String(msg.name || `Player ${player.number}`).slice(0, 16);
+        player.name = this.uniqueName(String(msg.name || `Player ${player.number}`).slice(0, 16));
         player.look = msg.look || null;
         player.x = Number(msg.x) || 0;
         player.y = Number(msg.y) || 0;
         player.map = String(msg.map || 'overworld');
         player.joined = true;
         this.broadcast({ t: 'joined', p: Room.describe(player) }, player.id);
+        // They may not have got the name they asked for.
+        player.ws.sendJSON({ t: 'youare', name: player.name });
         // Late joiners need the roster and the books as they stand *now*, not as
         // they were at connect: somebody who left the title screen open while
         // the rest of you played a morning would otherwise undo it.
@@ -182,6 +184,22 @@ export class Room {
       default:
         break;
     }
+  }
+
+  /**
+   * Nobody gets a name somebody else in the valley is already using. Only the
+   * server can decide this — a client picking from the list has no idea who
+   * else is here, and two Wrens are indistinguishable in every message we send,
+   * which are keyed by socket id but read by name.
+   */
+  uniqueName(wanted) {
+    const taken = new Set([...this.players.values()].filter((p) => p.joined).map((p) => p.name));
+    if (!taken.has(wanted)) return wanted;
+    for (let n = 2; n < 40; n++) {
+      const tryName = `${wanted} ${n}`.slice(0, 16);
+      if (!taken.has(tryName)) return tryName;
+    }
+    return `${wanted}${Math.floor(Math.random() * 900 + 100)}`.slice(0, 16);
   }
 
   get count() { return [...this.players.values()].filter((p) => p.joined).length; }

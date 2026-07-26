@@ -53,6 +53,16 @@ everyone has something plain they'll settle for, so some walk out no matter what
 The morning card tells you what was asked for that you hadn't got, which is
 tomorrow's shopping list.
 
+**Your employee** stands behind the counter while they're on duty, and works
+the queue whether or not you're in the room — customers ask for their list and
+your employee answers it, the same cycle you'd press Space for. Off duty they
+go home. Seeing them there is most of what you're paying for.
+
+Open the map in a shared valley and everyone else is on it, named, with anyone
+indoors greyed out. The browser remembers the name and colours you last played
+as and offers them back on the join screen. Two people can't be the same
+person: the server hands out a distinct name and tells you if it changed yours.
+
 The customer simulation runs on exactly one client (the longest-standing player),
 which publishes where its customers are standing so the rest can draw them. That
 matters: if every client simulated the room, the same cup of coffee would be sold

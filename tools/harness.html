@@ -419,6 +419,203 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           + `barrier tiles ${marks.slice(0, 12).join(' ')}\n` + rows.join('\n')
           + '\nkey: ~ water  = bridge/deck  + road  , grass  f forest  c chalk'
           + '  C cliff  s stone  O blocked  X barrier';
+      } else if (SCRIPT === 'titleme') {
+        // What this browser played as last time should be waiting on the join
+        // screen. Done across a real reload, because that is the only thing
+        // that proves it was read back rather than still sitting in memory.
+        const PHASE = 'catcafe.test.phase';
+        let phase = null;
+        try { phase = localStorage.getItem(PHASE); } catch (e) {}
+        if (!phase) {
+          try {
+            localStorage.setItem('catcafe.me',
+              JSON.stringify({ name: 'Tobias', coat: 'grey', cloth: '#7fbe57' }));
+            localStorage.setItem(PHASE, 'two');
+          } catch (e) {}
+          location.reload();
+          await wait(20000);            // the reload takes it from here
+        } else {
+          try { localStorage.removeItem(PHASE); } catch (e) {}
+          const scr = g.screens[0];
+          window.__me = `name=${scr && scr.name} coat=${scr && scr.look.coat}`
+            + ` cloth=${scr && scr.look.cloth} remembered=${scr && scr.remembered}`;
+          if (!scr) window.__errors.push('no title screen: ' + window.__me);
+          else {
+            if (scr.name !== 'Tobias') window.__errors.push('forgot the name: ' + window.__me);
+            if (scr.look.coat !== 'grey') window.__errors.push('forgot the coat: ' + window.__me);
+            if (scr.look.cloth !== '#7fbe57') window.__errors.push('forgot the clothes: ' + window.__me);
+          }
+          try { localStorage.removeItem('catcafe.me'); } catch (e) {}
+        }
+      } else if (SCRIPT === 'nettitleme') {
+        // Two people cannot be the same person. Only the server can enforce
+        // this: a client choosing from the list has no idea who else is here.
+        const st = g.state;
+        // A second socket joins as Pippin first, so our own join has to be
+        // given something else.
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const bot = new WebSocket(`${proto}//${location.host}/ws`);
+        let ready = false;
+        bot.onmessage = (ev) => {
+          const m = JSON.parse(ev.data);
+          if (m.t === 'welcome' && !ready) {
+            ready = true;
+            bot.send(JSON.stringify({ t: 'join', name: 'Pippin', look: st.playerLook,
+              x: 100 * 16, y: 100 * 16, map: 'overworld' }));
+          }
+        };
+        await wait(1200);
+        // Now ask for the same name over our own connection.
+        g.net.joined = false;
+        g.net.join('Pippin', st.playerLook, g.player.x, g.player.y, st.mapId);
+        let w = 0;
+        while (g.net.name === undefined && w < 6000) { await wait(200); w += 200; }
+        await wait(900);
+        const names = [...g.net.remotes.values()].map((r) => r.n);
+        window.__me = `mine=${g.net.name} others=[${names.join('|')}]`;
+        if (g.net.name === 'Pippin') {
+          window.__errors.push('two players got the same name: ' + window.__me);
+        }
+        if (!/^Pippin/.test(g.net.name || '')) {
+          window.__errors.push('the name it gave back is unrecognisable: ' + window.__me);
+        }
+      } else if (SCRIPT === 'netmapplayers') {
+        // Other players should show on the map — that is the point of opening
+        // it in a shared valley. Uses the roster, so somebody on the far side
+        // of the world still appears.
+        const st = g.state;
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const bot = new WebSocket(`${proto}//${location.host}/ws`);
+        let ready = false;
+        bot.onmessage = (ev) => {
+          const m = JSON.parse(ev.data);
+          if (m.t === 'welcome' && !ready) {
+            ready = true;
+            bot.send(JSON.stringify({ t: 'join', name: 'Faraway', look: st.playerLook,
+              x: 200 * 16, y: 60 * 16, map: 'overworld' }));
+          }
+        };
+        let w = 0;
+        while (!g.net.remotes.size && w < 9000) { await wait(250); w += 250; }
+        st.visit('brambleford', 'Brambleford', 96, 168);
+        key('KeyM', true); await wait(150); key('KeyM', false);
+        await wait(700);
+        const scr = g.screens[g.screens.length - 1];
+        // Look at the pixels: a pip for the other player has to be drawn.
+        const c = document.getElementById('screen');
+        const gg = c.getContext('2d');
+        // Look only where the other player should be. The whole canvas also
+        // contains your own marker, which blinks — so a full-frame diff passes
+        // whether or not anybody else was ever drawn.
+        const r = [...g.net.remotes.values()][0];
+        const p0 = scr.project ? scr.project(r.x, r.y) : { x: 0, y: 0 };
+        const shot = () => gg.getImageData(
+          Math.max(0, p0.x - 6), Math.max(0, p0.y - 8), 60, 18).data;
+        const withThem = shot();
+        // Turn the roster off at the source rather than emptying it: the server
+        // restates who is here every few seconds, so a cleared list refills
+        // itself mid-measurement and the comparison silently becomes nothing
+        // against nothing.
+        g.net.joined = false;
+        await wait(500);
+        const without = shot();
+        g.net.joined = true;
+        await wait(500);
+        let diff = 0;
+        for (let i = 0; i < withThem.length; i += 4) {
+          if (Math.abs(withThem[i] - without[i]) > 16) diff++;
+        }
+        const r0 = [...g.net.remotes.values()][0];
+        window.__mapp = `screen=${scr && scr.constructor.name} saw=${w}ms pixels=${diff}`
+          + ` shared=${g.net.shared} remotes=${g.net.remotes.size}`
+          + ` at=${r0 ? Math.round(r0.x / 16) + ',' + Math.round(r0.y / 16) : '-'}`
+          + ` map=${r0 ? r0.map : '-'}`;
+        if (!scr || scr.constructor.name !== 'MapScreen') {
+          window.__errors.push('map did not open: ' + window.__mapp);
+        }
+        if (diff < 6) window.__errors.push('other players are not on the map: ' + window.__mapp);
+        // Leave the bot connected: the browser closing takes it with us, and a
+        // screenshot taken after it left would show a map with nobody on it.
+      } else if (SCRIPT === 'emplook') {
+        const st = g.state;
+        st.money = 5000;
+        st.employee = { id: 'saffron', name: 'Saffron', wage: 90, fairWage: 90, quality: 0.8, onDuty: true };
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        st.shopOpen = true;
+        st.clock.t = 12 * (1200 / 24);
+        st.stock = {};
+        st.cafeSim.addStock('black_tea', 40, st.clock.day);
+        await wait(900);
+        await wait(600);
+        const spot = st.cafeMap.meta.staffSpot;
+        const counters = st.cafeMap.objects
+          .filter((o) => o.type === 'counter' || o.type === 'register')
+          .map((o) => `${o.type}@${o.tx},${o.ty}`);
+        const e = g.employeeActor;
+        window.__emp = `staffSpot=${spot.x},${spot.y} counters=[${counters.join(' ')}]`
+          + ` emp=${e ? Math.floor(e.x / 16) + ',' + Math.floor(e.y / 16) : 'none'}`
+          + ` empLook=${e ? e.look.species + '/' + e.look.coat : '-'}`
+          + ` empName=${e ? e.name : '-'}`;
+        g.player.x = (spot.x + 2) * 16 + 8; g.player.y = (spot.y + 2) * 16;
+        g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
+        await wait(4000);           // let the location banner fade
+        window.__emp += ` player=${g.player.tx},${g.player.ty}`
+          + ` drawn=${!!(g.employeeActor && g.state.inCafe)}`;
+      } else if (SCRIPT === 'employee') {
+        // The person you pay should be visible behind your counter, and should
+        // work the queue while you stand there watching.
+        const st = g.state;
+        st.money = 5000;
+        st.employee = { id: 'saffron', name: 'Saffron', wage: 90, fairWage: 90, quality: 0.8, onDuty: true };
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        st.shopOpen = true;
+        st.clock.t = 12 * (1200 / 24);
+        st.stock = {};
+        st.cafeSim.addStock('black_tea', 40, st.clock.day);
+        await wait(1000);
+        const spot = st.cafeMap.meta.staffSpot;
+        const emp = g.employeeActor;
+        window.__emp = `spot=${spot ? spot.x + ',' + spot.y : 'none'} actor=${!!emp}`;
+        if (!spot) window.__errors.push('nowhere behind the counter to stand: ' + window.__emp);
+        if (!emp) window.__errors.push('no employee actor: ' + window.__emp);
+
+        // They serve without the player pressing anything.
+        const money0 = st.money;
+        for (let i = 0; i < 4; i++) { st.cafeSim.trySpawn(st.cafeMap); await wait(300); }
+        let w = 0;
+        while (st.money === money0 && w < 16000) { await wait(250); w += 250; }
+        window.__emp += ` served=${st.money > money0} in=${w}ms`;
+        if (st.money <= money0) window.__errors.push('the employee served nobody: ' + window.__emp);
+
+        // Actually visible, not merely in the actor list. Compare the pixels
+        // around the counter on duty and off: a figure standing there has to
+        // change them. Being behind the counter, only their head and shoulders
+        // show, which is exactly what standing behind a counter looks like.
+        const spot2 = st.cafeMap.meta.staffSpot;
+        g.player.x = (spot2.x + 2) * 16 + 8;
+        g.player.y = (spot2.y + 3) * 16;
+        g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
+        await wait(500);
+        const shot = () => {
+          const c = document.getElementById('screen');
+          const gg = c.getContext('2d');
+          // The tile the employee stands on, in screen space.
+          const sx = Math.round((spot2.x * 16) - g.cam.ox);
+          const sy = Math.round((spot2.y * 16) - g.cam.oy) - 10;
+          return gg.getImageData(Math.max(0, sx), Math.max(0, sy), 16, 22).data;
+        };
+        const withEmp = shot();
+        st.employee.onDuty = false;
+        await wait(700);
+        const withoutEmp = shot();
+        let diff = 0;
+        for (let i = 0; i < withEmp.length; i += 4) {
+          if (Math.abs(withEmp[i] - withoutEmp[i]) > 12
+            || Math.abs(withEmp[i + 1] - withoutEmp[i + 1]) > 12) diff++;
+        }
+        window.__emp += ` offDuty=${!g.employeeActor} pixelsChanged=${diff}`;
+        if (g.employeeActor) window.__errors.push('still behind the counter off duty: ' + window.__emp);
+        if (diff < 20) window.__errors.push('nothing was drawn there: ' + window.__emp);
       } else if (SCRIPT === 'furnkeys') {
         // Build mode's keys. X picks up whatever is under the cursor from any
         // of its tiles, and never drops you out of the screen.
@@ -1954,6 +2151,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__furn ? ` ${window.__furn}` : '')
         + (window.__pass ? ` ${window.__pass}` : '')
         + (window.__cleared ? ` ${window.__cleared}` : '')
+        + (window.__emp ? ` ${window.__emp}` : '')
+        + (window.__mapp ? ` ${window.__mapp}` : '')
+        + (window.__me ? ` ${window.__me}` : '')
         + (window.__live ? ` ${window.__live}` : '')
         + (window.__ghost ? ` ${window.__ghost}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');

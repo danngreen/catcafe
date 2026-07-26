@@ -21,7 +21,8 @@ import { buildShopInterior, buildSpecialInterior } from './world/interiors.js';
 import { SHOPS, VILLAGERS, TOWNS, GOSSIP, PLAYER_NAMES } from './world/places.js';
 
 import { GameState, seedStartingInventory } from './game/state.js';
-import { Player, Villager, RemotePlayer, canStand } from './game/entities.js';
+import { Player, Villager, RemotePlayer, Employee, canStand } from './game/entities.js';
+import { HIRE_BY_ID } from './game/cafe.js';
 import { ITEMS, STOCK, FLEA_POOL, baseId } from './game/items.js';
 import { shopOpen, hoursText } from './game/time.js';
 import { BOOK_BY_ID } from './world/places.js';
@@ -181,6 +182,12 @@ class Game {
     const st = this.state;
     st.net = net;
     net.on('joined', (p) => this.hud.toast(`${p.n} joined the valley.`, 'good'));
+    // The server renames you if the name you picked is already in the valley.
+    net.on('youare', (name) => {
+      if (name === st.playerName) return;
+      this.hud.toast(`${st.playerName} was taken — you're ${name}.`, 'info', 6);
+      st.playerName = name;
+    });
     net.on('left', (p) => this.hud.toast(`${p.n} left.`, 'info'));
     net.on('disconnected', () => this.hud.toast('Lost the cafe — trying to get back...', 'bad'));
     net.on('reconnected', () => {
@@ -628,6 +635,7 @@ class Game {
     this.syncRemotes(dt);
     net.update(dt, this.player, st.mapId);
     this.updateCafeSim(dt);
+    this.updateEmployee(dt);
     this.updateAudio(dt);
     this.hud.update(dt, st);
     this.cam.follow(map, this.player.x, this.player.y - 6);
@@ -657,6 +665,26 @@ class Game {
    * Exactly one client simulates the cafe, or the same cup of coffee would be
    * sold once per player. The rest draw copies of its customers.
    */
+  /**
+   * Keep the person you pay standing where you can see them. Built lazily and
+   * dropped when they go off duty or leave, so nothing has to remember to tidy
+   * up after a resignation.
+   */
+  updateEmployee(dt) {
+    const st = this.state;
+    const emp = st.employee;
+    const spot = st.cafeMap && st.cafeMap.meta && st.cafeMap.meta.staffSpot;
+    if (!emp || !emp.onDuty || !spot) { this.employeeActor = null; return; }
+    if (!this.employeeActor || this.employeeActor.def.id !== emp.id) {
+      const def = HIRE_BY_ID[emp.id] || { id: emp.id, name: emp.name };
+      this.employeeActor = new Employee({ ...def, name: emp.name },
+        spot.x * TILE + TILE / 2, (spot.y + 1) * TILE - 2);
+    }
+    // Whoever is at the counter waiting to be dealt with.
+    const waiting = st.cafeSim.customers.find((c) => c.state === 'waiting') || null;
+    this.employeeActor.update(dt, waiting);
+  }
+
   updateCafeSim(dt) {
     const st = this.state;
     // "Is anyone minding the shop" is a question about everybody, not just us.
@@ -1525,6 +1553,7 @@ class Game {
       for (const v of map.villagers) actors.push(v);
     }
     if (st.inCafe) {
+      if (this.employeeActor) actors.push(this.employeeActor);
       for (const c of st.catActors) actors.push(c);
       for (const c of st.cafeSim.customers) actors.push(c);
     }
@@ -1655,6 +1684,32 @@ const WALL_CHOICES = ['#efe2c8', '#e6dcc2', '#dfe6e8', '#f0e4cc', '#f2e0e0'];
 const AWNING_CHOICES = ['#c05a7a', '#5b8fd6', '#7fbe57', '#eec453', '#8a72d6', '#e0894a', '#6b9e8f', '#d95f5f'];
 const CAFE_NAMES = ['The Contented Cat', 'Paws & Provisions', 'The Warm Windowsill', 'Bramble & Whisker', 'The Sleepy Saucer'];
 
+// What this browser last played as. Kept out of the save file on purpose: it
+// belongs to the machine rather than to the valley, so it is still there for a
+// brand new game, and on a shared laptop each browser profile keeps its own.
+const ME_KEY = 'catcafe.me';
+
+function loadMe() {
+  try {
+    const raw = localStorage.getItem(ME_KEY);
+    if (!raw) return null;
+    const me = JSON.parse(raw);
+    // Anything saved by an older version, or hand-edited, has to be checked
+    // before it is trusted — an unknown coat would paint nothing at all.
+    const coat = COAT_LIST.includes(me.coat) ? me.coat : null;
+    const cloth = CLOTHES.includes(me.cloth) ? me.cloth : null;
+    const name = typeof me.name === 'string' && me.name.trim() ? me.name.slice(0, 16) : null;
+    if (!coat && !cloth && !name) return null;
+    return { name, coat, cloth };
+  } catch { return null; }
+}
+
+function saveMe(name, look) {
+  try {
+    localStorage.setItem(ME_KEY, JSON.stringify({ name, coat: look.coat, cloth: look.cloth }));
+  } catch { /* private browsing; not worth mentioning */ }
+}
+
 class TitleScreen extends Screen {
   constructor(game) {
     super();
@@ -1662,14 +1717,22 @@ class TitleScreen extends Screen {
     this.stage = 'title';
     this.index = 0;
     this.options = GameState.hasSave() ? ['Continue', 'New game'] : ['New game'];
-    this.look = { species: 'cat', coat: 'ginger', cloth: CLOTHES[5] };
+    // Whatever this browser played as last time, so the usual answer is just
+    // to press Space.
+    const me = loadMe();
+    this.look = {
+      species: 'cat',
+      coat: (me && me.coat) || 'ginger',
+      cloth: (me && me.cloth) || CLOTHES[5],
+    };
     // Only shown when there's a session: solo play needs no name.
     this.multiplayer = !!game.net.connected;
     // Somebody has already opened the cafe, so its paint isn't ours to pick.
     this.joining = false;
     if (game.net.world) this.adoptOpenCafe();
-    this.name = game.state.playerName
+    this.name = game.state.playerName || (me && me.name)
       || PLAYER_NAMES[Math.floor(Math.random() * PLAYER_NAMES.length)];
+    this.remembered = !!me;
     this.style = {
       wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], awning: AWNING_CHOICES[0],
       floor: T.FLOOR_WOOD, name: CAFE_NAMES[0],
@@ -1724,6 +1787,7 @@ class TitleScreen extends Screen {
       audio.sfx('levelup', { gain: 0.6 });
       this.done = true;
       this.game.state.playerName = this.name;
+      saveMe(this.name, this.look);
       this.game.startNewGame({ ...this.look }, { ...this.style });
     }
     if (input.hit('cancel')) { this.stage = 'title'; audio.sfx('ui_back'); }
