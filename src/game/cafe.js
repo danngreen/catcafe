@@ -22,6 +22,20 @@ const STAPLE_IDS = MENU_IDS.filter((id) => ITEMS[id].appeal <= 1.05);
 // thing they asked for, before giving up on you.
 const ASK_PATIENCE = 16;
 
+/** The nearest tile you could stand on, spiralling out. Null if boxed in. */
+function nearestFree(map, tx, ty) {
+  for (let r = 1; r <= 6; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;   // ring only
+        const x = tx + dx, y = ty + dy;
+        if (map.inBounds(x, y) && !map.solid(x, y)) return { x, y };
+      }
+    }
+  }
+  return null;
+}
+
 /** How busy the valley is at a given hour — two humps, lunch and early evening. */
 function hourDemand(h) {
   if (h < 7 || h >= 21) return 0.05;
@@ -809,6 +823,61 @@ export class Cafe {
   clearCustomers() {
     for (const c of this.customers) if (c.seat) c.seat.taken = null;
     this.customers.length = 0;
+  }
+
+  /**
+   * Put the customers back after the room has been rebuilt, rather than
+   * sweeping them all out — which is what putting down a single plant pot used
+   * to do, and it emptied the cafe for the rest of the afternoon.
+   *
+   * The map is a new object, so every seat reference and every path is stale
+   * even where nothing about that corner of the room actually changed.
+   */
+  reseatCustomers(map) {
+    const seats = (map.meta && map.meta.seats) || [];
+    for (const s of seats) s.taken = null;
+    const seatAt = (x, y) => seats.find((s) => s.x === x && s.y === y);
+
+    const keep = [];
+    for (const c of this.customers) {
+      // Tiles may have moved under them; any route they were following is void.
+      c.path = null;
+      c.pathIndex = 0;
+
+      if (map.solid(c.tx, c.ty)) {
+        // Something was built on top of them. Step them aside if there's room.
+        const spot = nearestFree(map, c.tx, c.ty);
+        if (!spot) continue;                    // nowhere to go: they slip out
+        c.x = spot.x * TILE + TILE / 2;
+        c.y = spot.y * TILE + TILE - 2;
+      }
+
+      if (c.seat) {
+        const same = seatAt(c.seat.x, c.seat.y);
+        if (same && !same.taken) {
+          same.taken = c;
+          c.seat = same;
+        } else {
+          // Their chair has gone. Stand up, take another if there is one, and
+          // otherwise call it a day — no satisfaction hit, since being moved
+          // along is the management's doing rather than anything they did.
+          c.seat = null;
+          const free = seats.filter((s) => !s.taken);
+          if (free.length) {
+            const s = free[Math.floor(rng() * Math.min(3, free.length))];
+            s.taken = c;
+            c.seat = s;
+            c.state = 'toSeat';
+            c.showEmote('alert', 1.6);
+          } else {
+            c.state = 'leaving';
+            c.showEmote('alert', 2);
+          }
+        }
+      }
+      keep.push(c);
+    }
+    this.customers = keep;
   }
 }
 

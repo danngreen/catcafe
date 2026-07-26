@@ -47,6 +47,8 @@ const BUDGET = {
   ghostquest: 42000,
   deliverquest: 26000,
   wishlist: 30000,
+  furncustomers: 24000,
+  furnkeys: 14000,
   nightfolk: 18000,
   ghoststuck: 22000,
   // Deliberately longer than any idle timeout, which is the point of them.
@@ -80,9 +82,10 @@ const BUDGET = {
 const GROUPS = {
   quests: ['ghostquest', 'deliverquest', 'journalstep', 'questrepair', 'ghoststuck',
     'barriers', 'nightfolk', 'nightplaces'],
-  cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats'],
+  cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers'],
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces', 'barriers', 'debugpos'],
-  ui: ['menus', 'build', 'furnish', 'furnshop', 'shop', 'exterior', 'summarylines', 'journalstep'],
+  ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'exterior',
+    'summarylines', 'journalstep'],
   cutscene: ['taxi', 'sleep', 'door'],
   mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile'],
   // Single-process networked runs. The paired ones need two browsers at once

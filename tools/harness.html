@@ -239,6 +239,130 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         window.__pos = `slab=${bx},${by} standing=${Math.floor(p.x / 16)},${Math.floor(p.y / 16)} map=${p.map}`;
         if (Math.floor(p.x / 16) !== bx) window.__errors.push('position is wrong: ' + window.__pos);
         await wait(700);
+      } else if (SCRIPT === 'furnkeys') {
+        // Build mode's keys. X picks up whatever is under the cursor from any
+        // of its tiles, and never drops you out of the screen.
+        const st = g.state;
+        st.money = 5000;
+        st.inventory.f_bookshelf = 1;         // two tiles wide
+        st.inventory.f_plant = 2;
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        await wait(900);
+        g.openBuildMode();
+        await wait(700);
+        const b = g.screens[g.screens.length - 1];
+        window.__keys = `tabs=${b.modes.join('/')} first=${b.modeName}`;
+        if (b.modeName !== 'Furnish') window.__errors.push('Furnish is not the default tab: ' + window.__keys);
+
+        // X over bare floor must not leave.
+        const room = b.draft.rooms[0];
+        b.cur = { x: room.x + 1, y: room.y + 1 };
+        while (b.furnitureAt(b.cur.x, b.cur.y)) b.cur.x++;
+        key('KeyX', true); await wait(150); key('KeyX', false);
+        await wait(400);
+        const stillOpen = g.screens[g.screens.length - 1] === b && !b.done;
+        window.__keys += ` survivedX=${stillOpen}`;
+        if (!stillOpen) window.__errors.push('X over empty floor left build mode: ' + window.__keys);
+
+        // Put a bookshelf down and pick it up from its far tile. Find somewhere
+        // its whole two-tile width actually fits.
+        b.palette = b.furnitureStock.indexOf('f_bookshelf');
+        let spot = null;
+        for (let y = room.y; y < room.y + room.h && !spot; y++) {
+          for (let x = room.x; x < room.x + room.w; x++) {
+            if (b.fits('bookshelf', x, y).ok) { spot = { x, y }; break; }
+          }
+        }
+        b.cur = { ...spot };
+        key('Space', true); await wait(150); key('Space', false);
+        await wait(400);
+        const placed = b.draft.furniture.find((f) => f.type === 'bookshelf');
+        window.__keys += ` placed=${!!placed}`;
+        if (!placed) { window.__errors.push('bookshelf never went down: ' + window.__keys); }
+        else {
+          // The tile that is *not* the anchor — the old code only matched the anchor.
+          b.cur = { x: placed.x + 1, y: placed.y };
+          const found = b.furnitureAt(b.cur.x, b.cur.y);
+          key('KeyX', true); await wait(150); key('KeyX', false);
+          await wait(400);
+          const gone = !b.draft.furniture.find((f) => f.type === 'bookshelf');
+          window.__keys += ` shelf@${placed.x},${placed.y} cur=${b.cur.x},${b.cur.y}`
+            + ` farTileFinds=${!!found} pickedUp=${gone} msg="${b.msg}"`;
+          if (!found) window.__errors.push('far tile of a wide piece finds nothing: ' + window.__keys);
+          if (!gone) window.__errors.push('could not pick it up from its far tile: ' + window.__keys);
+        }
+        // A wide piece must not go down half on top of something else. The
+        // starting cafe has a pastry case at 6,1, so a two-wide shelf anchored
+        // at 5,1 would overlap it.
+        b.palette = b.furnitureStock.indexOf('f_bookshelf');
+        if (b.palette >= 0) {
+          const clash = b.draft.furniture.find((f) => f.type === 'pastryCase');
+          b.cur = { x: clash.x - 1, y: clash.y };
+          const n0 = b.draft.furniture.length;
+          key('Space', true); await wait(150); key('Space', false);
+          await wait(400);
+          window.__keys += ` overlapRefused=${b.draft.furniture.length === n0}`;
+          if (b.draft.furniture.length !== n0) {
+            window.__errors.push('a wide piece went down on top of another: ' + window.__keys);
+          }
+        }
+
+        // Esc still finishes.
+        key('Escape', true); await wait(150); key('Escape', false);
+        await wait(500);
+        window.__keys += ` escClosed=${b.done}`;
+        if (!b.done) window.__errors.push('Esc did not finish: ' + window.__keys);
+      } else if (SCRIPT === 'furncustomers') {
+        // Putting down a plant pot should not empty the cafe.
+        const st = g.state;
+        const sim = st.cafeSim;
+        st.money = 5000;
+        st.inventory.f_plant = 3;
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        st.shopOpen = true;
+        st.clock.t = 12 * (1200 / 24);
+        sim.addStock('black_tea', 40, st.clock.day);
+        await wait(900);
+        for (let i = 0; i < 4; i++) { sim.trySpawn(st.cafeMap); await wait(300); }
+        await wait(3500);
+        // Get somebody actually sat down.
+        for (const c of sim.customers) {
+          if (c.state !== 'waiting') continue;
+          c.wish = ['black_tea']; c.wishIndex = 0; c.order = 'black_tea';
+          c.served = true; c.servedByPlayer = true;
+          await wait(500);
+        }
+        await wait(3000);
+        const before = sim.customers.length;
+        const seatedBefore = sim.customers.filter((c) => c.seat).length;
+
+        // Place a plant somewhere harmless.
+        const room = st.cafe.rooms[0];
+        let px = room.x + 1, py = room.y + 1;
+        st.cafe.furniture.push({ type: 'plantPot', x: px, y: py, variant: 0 });
+        st.rebuildCafe();
+        await wait(600);
+
+        const after = sim.customers.length;
+        const seatedAfter = sim.customers.filter((c) => c.seat).length;
+        window.__furn = `customers ${before}->${after} seated ${seatedBefore}->${seatedAfter}`;
+        if (!before) window.__errors.push('nobody was in the cafe to begin with: ' + window.__furn);
+        if (after < before) window.__errors.push('placing furniture emptied the room: ' + window.__furn);
+        if (seatedAfter < seatedBefore) window.__errors.push('seated customers lost their chairs: ' + window.__furn);
+
+        // And taking a chair out from under somebody moves them, not the room.
+        const sat = sim.customers.find((c) => c.seat);
+        if (sat) {
+          const seat = { x: sat.seat.x, y: sat.seat.y };
+          st.cafe.furniture = st.cafe.furniture.filter((f) => !(f.x === seat.x && f.y === seat.y));
+          const n0 = sim.customers.length;
+          st.rebuildCafe();
+          await wait(600);
+          window.__furn += ` afterChairPulled=${sim.customers.length}/${n0}`;
+          if (sim.customers.length < n0 - 1) {
+            window.__errors.push('pulling one chair cleared the room: ' + window.__furn);
+          }
+        }
       } else if (SCRIPT === 'questrepair') {
         // The save people are actually holding: the hedge job stuck at step 0
         // with the collar already in the bag, because somebody else's accept
@@ -1642,6 +1766,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__bar ? ` ${window.__bar}` : '')
         + (window.__pos ? ` ${window.__pos}` : '')
         + (window.__repair ? ` ${window.__repair}` : '')
+        + (window.__keys ? ` ${window.__keys}` : '')
+        + (window.__furn ? ` ${window.__furn}` : '')
         + (window.__ghost ? ` ${window.__ghost}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';

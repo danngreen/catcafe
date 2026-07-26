@@ -240,10 +240,15 @@ export class GameState {
 
   // ---------------------------------------------------------------- cafe
 
+  /**
+   * Rebuild the interior after a change to the layout, the furniture or the
+   * floor. Customers are carried across rather than swept out: putting down a
+   * plant pot should not empty the room.
+   */
   rebuildCafe() {
     this.cafeMap = buildCafeMap(this.cafe);
     this.refreshCatActors();
-    this.cafeSim.clearCustomers();
+    this.cafeSim.reseatCustomers(this.cafeMap);
     this.hooks.onCafeRebuilt?.(this.cafeMap);
   }
 

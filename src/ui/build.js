@@ -13,11 +13,13 @@ import { Renderer, Camera } from '../world/render.js';
 import { audio } from '../engine/audio.js';
 import { clamp, money } from '../engine/util.js';
 import { SAFE } from '../engine/safe.js';
-import { objSprite, buildingSprite } from '../art/objects.js';
+import { objSprite, buildingSprite, OBJECTS } from '../art/objects.js';
 
-// Laying out rooms needs a hired crew; moving your own furniture about does
-// not, so the Rooms tab simply isn't offered until you have builders.
-const ALL_MODES = ['Rooms', 'Furnish', 'Style'];
+// Furnish first: it is what you come in here to do nearly every time, and it
+// is the only tab you can use before hiring anyone. Laying out rooms needs a
+// crew, so that tab simply isn't offered until you have builders.
+const ALL_MODES = ['Furnish', 'Rooms', 'Style'];
+const CREW_ONLY = new Set(['Rooms']);
 
 const FLOORS = [
   { id: T.FLOOR_WOOD, name: 'Boards' },
@@ -33,6 +35,12 @@ const AWNINGS = ['#c05a7a', '#5b8fd6', '#7fbe57', '#eec453', '#8a72d6', '#e0894a
 
 let draftSerial = 0;
 
+/** How many tiles a placed piece covers. */
+function footprint(type) {
+  const def = OBJECTS[type];
+  return [(def && def.tw) || 1, (def && def.th) || 1];
+}
+
 export class BuildScreen extends Screen {
   constructor(game) {
     super();
@@ -42,7 +50,7 @@ export class BuildScreen extends Screen {
     this.draft = JSON.parse(JSON.stringify(st.cafe));
     this.spentMoney = 0;
     this.spentMaterials = 0;
-    this.modes = st.workers > 0 ? ALL_MODES : ALL_MODES.slice(1);
+    this.modes = ALL_MODES.filter((m) => st.workers > 0 || !CREW_ONLY.has(m));
     this.mode = 0;
     this.cur = { x: 0, y: 0 };
     this.dragStart = null;
@@ -249,12 +257,11 @@ export class BuildScreen extends Screen {
     }
 
     if (input.hit('use')) {
-      const existing = this.draft.furniture.find((f) => f.x === this.cur.x && f.y === this.cur.y);
-      if (existing) { this.flash('Something is already there.', true); return; }
-      if (!this.roomAt(this.cur.x, this.cur.y)) { this.flash('That is outside the building.', true); return; }
       const key = stock[this.palette];
       if (!key) { this.flash('Nothing left to place. Buy furniture from Velvet & Oak.', true); return; }
       const def = ITEMS[baseId(key)];
+      const room = this.fits(def.place, this.cur.x, this.cur.y);
+      if (!room.ok) { this.flash(room.why, true); return; }
       // Whatever colourway you bought is the one that goes down.
       this.draft.furniture.push({ type: def.place, x: this.cur.x, y: this.cur.y, variant: variantOf(key) });
       this.takeFurniture(key);
@@ -264,24 +271,52 @@ export class BuildScreen extends Screen {
       this.flash(`${def.name} placed.`);
     }
 
+    // X picks up whatever is under the cursor, from any tile of it. It never
+    // leaves the screen: pressing it over bare floor used to drop you out of
+    // build mode, which is a long way to fall for a near miss on a bookshelf.
     if (input.hit('cancel')) {
-      const i = this.draft.furniture.findIndex((f) => f.x === this.cur.x && f.y === this.cur.y);
-      if (i >= 0) {
-        const f = this.draft.furniture[i];
-        // Fixtures that came with the shop stay put.
-        if (['counter', 'register', 'coffeeMachine', 'menuBoard'].includes(f.type) && this.countType(f.type) <= 1) {
-          this.flash('You need to keep at least one of those.', true);
-          return;
-        }
-        this.returnFurniture(f);
-        this.draft.furniture.splice(i, 1);
-        this.rebuild();
-        audio.sfx('ui_back');
-        this.flash('Picked up.');
-      } else {
-        this.finish();
+      const f = this.furnitureAt(this.cur.x, this.cur.y);
+      if (!f) { this.flash('Nothing there to pick up. Esc to finish.'); return; }
+      // Fixtures that came with the shop stay put.
+      if (['counter', 'register', 'coffeeMachine', 'menuBoard'].includes(f.type) && this.countType(f.type) <= 1) {
+        this.flash('You need to keep at least one of those.', true);
+        return;
+      }
+      this.returnFurniture(f);
+      this.draft.furniture.splice(this.draft.furniture.indexOf(f), 1);
+      this.rebuild();
+      audio.sfx('ui_back');
+      this.flash(`${ITEMS[Object.keys(ITEMS).find((k) => ITEMS[k].place === f.type)]?.name || 'It'} picked up.`);
+    }
+  }
+
+  /**
+   * Whatever piece covers this tile — not just the one anchored on it. A
+   * bookshelf is two tiles wide and a piano three, and having to guess which
+   * end counts as "the" tile was the fiddliest thing in here.
+   */
+  furnitureAt(x, y) {
+    return this.draft.furniture.find((f) => {
+      const [tw, th] = footprint(f.type);
+      return x >= f.x && x < f.x + tw && y >= f.y && y < f.y + th;
+    }) || null;
+  }
+
+  /**
+   * Can a piece of this type go down here? Checks every tile it would cover,
+   * not just the one under the cursor — a bookshelf is two wide and a piano
+   * three, and only testing the anchor let you drop one half on top of the
+   * pastry case, where it sat looking wrong and could not be picked up again.
+   */
+  fits(type, x, y) {
+    const [tw, th] = footprint(type);
+    for (let j = 0; j < th; j++) {
+      for (let i = 0; i < tw; i++) {
+        if (!this.roomAt(x + i, y + j)) return { ok: false, why: 'That would stick out of the building.' };
+        if (this.furnitureAt(x + i, y + j)) return { ok: false, why: 'Something is already there.' };
       }
     }
+    return { ok: true };
   }
 
   countType(type) { return this.draft.furniture.filter((f) => f.type === type).length; }
