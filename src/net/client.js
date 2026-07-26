@@ -46,7 +46,10 @@ export class NetClient {
     this.keepalive = null;
     // Counters for the `?netdebug` readout. Cheap, and the difference between
     // "it feels laggy" and "we dropped nine times in a minute".
-    this.debug = typeof location !== 'undefined' && location.search.includes('netdebug');
+    // `?debug` is the same readout for anyone who just wants to know where
+    // they are standing, which has nothing to do with networking.
+    this.debug = typeof location !== 'undefined'
+      && /(^|[?&])(netdebug|debug)(=|&|$)/.test(location.search);
     this.rttMs = -1;          // -1 = no answer yet; 0 is a real LAN round trip
     this.lastMsgAt = 0;
     this.lastPosAt = 0;

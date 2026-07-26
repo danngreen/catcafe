@@ -225,6 +225,20 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if ((st.questStep.lane_end_hedge || 0) !== 3) {
           window.__errors.push('the job went backwards: ' + window.__q);
         }
+      } else if (SCRIPT === 'debugpos') {
+        // The readout has to say where you are, in the same units the world is
+        // authored in — otherwise it can't help you find anything.
+        const st = g.state;
+        g.net.debug = true;
+        const b = [...g.overworld.interacts].find(([, v]) => v.barrier === 'eastpass');
+        const [bx, by] = b[0].split(',').map(Number);
+        g.player.x = bx * 16 + 8; g.player.y = (by + 2) * 16 - 2;
+        g.cam.follow(g.overworld, g.player.x, g.player.y, true);
+        await wait(900);
+        const p = st.hooks.playerPos();
+        window.__pos = `slab=${bx},${by} standing=${Math.floor(p.x / 16)},${Math.floor(p.y / 16)} map=${p.map}`;
+        if (Math.floor(p.x / 16) !== bx) window.__errors.push('position is wrong: ' + window.__pos);
+        await wait(700);
       } else if (SCRIPT === 'barriers') {
         // Where the blocked shortcuts actually are, and what they actually
         // block. A barrier that only shortens a trip is fine; a quest that
@@ -1589,6 +1603,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__deliver ? ` ${window.__deliver}` : '')
         + (window.__q ? ` ${window.__q}` : '')
         + (window.__bar ? ` ${window.__bar}` : '')
+        + (window.__pos ? ` ${window.__pos}` : '')
         + (window.__ghost ? ` ${window.__ghost}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';

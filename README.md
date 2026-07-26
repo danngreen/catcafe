@@ -91,10 +91,12 @@ thrown out. And the roster is restated every few seconds rather than relying on
 one-shot arrival messages — miss one of those and two players would disagree
 about who is in the valley for the rest of the session.
 
-If something looks wrong, there are two places to look. Add `?netdebug` to the
-URL for the client's view: link state, who the server thinks runs the cafe,
-round-trip time, how long since anything was heard, and how many times you've
-dropped. Open `/status` on the host — `http://192.168.x.x:8080/status` — for the
+If something looks wrong, there are two places to look. Add `?debug` (or
+`?netdebug` — same thing) to the URL for the client's view: where you're
+standing in tile coordinates, which is the same unit the world is authored in
+and so the one to navigate by; then link state, who the server thinks runs the
+cafe, round-trip time, how long since anything was heard, and how many times
+you've dropped. Open `/status` on the host — `http://192.168.x.x:8080/status` — for the
 server's view: every socket, whether it has actually joined the game, where it
 is, and how long it has been silent. When two screens disagree about who can
 see whom, that page settles it. The server also prints a line whenever it hangs

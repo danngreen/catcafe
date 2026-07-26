@@ -6,6 +6,7 @@ import { VIEW_W, VIEW_H } from '../engine/display.js';
 import { P } from '../art/palette.js';
 import { wrapText, clamp, money } from '../engine/util.js';
 import { iconSprite } from '../art/icons.js';
+import { TILE } from '../art/tiles.js';
 import { audio } from '../engine/audio.js';
 import { SAFE, fitRect, safeCenterX } from '../engine/safe.js';
 
@@ -283,10 +284,22 @@ export class Hud {
   }
 
   /** `?netdebug` — the numbers you'd want when the valley misbehaves. */
-  drawNetDebug(ctx, net) {
+  drawNetDebug(ctx, net, st) {
     const age = (ms) => (ms ? `${Math.round((performance.now() - ms) / 100) / 10}s` : '-');
+    // Tile coordinates, not pixels: everything in the world — landmarks,
+    // barriers, town rectangles — is authored in tiles, so these are the
+    // numbers you can actually navigate by.
+    const p = st.hooks.playerPos?.();
+    const where = p
+      ? `${Math.floor(p.x / TILE)},${Math.floor(p.y / TILE)} on ${p.map}`
+      : 'nowhere';
+    // Never having connected is playing alone, which is fine. Only a link that
+    // was up and isn't any more is worth shouting about.
+    const lost = net.everConnected && !net.connected;
+    const link = net.connected ? `up via ${net.transport}` : lost ? 'DOWN' : 'playing alone';
     const lines = [
-      `link ${net.connected ? 'up' : 'DOWN'} via ${net.transport || '-'}  joined ${net.joined}  here ${net.here}`,
+      `at ${where}`,
+      `link ${link}  joined ${net.joined}  here ${net.here}`,
       `me ${net.id || '-'}  cafe run by ${net.owner === net.id ? 'me' : (net.owner || 'nobody')}`,
       `others ${net.remotes.size}  ping ${net.pongCount ? `${net.rttMs}ms` : 'no answer'}  heard ${age(net.lastMsgAt)}`,
       `last pos ${age(net.lastPosAt)}  last cust ${age(net.lastCustAt)}`,
@@ -297,7 +310,7 @@ export class Hud {
     ctx.fillRect(4, VIEW_H - 12 - lines.length * 10, w, lines.length * 10 + 6);
     lines.forEach((l, i) => {
       drawText(ctx, l, 8, VIEW_H - 10 - (lines.length - i) * 10 + 4,
-        { color: i === 0 && !net.connected ? P.uiRed : P.uiTextDim });
+        { color: i === 0 ? P.uiGold : (i === 1 && lost ? P.uiRed : P.uiTextDim) });
     });
   }
 
@@ -344,7 +357,7 @@ export class Hud {
       drawText(ctx, label, VIEW_W - ow + 2, 30, { color: '#ffd8d8', shadow: P.uiShadow });
     }
 
-    if (net && net.debug) this.drawNetDebug(ctx, net);
+    if (net && net.debug) this.drawNetDebug(ctx, net, st);
 
     // --- location banner ---
     if (this.locationT > 0) {
