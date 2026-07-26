@@ -24,7 +24,9 @@ import { GameState, seedStartingInventory } from './game/state.js';
 import { Player, Villager, RemotePlayer, canStand } from './game/entities.js';
 import { ITEMS, STOCK, FLEA_POOL, baseId } from './game/items.js';
 import { shopOpen, hoursText } from './game/time.js';
-import { QUESTS, QUESTS_BY_GIVER, objectiveMet } from './game/quests.js';
+import { BOOK_BY_ID } from './world/places.js';
+import { QUESTS, QUESTS_BY_GIVER, objectiveMet, questSteps, currentStep,
+  stepIndex, isLastStep, progressText, objectiveText } from './game/quests.js';
 
 import { Dialogue, Hud, Fader, panel, panelTitle, dim, cursor } from './ui/core.js';
 import { SAFE, safeCenterX } from './engine/safe.js';
@@ -37,6 +39,85 @@ import { TaxiFlight, StairWalk } from './ui/cutscene.js';
 import { net } from './net/client.js';
 
 const WORLD_SEED = 20260724;
+
+/**
+ * What poking about somewhere gives you. Each returns what to say and, if
+ * you've earned it, what you come away with. They are deliberately not
+ * one-shot switches: a spot you searched too early should still be there when
+ * you come back knowing what you're looking for.
+ */
+const SEARCH_SPOTS = {
+  bushes: (st) => {
+    if (st.clock.isDark) {
+      return {
+        text: 'The hedge is moving. Not in the wind — in one place, steadily, as though '
+          + 'something is working its way along the bottom of it looking for something.\n\n'
+          + 'Whatever it is, it is about the size of a large and elderly dog.',
+        sfx: 'bush',
+        flag: 'saw_the_hedge',
+      };
+    }
+    return {
+      text: 'An ordinary hedge in ordinary daylight. Hawthorn, mostly, and a crisp packet '
+        + 'from some previous decade.\n\nNothing is moving at all.',
+      sfx: 'bush',
+    };
+  },
+  stones: (st) => {
+    if (!st.clock.isDark) {
+      return {
+        text: 'Seven stones, leaning slightly inward, as if listening to something in the middle.\n\n'
+          + 'Somebody has left a jam jar of wildflowers at the foot of the tallest. In the '
+          + 'daylight they are just very large rocks, and you feel slightly silly.',
+        sfx: 'ui_ok',
+      };
+    }
+    // Leaving the milk is the last step of Vesper's job, so it only counts if
+    // you were told to — otherwise it is a bottle of milk on a rock.
+    if (st.flags.read_stones && st.has('milk') && !st.flags.left_milk) {
+      st.take('milk');
+      return {
+        text: 'You put the saucer down in the middle of the circle and step back.\n\n'
+          + 'Nothing comes. Nothing comes for long enough that you start to feel foolish '
+          + 'again — and then the wind stops. All at once, everywhere, like a held breath.\n\n'
+          + 'When it starts again the saucer is empty and dry, and there is a single set '
+          + 'of small prints in the chalk dust that go in and do not come out.',
+        sfx: 'spooky',
+        flag: 'left_milk',
+      };
+    }
+    return {
+      text: 'You stand in the middle of the seven stones.\n\n'
+        + 'They are warm. Not sun-warm — it has been dark for hours — but warm the way a '
+        + 'sleeping animal is warm, all seven of them, at the same time.\n\n'
+        + 'Somewhere above you something enormous and silent goes over.',
+      sfx: 'spooky',
+      flag: 'stood_in_stones',
+    };
+  },
+  pier_mud: (st) => {
+    if (st.has('golden_collar') || st.flags.got_collar) {
+      return { text: 'Mud, rope, and the ribs of a boat nobody has thought about in a long time.', sfx: 'splash' };
+    }
+    if (!st.flags.read_town_history) {
+      return {
+        text: 'You lean over the end of the pier. Below, the tide is out, and there is a '
+          + 'great deal of mud.\n\nIt is exactly as interesting as mud. You have no idea '
+          + 'what you would even be looking for.',
+        sfx: 'splash',
+      };
+    }
+    return {
+      text: 'You lean over the end of the pier, thinking about 1800, and a ribbon, and a '
+        + 'dog who did not go home.\n\nAnd there — under two hundred years of mud, catching '
+        + 'the lamplight — something gold.\n\nYou have to lie flat and put your whole arm in.',
+      sfx: 'splash',
+      give: ['golden_collar', 1],
+      flag: 'got_collar',
+    };
+  },
+};
+
 
 class Game {
   constructor() {
@@ -236,7 +317,13 @@ class Game {
       const isKeeper = SHOPS.some((s) => s.keeper === def.id);
       if (isKeeper) continue;                        // placed inside their shop
       let x, y;
-      if (def.town && this.towns[def.town]) {
+      // Some of the cast belong somewhere in particular — a ghost is only
+      // interesting if it is haunting the hedge somebody complained about.
+      if (def.spot) {
+        const l = this.landmarks.find((k) => k.id === def.spot);
+        if (l) { x = l.x; y = l.y - 1; }
+      }
+      if (x === undefined && def.town && this.towns[def.town]) {
         const tw = this.towns[def.town];
         for (let tries = 0; tries < 200; tries++) {
           const tx = tw.rect.x + 2 + rng.int(tw.rect.w - 4);
@@ -258,8 +345,58 @@ class Game {
       if (x === undefined) continue;
       const v = new Villager(def, x * TILE + TILE / 2, (y + 1) * TILE - 2);
       v.mapId = 'overworld';
+      v.burrow = this.burrowFor(x, y);
       this.villagers.push(v);
     }
+    // Start the right crowd out, without walking anybody anywhere.
+    const dark = this.state.clock.isDark;
+    for (const v of this.villagers) {
+      const on = v.when === 'always' || (v.when === 'night') === dark;
+      v.shift = on ? 'here' : 'away';
+      v.alpha = on ? 1 : 0;
+    }
+    this.wasDark = dark;
+  }
+
+  /**
+   * Somewhere near `tx,ty` a person could plausibly disappear into: a door,
+   * failing that the woods, failing that a spot far enough off to be out of
+   * mind. Nobody should pop out of existence in the middle of the square.
+   */
+  burrowFor(tx, ty) {
+    const map = this.overworld;
+    let woods = null;
+    for (let r = 1; r <= 14; r++) {
+      for (let a = 0; a < r * 8; a++) {
+        const ang = (a / (r * 8)) * Math.PI * 2;
+        const x = Math.round(tx + Math.cos(ang) * r);
+        const y = Math.round(ty + Math.sin(ang) * r);
+        if (!map.inBounds(x, y) || map.solid(x, y)) continue;
+        const it = map.interactAt(x, y);
+        if (it && it.kind === 'door') return { x: x * TILE + TILE / 2, y: (y + 1) * TILE - 2 };
+        if (!woods && map.get(x, y) === T.FOREST_FLOOR) {
+          woods = { x: x * TILE + TILE / 2, y: (y + 1) * TILE - 2 };
+        }
+      }
+    }
+    return woods || { x: tx * TILE + TILE / 2, y: (ty + 9) * TILE - 2 };
+  }
+
+  /**
+   * Dusk and dawn: one crowd walks home, the other comes out. Checked against
+   * the clock rather than run on a timer, so it still happens correctly after
+   * sleeping through a night or having the day rolled by somebody else.
+   */
+  updateVillagerShift() {
+    const dark = this.state.clock.isDark;
+    if (dark === this.wasDark) return;
+    this.wasDark = dark;
+    for (const v of this.villagers) {
+      if (v.when === 'always') continue;
+      v.setShift((v.when === 'night') === dark);
+    }
+    this.hud.toast(dark ? 'The valley settles. Something else is about.' : 'Morning. The lane fills up again.',
+      'info', 5);
   }
 
   /** A 1px-per-tile picture of the valley for the map screen. */
@@ -520,10 +657,14 @@ class Game {
     const map = this.currentMap;
 
     if (st.mapId === 'overworld') {
-      // Only bother with villagers near the camera.
+      this.updateVillagerShift();
+      // Only bother with villagers near the camera — except the ones walking
+      // off shift, who have somewhere to be whether you're watching or not.
       const cx = this.player.x, cy = this.player.y;
       for (const v of this.villagers) {
-        if (Math.abs(v.x - cx) > 400 || Math.abs(v.y - cy) > 320) continue;
+        if (v.shift === 'away') continue;
+        const near = Math.abs(v.x - cx) <= 400 && Math.abs(v.y - cy) <= 320;
+        if (!near && v.shift === 'here') continue;
         v.update(dt, map);
       }
     } else if (map.villagers) {
@@ -718,7 +859,8 @@ class Game {
     }
 
     // Someone to talk to?
-    const list = st.mapId === 'overworld' ? this.villagers : (map.villagers || []);
+    const list = (st.mapId === 'overworld' ? this.villagers : (map.villagers || []))
+      .filter((v) => v.shift === 'here');
     let best = null, bestD = 26;
     for (const v of list) {
       const d = Math.hypot(v.x - this.player.x, v.y - this.player.y);
@@ -831,6 +973,56 @@ class Game {
     st.touchCats();
   }
 
+  /**
+   * Reading is how you find things out. What you learn is kept as a flag
+   * rather than an item: it can't be dropped, sold, or handed to anyone, and a
+   * quest step can simply ask whether you know a thing yet.
+   */
+  readBook(id) {
+    const st = this.state;
+    const bk = BOOK_BY_ID[id];
+    if (!bk) return;
+    const known = !!st.flags[bk.flag];
+    audio.sfx('ui_ok', { gain: 0.4 });
+    this.dialogue.say(bk.text, {
+      speaker: bk.title,
+      onDone: () => {
+        if (known) return;
+        st.flags[bk.flag] = true;
+        st.touch('flags');
+        audio.sfx('quest', { gain: 0.6 });
+        this.hud.toast(`You've read: ${bk.title}`, 'good', 5);
+        this.checkQuestProgress();
+      },
+    });
+  }
+
+  /**
+   * Poking about in a hedge, or in the mud under a pier. What you get out
+   * depends on what you already know to look for — which is the whole shape of
+   * the longer jobs: find out, then go back and look again.
+   */
+  searchSpot(spot) {
+    const st = this.state;
+    const found = SEARCH_SPOTS[spot];
+    if (!found) return;
+    const res = found(st, this);
+    audio.sfx(res.sfx || 'bush', { gain: 0.7 });
+    if (res.give) {
+      st.give(res.give[0], res.give[1] || 1);
+      st.flags[`found_${spot}`] = true;
+      st.touch('flags');
+    }
+    if (res.flag) { st.flags[res.flag] = true; st.touch('flags'); }
+    this.dialogue.say(res.text, {
+      speaker: res.speaker,
+      onDone: () => {
+        if (res.give) this.hud.toast(`Found: ${st.itemName(res.give[0])}`, 'good', 5);
+        this.checkQuestProgress();
+      },
+    });
+  }
+
   handleInteract(it, tile) {
     const st = this.state;
     switch (it.kind) {
@@ -841,6 +1033,14 @@ class Game {
 
       case 'door':
         this.openDoor(it, tile);
+        break;
+
+      case 'book':
+        this.readBook(it.book);
+        break;
+
+      case 'search':
+        this.searchSpot(it.spot);
         break;
 
       case 'shopkeeper':
@@ -1066,23 +1266,30 @@ class Game {
     v.faceTowards(this.player.x, this.player.y);
     const finish = () => { v.talking = false; };
 
-    // 1. Delivering something to this person?
+    // 1. Handing over, or reporting in on, whatever step is in play.
     for (const q of QUESTS) {
       if (st.quests[q.id] !== 'active') continue;
-      if (q.objective.type === 'deliver' && q.objective.to === def.id && st.has(q.objective.item)) {
-        st.take(q.objective.item);
-        this.completeQuest(q, v, finish);
-        return;
-      }
+      const step = currentStep(q, st);
+      const o = step.objective;
+      // Deliveries and errands that end in "go and find X" are both finished by
+      // standing in front of the right person.
+      const delivering = o.type === 'deliver' && o.to === def.id && st.has(o.item);
+      const meeting = o.type === 'talk' && o.to === def.id;
+      if (!delivering && !meeting) continue;
+      if (delivering) st.take(o.item);
+      this.advanceQuest(q, v, finish, step);
+      return;
     }
 
-    // 2. Turning in a finished job to whoever set it.
+    // 2. Turning a finished step back in to whoever set the job.
     const mine = QUESTS_BY_GIVER[def.id] || [];
     for (const q of mine) {
-      if (st.quests[q.id] === 'active' && q.objective.type !== 'deliver' && objectiveMet(q, st)) {
-        this.completeQuest(q, v, finish);
-        return;
-      }
+      if (st.quests[q.id] !== 'active') continue;
+      const step = currentStep(q, st);
+      if (step.objective.type === 'deliver' || step.objective.type === 'talk') continue;
+      if (!objectiveMet(q, st)) continue;
+      this.advanceQuest(q, v, finish, step);
+      return;
     }
 
     // 3. Offering a new job.
@@ -1094,9 +1301,12 @@ class Game {
         onDone: () => {
           finish();
           st.quests[q.id] = 'active';
+          st.questStep[q.id] = 0;
           st.touch('quests');
+          st.touch('questStep');
           // Deliver-type errands hand you the parcel there and then.
-          if (q.objective.type === 'deliver') st.give(q.objective.item, 1);
+          const first = questSteps(q)[0].objective;
+          if (first.type === 'deliver' && first.give !== false) st.give(first.item, 1);
           audio.sfx('quest', { gain: 0.7 });
           this.hud.toast(`New in your journal: ${q.title}`, 'good');
           this.refreshQuestMarks();
@@ -1109,7 +1319,7 @@ class Game {
     // 4. Nudge on a job in progress.
     for (const q of mine) {
       if (st.quests[q.id] === 'active') {
-        this.dialogue.say(q.progress, { speaker: def.name, onDone: finish });
+        this.dialogue.say(progressText(q, st), { speaker: def.name, onDone: finish });
         return;
       }
     }
@@ -1138,12 +1348,44 @@ class Game {
 
   questAvailable(q) {
     const st = this.state;
+    // Some jobs are only handed out by people who are only out at night. This
+    // is belt and braces — you can't talk to them by day anyway — but it also
+    // stops a night job appearing in the journal from a daytime conversation.
+    if (q.night && !st.clock.isDark) return false;
     // Gate a couple of the bigger jobs behind a little progress.
     if (q.id === 'busy_day' && st.reputation < 0.3) return false;
     if (q.id === 'first_extension' && st.workers < 1 && st.money < 400) return false;
     if (q.id === 'rare_cat' && st.cats.length < 2) return false;
     if (q.id === 'music_night' && st.reputation < 0.25) return false;
     return true;
+  }
+
+  /**
+   * One step of a job is done. Either move on to the next — saying whatever
+   * this step ends with, and handing over anything the next one needs — or, if
+   * that was the last, finish the whole thing.
+   */
+  advanceQuest(q, v, finish, step) {
+    const st = this.state;
+    if (isLastStep(q, st)) { this.completeQuest(q, v, finish); return; }
+
+    st.questStep[q.id] = stepIndex(q, st) + 1;
+    st.touch('questStep');
+    if (step.gives) for (const [id, n] of step.gives) st.give(id, n);
+    if (step.flags) { for (const f of step.flags) st.flags[f] = true; st.touch('flags'); }
+    const next = currentStep(q, st);
+    // A delivery step normally comes with the parcel; `give: false` is for the
+    // ones where you're carrying something you found yourself.
+    if (next.objective.type === 'deliver' && next.objective.give !== false) {
+      st.give(next.objective.item, 1);
+    }
+
+    audio.sfx('quest', { gain: 0.55 });
+    this.dialogue.say(step.done || 'Right. Next thing, then.', {
+      speaker: v ? v.def.name : q.title,
+      onDone: () => { finish?.(); this.refreshQuestMarks(); },
+    });
+    this.hud.toast(`${q.title}: ${objectiveText(q, st)}`, 'good', 6);
   }
 
   completeQuest(q, v, finish) {
@@ -1167,20 +1409,26 @@ class Game {
     if (q.reward?.hint === 'taxi') this.hud.toast('Taxi birds unlocked — look for the perches.', 'good');
   }
 
+  /** Would this person have something to say about `q` right now? */
+  wantsToTalk(q, st) {
+    if (!st.quests[q.id]) return this.questAvailable(q);
+    if (st.quests[q.id] !== 'active') return false;
+    const o = currentStep(q, st).objective;
+    return o.type !== 'deliver' && o.type !== 'talk' && objectiveMet(q, st);
+  }
+
   /** Put a ! over anyone who has something for you. */
   refreshQuestMarks() {
     const st = this.state;
     for (const v of this.villagers) {
       const mine = QUESTS_BY_GIVER[v.def.id] || [];
-      v.hasQuestMark = mine.some((q) => (!st.quests[q.id] && this.questAvailable(q))
-        || (st.quests[q.id] === 'active' && q.objective.type !== 'deliver' && objectiveMet(q, st)));
+      v.hasQuestMark = mine.some((q) => this.wantsToTalk(q, st));
     }
     for (const [, map] of this.maps) {
       if (!map.villagers) continue;
       for (const v of map.villagers) {
         const mine = QUESTS_BY_GIVER[v.def.id] || [];
-        v.hasQuestMark = mine.some((q) => (!st.quests[q.id] && this.questAvailable(q))
-          || (st.quests[q.id] === 'active' && q.objective.type !== 'deliver' && objectiveMet(q, st)));
+        v.hasQuestMark = mine.some((q) => this.wantsToTalk(q, st));
       }
     }
   }
@@ -1213,6 +1461,7 @@ class Game {
     if (st.mapId === 'overworld') {
       const cx = this.player.x, cy = this.player.y;
       for (const v of this.villagers) {
+        if (!v.present) continue;
         if (Math.abs(v.x - cx) > 340 || Math.abs(v.y - cy) > 260) continue;
         actors.push(v);
       }
@@ -1258,6 +1507,7 @@ class Game {
     if (!label) {
       const list = st.mapId === 'overworld' ? this.villagers : (map.villagers || []);
       for (const v of list) {
+        if (v.shift !== 'here') continue;
         if (Math.hypot(v.x - this.player.x, v.y - this.player.y) < 26) { label = `Talk to ${v.def.name}`; break; }
       }
     }

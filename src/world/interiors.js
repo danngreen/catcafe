@@ -4,7 +4,7 @@
 
 import { GameMap } from './tilemap.js';
 import { T } from '../art/tiles.js';
-import { SHOPS } from './places.js';
+import { SHOPS, BOOKS } from './places.js';
 import { makeRng } from '../engine/util.js';
 
 /**
@@ -62,6 +62,7 @@ const SHOP_LAYOUTS = {
   exotic: { w: 17, h: 12, floor: T.RUG, fixtures: ['catTower', 'catTower', 'catBed', 'lampIn', 'plantPot'] },
   herbalist: { w: 15, h: 11, floor: T.FLOOR_WOOD, fixtures: ['bookshelf', 'shelf', 'plantPot', 'plantPot'] },
   beekeeper: { w: 13, h: 10, floor: T.FLOOR_WOOD, fixtures: ['shelf', 'crate', 'plantPot'] },
+  library: { w: 17, h: 12, floor: T.FLOOR_WOOD, fixtures: ['bookshelf', 'bookshelf', 'bookshelf', 'lampIn'] },
 };
 
 export function buildShopInterior(shopId) {
@@ -144,6 +145,18 @@ export function buildShopInterior(shopId) {
     for (let k = -1; k <= 1; k++) map.addObject('stairs', stairs.x + k, stairs.y, { flat: true, variant: (k + 1) % 3 });
     map.addObject('stairs', stairs.x, stairs.y - 1, { flat: true, variant: 2 });
     map.setInteract(stairs.x, stairs.y + 1, { kind: 'sign', text: 'Stairs up to the rooms. The third one creaks, exactly as promised.' });
+  }
+
+  // A library is a shop where the goods are free and can't leave the building.
+  // Every bookshelf gets something on it worth standing and reading.
+  if (shop.kind === 'library') {
+    const shelves = map.objects.filter((o) => o.type === 'bookshelf');
+    BOOKS.forEach((bk, i) => {
+      const o = shelves[i % Math.max(1, shelves.length)];
+      if (!o) return;
+      // Read from the tile below the shelf, where you'd actually be standing.
+      for (let k = 0; k < 2; k++) map.setInteract(o.tx + k, o.ty + 1, { kind: 'book', book: bk.id });
+    });
   }
 
   map.indexObjects();

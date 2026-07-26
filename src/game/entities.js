@@ -247,9 +247,34 @@ export class Villager extends Actor {
     this.lineIndex = 0;
     this.range = def.role === 'wanderer' ? 90 : 52;
     this.hasQuestMark = false;
+
+    // Whether they're out at this hour, and the door or treeline they use to
+    // come and go. Nobody blinks in and out: at dusk the day crowd walks home
+    // and the night crowd walks out, and you can watch either happen.
+    this.when = def.when || 'day';
+    this.shift = 'here';           // here | leaving | away | arriving
+    this.burrow = { x, y };
+    this.alpha = 1;
+    this.ghost = !!def.ghost;
   }
 
+  /** Send them home (or bring them back) through their own door. */
+  setShift(active) {
+    if (active && (this.shift === 'away' || this.shift === 'leaving')) {
+      if (this.shift === 'away') { this.x = this.burrow.x; this.y = this.burrow.y; this.alpha = 0; }
+      this.shift = 'arriving';
+      this.target = { x: this.home.x, y: this.home.y };
+    } else if (!active && (this.shift === 'here' || this.shift === 'arriving')) {
+      this.shift = 'leaving';
+      this.target = { x: this.burrow.x, y: this.burrow.y };
+    }
+  }
+
+  get present() { return this.shift !== 'away'; }
+
   update(dt, map) {
+    if (this.shift === 'away') return;
+    if (this.shift === 'leaving' || this.shift === 'arriving') { this.updateShift(dt, map); return; }
     if (this.talking) { this.moving = false; this.animate(dt); return; }
     this.wanderT -= dt;
     if (this.wanderT <= 0) {
@@ -279,12 +304,44 @@ export class Villager extends Actor {
     this.animate(dt);
   }
 
+  /** Walking out to the treeline, or in from it, fading as they go. */
+  updateShift(dt, map) {
+    const t = this.target || this.burrow;
+    const dx = t.x - this.x, dy = t.y - this.y;
+    const dist = Math.hypot(dx, dy);
+    const arriving = this.shift === 'arriving';
+    this.alpha = clamp(arriving ? this.alpha + dt * 1.6 : this.alpha - dt * 0.9, 0, 1);
+
+    if (dist < 3 || (!arriving && this.alpha <= 0)) {
+      if (arriving) { this.shift = 'here'; this.alpha = 1; this.target = null; }
+      else { this.shift = 'away'; this.alpha = 0; this.target = null; }
+      this.moving = false;
+      return;
+    }
+    const step = this.speed * 1.25 * dt;
+    const before = { x: this.x, y: this.y };
+    moveActor(map, this, (dx / dist) * step, (dy / dist) * step);
+    this.moving = Math.hypot(this.x - before.x, this.y - before.y) > 0.05;
+    // Walls happen. Rather than get stuck halfway, finish the trip out of sight.
+    if (!this.moving && !arriving) this.alpha = Math.max(0, this.alpha - dt * 1.4);
+    if (Math.abs(dx) > Math.abs(dy)) this.dir = dx > 0 ? 'right' : 'left';
+    else this.dir = dy > 0 ? 'down' : 'up';
+    this.animate(dt);
+  }
+
   draw(ctx, ox, oy) {
+    if (this.shift === 'away') return;
     const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, this.dir, this.frame);
-    ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - CHAR_H - oy));
+    // Ghosts hover, and you can see the hedge through them.
+    const a = this.alpha * (this.ghost ? 0.62 : 1);
+    const lift = this.ghost ? Math.sin(this.bobT * 1.7) * 1.5 - 2 : 0;
+    if (a < 1) ctx.globalAlpha = a;
+    ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - CHAR_H - oy + lift));
+    if (a < 1) ctx.globalAlpha = 1;
   }
 
   drawEmote(ctx, ox, oy, topY) {
+    if (this.shift !== 'here') return;
     if (this.hasQuestMark && !this.emote && !this.emoteIcon) {
       const q = emoteSprite('quest');
       const bob = Math.sin(this.bobT * 3) * 1.5;

@@ -81,6 +81,12 @@ export const SHOPS = [
     greet: 'Bed upstairs whenever you like. Mind the third stair.',
   },
   {
+    id: 'library', town: 'brambleford', name: 'The Reading Room', sign: 'book',
+    kind: 'library', keeper: 'quire', tw: 5, roof: '#5a6472', roofStyle: 'gable', timbered: true,
+    hours: [9, 21], days: [0, 1, 2, 3, 4, 5, 6],
+    greet: 'Everything on the shelves, nothing out of the building. Those are the rules.',
+  },
+  {
     id: 'groomer', town: 'hollowdown', name: 'Fluff & Tumble', sign: 'groomer',
     kind: 'groomer', keeper: 'suds', tw: 4, roof: '#7d8794', awning: '#d472b0',
     hours: [9, 17], days: [2, 3, 4, 5, 6],
@@ -404,6 +410,57 @@ export const VILLAGERS = [
     lines: ["Night's the best of it. All this, and nobody about.",
       "Lamps make a village look like a handful of coals from up here.",
       "You should light your cafe properly. It shows from the hill."] },
+
+  // --- out after dark -----------------------------------------------------
+  // The night crowd. They come out of a doorway or a treeline at dusk and go
+  // back the same way at dawn — see `when` on the Villager.
+
+  { id: 'quire', name: 'Quire', town: 'brambleford', species: 'owl', coat: 'owl', role: 'library',
+    when: 'always',
+    lines: ["Shhh. Well — there's nobody else in. Talk as loud as you like.",
+      'Everything ever written about this valley is on that middle shelf. It is not a long shelf.',
+      "People think a library is about books. It's about knowing which one."],
+    hint: 'Anything old around here, you want the town history. Middle shelf. Green spine, gold letters.' },
+
+  { id: 'moth', name: 'Moth', town: 'brambleford', species: 'mouse', coat: 'grey', role: 'villager',
+    when: 'night',
+    lines: ["Don't mind me. I'm counting.",
+      'Fourteen species on that one lamp last night. Fourteen!',
+      "Everyone's asleep and missing all of it."] },
+  { id: 'bracken', name: 'Bracken', town: 'brambleford', species: 'hedgehog', coat: 'brown', role: 'villager',
+    when: 'night',
+    lines: ['Night watch. Self-appointed. Nobody asked, nobody has complained.',
+      "Quiet tonight. Quiet's good. Quiet means the job is going well.",
+      'Careful down by the hedges after midnight. No reason.'] },
+  { id: 'woofers', name: 'Sir Woofers', town: 'brambleford', species: 'dog', coat: 'white',
+    cloth: '#a8c8e8', role: 'ghost', when: 'night', ghost: true, spot: 'bushes',
+    lines: ['*an extremely old dog, made mostly of moonlight, snuffling along the hedge*',
+      'I have lost something. I have been losing it for rather a long time.',
+      'It was gold. It was mine. They put my name on it.'] },
+
+  { id: 'vesper', name: 'Vesper', town: 'hollowdown', species: 'raven', coat: 'raven', role: 'villager',
+    when: 'night',
+    lines: ['Best view in the valley, and it only opens at night.',
+      'You can see every lit window from up here. I know whose is whose.',
+      "Stars are other people's lamps. That isn't true. I like saying it."],
+    hint: 'Stand in the middle of the standing stones after dark. Just stand there. You will see.' },
+  { id: 'tallow', name: 'Tallow', town: 'thistlewick', species: 'goat', coat: 'cream', role: 'villager',
+    when: 'night',
+    lines: ['Wax sets better in the cold, so I work in the cold.',
+      "Every candle in the valley, me. You're welcome.",
+      'A lit window is an invitation. Put one in that cafe of yours.'] },
+  { id: 'brine', name: 'Brine', town: 'saltmere', species: 'otter', coat: 'brown', role: 'villager',
+    when: 'night',
+    lines: ['Night fishing. Better catch, worse company. Present company excepted.',
+      'That old pier is rotten through. Mind your feet if you go out on it.',
+      'The tide takes things out and brings other things back. Never the same things.'],
+    hint: 'Anything lost off the end of that pier is still under it. The mud keeps what it is given.' },
+  { id: 'nightjar', name: 'Nightjar', species: 'songbird', coat: 'grey', role: 'wanderer',
+    when: 'night',
+    lines: ['*a long whirring churr, somewhere between a bird and a distant engine*',
+      "You are a long way from your lamp.",
+      "I go where it's dark. That's most places, if you are patient."] },
+
 ];
 
 /** Names a player can pick when joining a shared valley. */
@@ -432,9 +489,62 @@ export const GOSSIP = [
   "Warm night. The kind where nobody wants to go home.",
 ];
 
+/**
+ * What is on the shelves in the Reading Room. Reading one sets `read_<id>`,
+ * which is how a quest step knows you have found something out — the knowing
+ * is the item, and you can't drop it or sell it.
+ */
+export const BOOKS = [
+  {
+    id: 'town_history',
+    title: 'A History of Brambleford & the Salt Coast',
+    text: 'A green book with gold letters, and a spine that has given up.\n\n'
+      + 'You skim. Floods. A dispute about a hedge that ran for sixty years. Then:\n\n'
+      + '"At the opening of Saltsouth Pier in 1800, the ribbon was cut by Sir Woofers, '
+      + 'a dog of great age and greater self-regard, who wore for the occasion his new '
+      + 'golden collar. He was not seen to leave the pier that evening, and neither was '
+      + 'the collar."\n\n'
+      + '(Somebody has pencilled in the margin: "Saltsouth = Saltmere. They renamed it '
+      + 'after the flood. Nobody remembers why.")',
+    flag: 'read_town_history',
+  },
+  {
+    id: 'stones_book',
+    title: 'On the Standing Stones, and What Is Done There',
+    text: 'Thin, hand-bound, and slightly damp.\n\n'
+      + '"Seven stones. They are not aligned to the sun, nor the moon, nor anything '
+      + 'else we have thought to measure. On certain nights they are warm."\n\n'
+      + 'The last page is a list of things people have left at the stones. Most of it '
+      + 'is flowers. One entry says only: "a saucer of milk — returned empty".',
+    flag: 'read_stones',
+  },
+  {
+    id: 'cat_lore',
+    title: 'The Domestic Cat: A Warning',
+    text: 'Beautifully illustrated. Deeply unhelpful.\n\n'
+      + '"The cat cannot be trained, only negotiated with. The keeper of cats will '
+      + 'find that a well-fed animal is a glossy one, and a glossy one draws a crowd, '
+      + 'and a crowd is a business."\n\n'
+      + 'A later hand has written underneath: "Also they will sit on the till."',
+    flag: 'read_cat_lore',
+  },
+  {
+    id: 'tide_book',
+    title: 'Tides, Muds and the Recovery of Lost Property',
+    text: '"The mud beneath a pier is not a place where things are lost. It is a place '
+      + 'where things are kept.\n\n'
+      + 'It will give a thing back to anyone who knows what they are reaching for. To '
+      + 'anyone who does not, it gives back mud."',
+    flag: 'read_tides',
+  },
+];
+
+export const BOOK_BY_ID = Object.fromEntries(BOOKS.map((b) => [b.id, b]));
+
 export const LANDMARKS = [
   { id: 'oldmill', name: 'The Old Mill', hint: 'A wheel that hasn\'t turned in thirty years.' },
   { id: 'stones', name: 'The Standing Stones', hint: 'Older than the towns. Nobody argues with them.' },
   { id: 'lighthouse', name: 'Gullrock Light', hint: 'Still lit. Nobody is sure by whom.' },
   { id: 'bigoak', name: 'The Great Oak', hint: 'Oakhollow was built around it, not the other way round.' },
+  { id: 'pier', name: 'Saltmere Pier', hint: 'Opened in 1800 under a name nobody uses now.' },
 ];

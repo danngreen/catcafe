@@ -11,7 +11,7 @@ export const HOUR_SECONDS = DAY_SECONDS / 24;
 
 /** Everything a client may set wholesale. Anything else is ignored. */
 export const FIELDS = new Set([
-  'money', 'reputation', 'inventory', 'stock', 'cats', 'cafe', 'flags', 'quests',
+  'money', 'reputation', 'inventory', 'stock', 'cats', 'cafe', 'flags', 'quests', 'questStep',
   'friends', 'workers', 'materials', 'employee', 'shopOpen', 'shopHours',
   'visited', 'mail', 'pendingLetters', 'bestDayProfit', 'totalCustomers', 'daysPlayed',
 ]);

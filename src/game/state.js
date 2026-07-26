@@ -28,6 +28,7 @@ export class GameState {
     this.catActors = [];        // live Cat instances inside the cafe map
     this.flags = {};
     this.quests = {};           // id -> 'active' | 'done'
+    this.questStep = {};        // id -> how far along a multi-step job you are
     this.friends = {};          // villager id -> friendship 0..1
     this.workers = 0;
     this.materials = 0;
@@ -116,7 +117,7 @@ export class GameState {
       money: this.money, reputation: this.reputation,
       inventory: this.inventory, stock: this.stock,
       cats: this.cats.map((c) => c.save()), cafe: this.cafe,
-      flags: this.flags, quests: this.quests, friends: this.friends,
+      flags: this.flags, quests: this.quests, questStep: this.questStep, friends: this.friends,
       workers: this.workers, materials: this.materials, employee: this.employee,
       shopOpen: this.shopOpen, shopHours: this.shopHours, visited: this.visited,
       mail: this.mail, pendingLetters: this.pendingLetters,
@@ -288,6 +289,7 @@ export class GameState {
       cafe: this.cafe,
       flags: this.flags,
       quests: this.quests,
+      questStep: this.questStep,
       friends: this.friends,
       workers: this.workers,
       materials: this.materials,
@@ -335,6 +337,7 @@ export class GameState {
     if (!this.cafe.awning) this.cafe.awning = '#c05a7a';
     this.flags = data.flags || {};
     this.quests = data.quests || {};
+    this.questStep = data.questStep || {};
     this.friends = data.friends || {};
     this.workers = data.workers || 0;
     this.materials = data.materials || 0;

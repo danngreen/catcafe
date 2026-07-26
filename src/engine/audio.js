@@ -23,6 +23,9 @@ const CH = {
   sus2: [0, 2, 7, 14],
   add9: [0, 4, 7, 14],
   min6: [0, 3, 7, 9],
+  // Augmented: every interval the same size, so it has no home note. Used only
+  // after dark, where not knowing quite where you are is the idea.
+  aug: [0, 4, 8, 12],
 };
 
 // Each entry: [rootMidi, chordName]. Roots sit around C3 (48).
@@ -45,11 +48,16 @@ const TRACKS = {
     prog: [[50, 'sus2'], [50, 'add9'], [48, 'maj9'], [45, 'min9'],
            [43, 'sus2'], [50, 'add9'], [55, 'min7'], [48, 'maj9']],
   },
-  // Night: hushed, mostly pad and the odd chime.
+  // Out after dark. Slower and emptier than the daytime tracks, with the drums
+  // almost gone and the pad doing the work — the valley at night should feel
+  // like somewhere slightly other, not like the same place with the lights off.
+  // The half-diminished and the augmented in the middle are what make it prick
+  // up: they never resolve where the ear expects.
   night: {
-    bpm: 60, swing: 0.14, drums: 0.28, pad: 0.95, melody: 0.35, crackle: 0.55,
-    prog: [[45, 'min9'], [43, 'm7b5'], [41, 'maj9'], [48, 'dom9'],
-           [45, 'min9'], [50, 'min7'], [43, 'min6'], [45, 'min9']],
+    bpm: 52, swing: 0.16, drums: 0.14, pad: 1.0, melody: 0.3, crackle: 0.7,
+    shimmer: 0.5,
+    prog: [[45, 'min9'], [44, 'm7b5'], [43, 'aug'], [41, 'maj9'],
+           [45, 'min9'], [50, 'm7b5'], [42, 'aug'], [40, 'min6']],
   },
   // Little shop jingle-ish loop, a touch faster and cheerier.
   shop: {
@@ -387,6 +395,18 @@ export class AudioEngine {
       }
     }
 
+    // --- shimmer: a few high bell tones drifting over the top ---------------
+    // Night only. Struck rarely and left to ring far longer than anything else
+    // in the mix, an octave and a half above the pad, so it reads as something
+    // far off rather than as part of the tune.
+    if (tr.shimmer > 0 && rng.chance(0.09 * tr.shimmer)) {
+      const n = root + 24 + rng.pick([0, 2, 7, 9, 14]);
+      this.fmVoice(mus, {
+        t0: t + rng.range(0, spb * 0.6), freq: mtof(n), ratio: 3.01, index: 0.9,
+        dur: spb * 2.2, release: 2.6, gain: 0.03 * tr.shimmer,
+      });
+    }
+
     // --- vinyl crackle: the lo-fi glue --------------------------------------
     if (tr.crackle > 0 && rng.chance(0.5)) {
       this.noiseHit(mus, { t0: t + rng.range(0, spb * 0.5), dur: 0.012, gain: 0.02 * tr.crackle, type: 'bandpass', freq: rng.range(1500, 6000), q: 3 });
@@ -504,6 +524,13 @@ export class AudioEngine {
       if (this.critterTimer <= 0) {
         this.critterTimer = this.rng.range(3.5, 11);
         this.cricket(0.4);
+      }
+      // An owl somewhere you can't see. Rare on purpose: the point of a sound
+      // like this is that you look up, and you can't do that twice a minute.
+      this.owlTimer = (this.owlTimer ?? 18) - dt;
+      if (this.owlTimer <= 0) {
+        this.owlTimer = this.rng.range(22, 60);
+        this.sfx('owl', { gain: 0.5, pan: this.rng.range(-0.8, 0.8) });
       }
     }
     if ((amb.chatter || 0) > 0.05) {
@@ -681,6 +708,25 @@ export class AudioEngine {
       case 'error':
         this.tone(dest, { type: 'square', freq: 220, t0: t, attack: 0.003, decay: 0.12, sustain: 0.2, release: 0.1, dur: 0.14, gain: 0.06 * vol });
         break;
+      // A tawny owl: two soft breathy notes, the second lower and longer. Sine
+      // through a narrow band so it reads as hollow rather than as a whistle.
+      case 'owl': {
+        this.tone(dest, { type: 'sine', freq: 392, t0: t, attack: 0.05, decay: 0.1, sustain: 0.6, release: 0.16, dur: 0.2, gain: 0.06 * vol });
+        this.tone(dest, { type: 'sine', freq: 330, t0: t + 0.42, attack: 0.07, decay: 0.14, sustain: 0.5, release: 0.35, dur: 0.4, gain: 0.055 * vol });
+        this.noiseHit(dest, { t0: t, dur: 0.2, gain: 0.012 * vol, type: 'bandpass', freq: 500, q: 6, attack: 0.06 });
+        break;
+      }
+      // Something not quite of this world noticing you. Three tones a whole
+      // tone apart — no key, no resolution — left ringing.
+      case 'spooky': {
+        [0, 2, 4].forEach((k, i) => {
+          this.fmVoice(dest, {
+            t0: t + i * 0.13, freq: mtof(74 + k), ratio: 3.01, index: 1.4,
+            dur: 0.5, release: 1.4, gain: 0.055 * vol,
+          });
+        });
+        break;
+      }
       // "Sorry, we're out of that." A small falling shrug — disappointing, but
       // it happens a lot, so it mustn't sound like a mistake you've made.
       case 'outof': {

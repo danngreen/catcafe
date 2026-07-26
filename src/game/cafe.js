@@ -601,6 +601,11 @@ export class Cafe {
     c.queueSlot = undefined;   // free our place in the queue
 
     audio.sfx(byPlayer ? 'cash' : 'coin', { gain: 0.6 });
+    // Trading after sunset is its own small achievement, and one job asks for it.
+    if (byPlayer && st.clock.isDark && !st.flags.served_after_dark) {
+      st.flags.served_after_dark = true;
+      st.touch('flags');
+    }
     st.earn(pay);
     this.todayRevenue += pay;
     st.floatText(`+${pay}`, c.x, c.y - 26, '#ffcf6b');

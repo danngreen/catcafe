@@ -147,6 +147,155 @@ export const QUESTS = [
     complete: "Eleven years of tides and weather... and one line, near the end.\n\n'The cat has stopped coming. I shall wait a while longer.'\n\nHm. Take this lantern. Somebody should keep something burning.",
   },
   {
+    id: 'lane_end_hedge',
+    giver: 'button',
+    title: 'The Hedge at Lane End',
+    desc: "Button's hedge moves at night. Button would like it to stop.",
+    offer: "Right. Short legs, long opinions, and here is one of them.\n\n"
+      + "The hedge at the end of my lane MOVES. At night. Not the wind — one bit of it, "
+      + "going up and down like something is working along the bottom of it looking for a sock.\n\n"
+      + "I have barked at it. I have barked at it a great deal. It does not care, which is "
+      + "frankly insulting. You have cats. You are used to nonsense. Would you go and look?",
+    complete: 'Oh. Oh, that IS mine. That is my collar.\n\n'
+      + '*the very old dog stands still for the first time in two hundred years*\n\n'
+      + 'They put my name on it, you know. At the opening. There was a ribbon and everything.\n\n'
+      + 'Thank you. Thank you. I shall stop bothering the hedge.',
+    steps: [
+      {
+        objective: { type: 'flag', flag: 'saw_the_hedge' },
+        note: 'Look at the hedge at the end of the lane — after dark',
+        progress: "After dark, mind. It does nothing in daylight. I have stood there checking. Repeatedly.",
+        done: 'You SAW it? Ha! HA! I am not daft, then. Right. What do we do about it?',
+      },
+      {
+        objective: { type: 'talk', to: 'woofers' },
+        note: 'Speak to whatever is in the hedge',
+        progress: "Somebody will have to talk to it, and it will not be me. I have made my position clear.",
+        done: '*the shape in the hedge lifts its head*\n\n'
+          + 'You can see me. Nobody has been able to see me in a very long while.\n\n'
+          + 'I have lost my collar. It was gold, and it had my name upon it, and I have been '
+          + 'looking in this hedge for — some time. I no longer recall where I had it last.\n\n'
+          + 'I do not recall a great deal. I am fairly sure I was IMPORTANT.',
+      },
+      {
+        objective: { type: 'flag', flag: 'read_town_history' },
+        note: 'Find out who Sir Woofers was — try the Reading Room',
+        progress: 'A dead dog wants its collar back and cannot remember losing it. Somebody will '
+          + 'have written this down. Somebody writes everything down. Try the Reading Room.',
+        done: 'Saltsouth Pier. 1800. He wore it to the opening and never came home with it.\n\n'
+          + 'And Saltsouth, according to the margin, is Saltmere.',
+      },
+      {
+        objective: { type: 'item', item: 'golden_collar' },
+        note: 'Search the mud at the end of Saltmere Pier',
+        progress: 'The end of the pier at Saltmere. Under it, mind, not on it.',
+        done: 'Two hundred years in the mud, and still bright.',
+      },
+      {
+        objective: { type: 'deliver', item: 'golden_collar', to: 'woofers', give: false },
+        note: 'Take the collar back to Sir Woofers, after dark',
+        progress: "He will be at the hedge. He is always at the hedge. After dark, obviously.",
+      },
+    ],
+    reward: { money: 340, rep: 0.1, friendship: ['button'], items: [['catnip', 2]] },
+  },
+  {
+    id: 'moth_count',
+    giver: 'moth',
+    night: true,
+    title: 'Fourteen Species',
+    desc: 'Moth counts moths, and has run out of light to count them by.',
+    offer: "You're up. Good. Nobody's ever up.\n\n"
+      + "I count them, you see. On the lamps. Only the lamps in this town are dreadful and "
+      + "half of them are out, and I'm fairly sure I've been counting the same moth eleven times.\n\n"
+      + "There's a proper storm lantern to be had at the hardware place up in Hollowdown. "
+      + "Bring me one and I'll show you something.",
+    complete: '*Moth holds the lantern up and the air fills — properly fills — with wings*\n\n'
+      + "Fourteen. Fourteen species on one lamp. And there's the one I've never got a name for.\n\n"
+      + "Take this. Found it under the lamp at the crossroads, and it's no use to me.",
+    steps: [
+      {
+        objective: { type: 'item', item: 'lantern' },
+        note: 'Buy a storm lantern — the Chalk Pit Store, Hollowdown',
+        progress: 'The hardware place in Hollowdown. Ask for a storm lantern, not a nice one.',
+        done: "That's the one. Now — where's dark and still and has a lamp?",
+      },
+      {
+        objective: { type: 'deliver', item: 'lantern', to: 'moth', give: false },
+        note: 'Take the lantern to Moth, after dark',
+      },
+    ],
+    reward: { money: 150, items: [['seashell', 1]], friendship: ['moth'] },
+  },
+  {
+    id: 'stone_circle',
+    giver: 'vesper',
+    night: true,
+    title: 'What The Stones Do',
+    desc: 'Vesper insists the standing stones do something after dark, and will not say what.',
+    offer: "You want to know what I do up here all night? I watch the stones.\n\n"
+      + "No, I'm not telling you. If I tell you, you'll go up expecting it, and you'll see "
+      + "what you expected. Go and stand in the middle of them after dark and come back to me.\n\n"
+      + "Bring a saucer of milk. You'll see why.",
+    complete: "So now you know.\n\n"
+      + "Everyone who has ever left a saucer there has found it empty. Every single one. "
+      + "For as long as anyone has been writing it down.\n\n"
+      + "Nobody has ever seen what drinks it. I have watched for four years.",
+    steps: [
+      {
+        objective: { type: 'flag', flag: 'stood_in_stones' },
+        note: 'Stand in the middle of the standing stones, after dark',
+        progress: 'The high downs, north-east. In the middle of them. After dark. Not from the edge.',
+        done: 'Warm, were they? Under your hand? Good. Now go and find out how long that has been going on.',
+      },
+      {
+        objective: { type: 'flag', flag: 'read_stones' },
+        note: 'Read what the Reading Room has on the stones',
+        progress: 'Somebody bound a book about it by hand. It lives in the Reading Room and it is slightly damp.',
+        done: 'A saucer of milk. Returned empty. That is the entry I wanted you to find.',
+      },
+      {
+        objective: { type: 'item', item: 'milk' },
+        note: 'Get a bottle of milk',
+        progress: 'Milk. Any milk. The grocer has milk.',
+        done: 'Right. Up you go, then. Leave it in the middle and step back.',
+      },
+      {
+        objective: { type: 'flag', flag: 'left_milk' },
+        note: 'Leave the milk at the standing stones, after dark',
+        progress: 'In the middle of the stones. After dark. And then wait a moment.',
+      },
+    ],
+    reward: { money: 260, rep: 0.08, items: [['catnip', 1]], flags: ['hint_stones'] },
+  },
+  {
+    id: 'lit_window',
+    giver: 'tallow',
+    night: true,
+    title: 'A Lit Window',
+    desc: 'Tallow thinks the cafe is wasting its evenings.',
+    offer: "Your place is dark at night. That's a waste of a building.\n\n"
+      + "A lit window after sunset is the most inviting thing there is. People walk towards it "
+      + "without deciding to.\n\n"
+      + "Put a lamp in that cafe of yours, then keep the door open past sunset and see who comes.",
+    complete: 'I walked past last night and there it was. Warm square of light with cats in it.\n\n'
+      + "I stood there like an idiot for a full minute.\n\nThat's the trade. That's all of it.",
+    steps: [
+      {
+        objective: { type: 'furniture', place: 'lampIn' },
+        note: 'Put a lamp in the cafe',
+        progress: 'A lamp. Inside. The furniture place up in Thistlewick has them.',
+        done: "Good. Now leave the sign on OPEN past sunset and actually be in there.",
+      },
+      {
+        objective: { type: 'flag', flag: 'served_after_dark' },
+        note: 'Serve somebody in the cafe after dark',
+        progress: 'Open, after sunset, with you behind the counter. Somebody will come.',
+      },
+    ],
+    reward: { money: 220, rep: 0.12, friendship: ['tallow'] },
+  },
+  {
     id: 'music_night',
     giver: 'lark',
     title: 'Somewhere to Play',
@@ -165,9 +314,38 @@ export const QUESTS_BY_GIVER = QUESTS.reduce((m, q) => {
   return m;
 }, {});
 
-/** Has the player met this quest's objective? */
+// ---------------------------------------------------------------------------
+// Steps
+// ---------------------------------------------------------------------------
+//
+// A quest is a list of steps done in order. Most have one, which is why they
+// can still be written with a bare `objective` and `progress`; the longer ones
+// spell out a `steps` array, where each step has its own thing to do, its own
+// line for the journal, and its own line for whoever you report back to.
+
+/** Every quest as a list of steps, however it was written. */
+export function questSteps(q) {
+  if (q.steps) return q.steps;
+  return [{ objective: q.objective, progress: q.progress }];
+}
+
+/** Which step of `q` is in play. */
+export function stepIndex(q, st) {
+  const n = questSteps(q).length;
+  return Math.min(st.questStep?.[q.id] || 0, n - 1);
+}
+
+export function currentStep(q, st) { return questSteps(q)[stepIndex(q, st)]; }
+
+export function isLastStep(q, st) { return stepIndex(q, st) >= questSteps(q).length - 1; }
+
+/** Has the player done what the step in play asks? */
 export function objectiveMet(q, st) {
-  const o = q.objective;
+  return stepMet(currentStep(q, st).objective, st);
+}
+
+export function stepMet(o, st) {
+  if (!o) return false;
   switch (o.type) {
     case 'stock': {
       const n = o.any.reduce((s, id) => s + st.cafeSim.stockCount(id), 0);
@@ -176,7 +354,8 @@ export function objectiveMet(q, st) {
     case 'item':
       return (st.inventory[o.item] || 0) >= (o.count || 1);
     case 'deliver':
-      return false; // completed by talking to the recipient
+    case 'talk':
+      return false; // both are finished by talking to somebody
     case 'flag':
       return !!st.flags[o.flag];
     case 'cats':
@@ -198,21 +377,35 @@ export function objectiveMet(q, st) {
 
 /** Short "what do I do now" text for the journal. */
 export function objectiveText(q, st) {
-  const o = q.objective;
+  const step = currentStep(q, st);
+  const o = step.objective;
+  const n = questSteps(q).length;
+  const of = n > 1 ? ` (${stepIndex(q, st) + 1}/${n})` : '';
+  return stepText(o, st, step) + of;
+}
+
+function stepText(o, st, step) {
+  if (step && step.note) return step.note;
   switch (o.type) {
     case 'stock': {
       const n = o.any.reduce((s, id) => s + st.cafeSim.stockCount(id), 0);
       return `Stock coffee or tea (${Math.min(n, o.count)}/${o.count})`;
     }
     case 'item': return `Find: ${st.itemName(o.item)} (${Math.min(st.inventory[o.item] || 0, o.count || 1)}/${o.count || 1})`;
-    case 'deliver': return `Deliver ${st.itemName(o.item)} to ${st.villagerName(o.to)}`;
+    case 'deliver': return `Take ${st.itemName(o.item)} to ${st.villagerName(o.to)}`;
+    case 'talk': return `Find ${st.villagerName(o.to)}`;
     case 'flag': return 'Clear the way';
     case 'cats': return `Own ${o.count} cats (${st.cats.length}/${o.count})`;
-    case 'coat': return 'Raise a cat\'s coat with good food';
+    case 'coat': return "Raise a cat's coat with good food";
     case 'rooms': return `Build another room (${st.cafe.rooms.length}/${o.count})`;
     case 'profit': return `Clear ${o.amount} profit in a day (best: ${Math.round(st.bestDayProfit)})`;
     case 'rarecat': return 'Own a rare breed';
     case 'furniture': return 'Put a piano in the cafe';
     default: return '';
   }
+}
+
+/** The line the giver says while you're partway through. */
+export function progressText(q, st) {
+  return currentStep(q, st).progress || q.progress || 'Still on it, then?';
 }

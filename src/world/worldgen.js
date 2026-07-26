@@ -641,7 +641,11 @@ function placeLandmarks(map, elev, reserved, inland, rng) {
       const sx = Math.round(x + Math.cos(a) * 5), sy = Math.round(y + Math.sin(a) * 4);
       map.addObject('boulder', sx, sy, { variant: i % 3 });
     }
-    map.setInteract(x, y, { kind: 'sign', text: 'THE STANDING STONES\n\nSeven of them, leaning slightly inward, as if listening.\n\nSomeone has left a jam jar of wildflowers at the base of the tallest.' });
+    // The middle of the circle is somewhere you stand, not a plaque you read —
+    // and what happens when you stand there depends on the hour.
+    for (const [ax, ay] of [[x, y], [x, y + 1], [x - 1, y], [x + 1, y]]) {
+      map.setInteract(ax, ay, { kind: 'search', spot: 'stones' });
+    }
     out.push({ id: 'stones', x, y, name: 'The Standing Stones' });
   }
 
@@ -670,6 +674,68 @@ function placeLandmarks(map, elev, reserved, inland, rng) {
     map.addObject('oak', x - 1, y - 1, { variant: 2 });
     map.setInteract(x, y + 1, { kind: 'sign', text: 'THE GREAT OAK\n\nIt is enormous. Three of the village houses lean on it slightly, and it does not appear to mind.' });
     out.push({ id: 'bigoak', x, y: y + 1, name: 'The Great Oak' });
+  }
+
+  // Saltmere pier. Opened in 1800 under the name Saltsouth, which is what the
+  // town history still calls it and the reason anyone reading that has to work
+  // out where to go. A pier has to actually stand over water, and which way the
+  // sea lies from Saltmere depends on how the coastline came out of the noise —
+  // so find the shore first, then walk seaward from it.
+  {
+    const wet = (tx, ty) => map.inBounds(tx, ty) && isWater(map.ground[ty * WORLD_W + tx]);
+    const DIRS = [[0, 1], [-1, 0], [1, 0], [0, -1]];
+    let best = null;
+    for (let ty = 248; ty < 282 && !best; ty++) {
+      for (let tx = 64; tx < 102 && !best; tx++) {
+        if (wet(tx, ty) || map.blocked[ty * WORLD_W + tx]) continue;
+        for (const [dx, dy] of DIRS) {
+          // Open water, straight out: ten clear tiles with room either side, so
+          // the deck never clips a headland on its way past.
+          let run = 0;
+          while (run < 13
+            && wet(tx + dx * (run + 1), ty + dy * (run + 1))
+            && wet(tx + dx * (run + 1) - dy, ty + dy * (run + 1) + dx)
+            && wet(tx + dx * (run + 1) + dy, ty + dy * (run + 1) - dx)) run++;
+          if (run >= 10) { best = { x: tx, y: ty, dx, dy }; break; }
+        }
+      }
+    }
+    if (best) {
+      const { x, y, dx, dy } = best;
+      const px = -dy, py = dx;                    // across the pier
+      const len = 10;
+      for (let i = 0; i <= len; i++) {
+        const tx = x + dx * i, ty = y + dy * i;
+        for (let k = -1; k <= 1; k++) {
+          const cx = tx + px * k, cy = ty + py * k;
+          if (!map.inBounds(cx, cy)) continue;
+          const idx = cy * WORLD_W + cx;
+          map.ground[idx] = T.DECK;
+          map.blocked[idx] = 0;
+          reserved[idx] = 1;
+        }
+        if (i > 0 && i % 4 === 0) map.addObject('lamppost', tx + px * 2, ty + py * 2, {});
+      }
+      const ex = x + dx * len, ey = y + dy * len;
+      map.setInteract(x - dx, y - dy, { kind: 'sign', text: 'SALTMERE PIER\n\nA board at the landward '
+        + 'end, repainted many times. Under the newest coat you can just make out an older name, '
+        + 'and the year 1800.' });
+      // The far end, where you can lie flat and put an arm into the mud.
+      for (const [ax, ay] of [[ex, ey], [ex + px, ey + py], [ex - px, ey - py], [ex - dx, ey - dy]]) {
+        map.setInteract(ax, ay, { kind: 'search', spot: 'pier_mud' });
+      }
+      map.lights.push({ x: ex * TILE + 8, y: ey * TILE, r: 80, color: '#ffe0b0' });
+      out.push({ id: 'pier', x: ex, y: ey, name: 'Saltmere Pier' });
+    }
+  }
+
+  // The hedge at the end of the lane in Brambleford. Nothing much, by day.
+  {
+    const x = 108, y = 186;
+    clear(x, y, 3, T.GRASS);
+    for (let i = -3; i <= 3; i++) map.addObject('bush', x + i, y, { variant: (i + 3) % 3 });
+    for (const ax of [x - 1, x, x + 1]) map.setInteract(ax, y + 1, { kind: 'search', spot: 'bushes' });
+    out.push({ id: 'bushes', x, y: y + 1, name: 'The Hedge at Lane End' });
   }
 
   // A couple of farms out in the fields.

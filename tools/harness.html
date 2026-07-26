@@ -110,6 +110,146 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!s || s.constructor.name !== 'SummaryScreen') {
           window.__errors.push('no summary card: ' + window.__sum);
         }
+      } else if (SCRIPT === 'nightfolk') {
+        // Dusk and dawn swap the cast over, and nobody blinks in or out: the
+        // day crowd walks to a door or a treeline, the night crowd comes from
+        // one. Checked by watching the walk, not just the end state.
+        const st = g.state;
+        const byId = (id) => g.villagers.find((v) => v.def.id === id);
+        st.clock.t = 12 * (1200 / 24);
+        g.updateVillagerShift();
+        await wait(400);
+        const dayOut = byId('nettle').shift, ghostOut = byId('woofers').shift;
+
+        st.clock.t = 21 * (1200 / 24);      // after dark
+        g.updateVillagerShift();
+        await wait(300);
+        const leaving = g.villagers.filter((v) => v.shift === 'leaving').length;
+        const arriving = g.villagers.filter((v) => v.shift === 'arriving').length;
+        // They should be *walking*, and fading rather than vanishing.
+        const mid = byId('nettle');
+        const midAlpha = mid.alpha;
+        await wait(6000);
+        const nightNow = g.villagers.filter((v) => v.def.when === 'night' && v.shift === 'here').length;
+        const dayNow = g.villagers.filter((v) => v.def.when !== 'night' && v.def.when !== 'always' && v.shift === 'here').length;
+        window.__night = `byDay[${dayOut}/${ghostOut}] atDusk[leaving=${leaving} arriving=${arriving}`
+          + ` fading=${midAlpha < 1}] after[night=${nightNow} day=${dayNow}]`;
+        if (dayOut !== 'here') window.__errors.push('day folk not out by day: ' + window.__night);
+        if (ghostOut !== 'away') window.__errors.push('the ghost was out in daylight: ' + window.__night);
+        if (!leaving || !arriving) window.__errors.push('nobody walked anywhere at dusk: ' + window.__night);
+        if (!nightNow) window.__errors.push('night folk never arrived: ' + window.__night);
+        if (dayNow) window.__errors.push('day folk still out after dark: ' + window.__night);
+      } else if (SCRIPT === 'pierlook') {
+        const st = g.state;
+        const pier = g.landmarks.find((l) => l.id === 'pier');
+        st.clock.t = 21 * (1200 / 24);
+        g.player.x = pier.x * 16 + 8; g.player.y = (pier.y - 3) * 16;
+        g.cam.follow(g.overworld, g.player.x, g.player.y, true);
+        await wait(1500);
+      } else if (SCRIPT === 'hedgelook') {
+        const st = g.state;
+        const b = g.landmarks.find((l) => l.id === 'bushes');
+        st.clock.t = 21.5 * (1200 / 24);
+        g.updateVillagerShift();
+        g.player.x = b.x * 16 + 8; g.player.y = (b.y + 2) * 16;
+        g.cam.follow(g.overworld, g.player.x, g.player.y, true);
+        const w = g.villagers.find((v) => v.def.id === 'woofers');
+        w.shift = 'here'; w.alpha = 1;
+        await wait(2500);
+      } else if (SCRIPT === 'nightplaces') {
+        // The trail has to exist in the world, not just in the handlers: a
+        // hedge you can reach, a library you can walk into with books on the
+        // shelves, and a pier standing out over the water with mud under it.
+        const st = g.state;
+        const spots = {};
+        for (const [k, v] of g.overworld.interacts) {
+          if (v.kind === 'search') (spots[v.spot] ||= []).push(k);
+        }
+        st.clock.t = 13 * (1200 / 24);      // the Reading Room keeps hours
+        const lib = g.doorByShop.get('library');
+        const pier = g.landmarks.find((l) => l.id === 'pier');
+        const bushes = g.landmarks.find((l) => l.id === 'bushes');
+
+        // Walk into the library the way a player does, and read what's there.
+        let books = 0;
+        if (lib) {
+          g.player.x = lib.x * 16 + 8; g.player.y = (lib.y + 1) * 16 - 2;
+          g.openDoor({ kind: 'door', shop: 'library', name: 'The Reading Room' }, lib);
+          await wait(1400);
+          const map = g.currentMap;
+          for (const [, v] of map.interacts) if (v.kind === 'book') books++;
+        }
+        window.__places = `library=${!!lib}@${st.mapId} books=${books}`
+          + ` pier=${pier ? pier.x + ',' + pier.y : 'none'} mud=${(spots.pier_mud || []).length}`
+          + ` hedge=${bushes ? 'yes' : 'no'}/${(spots.bushes || []).length}`
+          + ` stones=${(spots.stones || []).length}`;
+        if (!lib) window.__errors.push('no library in the valley: ' + window.__places);
+        if (st.mapId !== 'shop:library') window.__errors.push('could not get into it: ' + window.__places);
+        if (books < 4) window.__errors.push('nothing on the shelves: ' + window.__places);
+        if (!pier || !(spots.pier_mud || []).length) window.__errors.push('no pier to search: ' + window.__places);
+        if (!bushes || !(spots.bushes || []).length) window.__errors.push('no hedge to search: ' + window.__places);
+        if (!(spots.stones || []).length) window.__errors.push('cannot stand in the stones: ' + window.__places);
+      } else if (SCRIPT === 'ghostquest') {
+        // The whole of Nettle's hedge job, step by step, the way it is played:
+        // take it by day, see the hedge at night, talk to what's in it, read up
+        // on it, dig the collar out of the pier, bring it back.
+        const st = g.state;
+        const clear = async () => {
+          for (let i = 0; i < 12 && g.dialogue.active; i++) {
+            key('Space', true); await wait(90); key('Space', false); await wait(160);
+          }
+        };
+        const talk = async (id) => {
+          const v = g.villagers.find((k) => k.def.id === id);
+          if (!v) { window.__errors.push('no such villager: ' + id); return; }
+          v.shift = 'here'; v.alpha = 1;
+          g.talkTo(v);
+          await wait(300);
+          await clear();
+          await wait(300);
+        };
+        const step = () => st.questStep.lane_end_hedge || 0;
+        const trail = [];
+
+        st.clock.t = 12 * (1200 / 24);
+        g.updateVillagerShift();
+        await wait(300);
+        await talk('button');                        // take the job
+        trail.push(`taken=${st.quests.lane_end_hedge}@${step()}`);
+
+        st.clock.t = 21 * (1200 / 24);               // after dark
+        g.updateVillagerShift();
+        await wait(400);
+        g.searchSpot('bushes'); await wait(250); await clear();
+        trail.push(`hedge=${!!st.flags.saw_the_hedge}`);
+        await talk('button');                        // report the hedge moved
+        trail.push(`step${step()}`);
+
+        await talk('woofers');                       // meet the ghost
+        trail.push(`met@${step()}`);
+
+        g.readBook('town_history'); await wait(250); await clear();
+        trail.push(`read=${!!st.flags.read_town_history}`);
+        await talk('button');                        // work out where to look
+        trail.push(`step${step()}`);
+
+        g.searchSpot('pier_mud'); await wait(250); await clear();
+        trail.push(`collar=${st.has('golden_collar')}`);
+        await talk('button');
+        trail.push(`step${step()}`);
+
+        const money0 = st.money;
+        await talk('woofers');                       // give it back
+        await wait(400);
+        window.__ghost = trail.join(' ') + ` done=${st.quests.lane_end_hedge}`
+          + ` paid=${st.money - money0} carrying=${st.has('golden_collar')}`;
+        if (!st.flags.saw_the_hedge) window.__errors.push('the hedge never moved: ' + window.__ghost);
+        if (!st.has('golden_collar') && !st.flags.got_collar) {
+          window.__errors.push('never found the collar: ' + window.__ghost);
+        }
+        if (st.quests.lane_end_hedge !== 'done') window.__errors.push('job never finished: ' + window.__ghost);
+        if (st.money - money0 < 300) window.__errors.push('no reward: ' + window.__ghost);
+        if (st.has('golden_collar')) window.__errors.push('kept the collar: ' + window.__ghost);
       } else if (SCRIPT === 'wishlist') {
         // Customers arrive wanting three or four particular things and ask for
         // them in turn. Each press of Space answers one ask: in stock they buy
@@ -1252,6 +1392,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__walk ? ` inn=${window.__innMap} stairs=${window.__stairs} walk=${window.__walk} summary=${window.__summary} slept=${window.__slept}` : '')
         + (window.__wish ? ` ${window.__wish} | ${window.__asked || ''} | ${window.__waited || ''} | ${window.__settle || ''}` : '')
         + (window.__sum ? ` ${window.__sum}` : '')
+        + (window.__night ? ` ${window.__night}` : '')
+        + (window.__places ? ` ${window.__places}` : '')
+        + (window.__ghost ? ` ${window.__ghost}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';
       out.textContent = `RESULT ${errs.length ? 'FAIL' : 'OK'} (${errs.length} issues)\n${info}\n` + errs.slice(0, 25).join('\n');

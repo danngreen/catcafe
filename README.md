@@ -100,6 +100,24 @@ is, and how long it has been silent. When two screens disagree about who can
 see whom, that page settles it. The server also prints a line whenever it hangs
 up on anyone, and why.
 
+## After dark
+
+The valley keeps two casts. At dusk the day crowd walks home — to a door, or a
+treeline, or wherever the nearest way out of sight happens to be — and the night
+crowd comes out the same way. Nobody blinks in or out; if you're standing in the
+lane at sunset you can watch the changeover happen around you.
+
+The music changes with them: slower, emptier, and built on chords that never
+resolve where the ear expects, with the odd bell a long way off. There's an owl
+somewhere you can't see.
+
+Night people have their own jobs for you, and the longer jobs run in steps —
+find out where something is, then go and get it, then bring it back. The Reading
+Room in Brambleford is where finding out mostly happens: what you read is kept
+as something you *know*, which a job can then ask about. Some places give up
+different things depending on what you know and what hour it is. A hedge is just
+a hedge in daylight.
+
 ## Controls
 
 | Key | Does |
@@ -240,7 +258,7 @@ There's a headless smoke test that drives the game through scenarios in a real
 browser and reports console errors:
 
 ```bash
-node tools/check.js walk cafe shop furnshop build furnish exterior treats taxi sleep map night door wishlist summarylines title systems1 systems2 --clean
+node tools/check.js walk cafe shop furnshop build furnish exterior treats taxi sleep map night door wishlist summarylines nightfolk nightplaces ghostquest title systems1 systems2 --clean
 node tools/check.js runmobile tabmobile pausemobile dialogmobile --mobile 844x390 --clean   # touch
 node tools/check.js net netmobile netbooks netclock netdrop netforget solo --clean  # multiplayer
 node tools/check.js netping netmute netidle netpollquiet --ms 82000 --clean   # keepalive (slow)
