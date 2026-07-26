@@ -330,6 +330,22 @@ export class Room {
     for (const p of joined) p.ws.send(text);
   }
 
+  /**
+   * Shut this room down for good. Stops the clock, turns off saving so the file
+   * we are about to remove isn't written straight back out, and turns anybody
+   * still attached loose — though the caller is expected to have refused while
+   * the valley had people in it.
+   */
+  close() {
+    clearInterval(this.timer);
+    this.dirty = false;
+    for (const p of [...this.players.values()]) {
+      try { p.ws.close(1001, 'game removed'); } catch { /* already gone */ }
+    }
+    this.players.clear();
+    this.closed = true;
+  }
+
   // ------------------------------------------------------------- persistence
 
   restore() {

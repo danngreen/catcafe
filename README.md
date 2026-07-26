@@ -77,6 +77,14 @@ and when anybody last played it — for whichever row is highlighted, since this
 is played on a keyboard and on a phone and neither has a hover. "New valley"
 makes another, with its own seed.
 
+`X` on a highlighted valley deletes it, after a confirm that names the cafe and
+what day it had reached and starts on **No**. The server refuses while anybody
+is connected to that game, whether they're playing or still in the lobby for it
+— so you can't pull the ground out from under someone mid-afternoon, and the
+lobby's own idea of who is where can be a few seconds stale without it
+mattering. Ids are reused, so a deleted 002 is what the next new valley
+becomes.
+
 Games are kept in `saves/valley-NNN.json`. A single `valley.json` from before
 this existed becomes game 001 on first run, so nothing is lost. `?game=002` in
 the URL is a direct link that skips the lobby. `SESSION_SAVE=0 npm start` plays

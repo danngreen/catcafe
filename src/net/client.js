@@ -143,6 +143,14 @@ export class NetClient {
     } catch { return null; }
   }
 
+  static async deleteGame(id) {
+    try {
+      const res = await fetch(`/games/${encodeURIComponent(id)}`,
+        { method: 'DELETE', cache: 'no-store' });
+      return await res.json();
+    } catch { return { ok: false, why: 'the server did not answer' }; }
+  }
+
   static async newGame() {
     try {
       const res = await fetch('/games/new', { method: 'POST', cache: 'no-store' });

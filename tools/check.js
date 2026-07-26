@@ -67,6 +67,7 @@ const BUDGET = {
   netmapplayers: 20000,
   nettitleme: 18000,
   netlobby: 26000,
+  netlobbydel: 30000,
   netgameone: 20000,
   netgametwo: 18000,
   titleme: 20000,
@@ -100,7 +101,7 @@ const GROUPS = {
   // Single-process networked runs. The paired ones need two browsers at once
   // and are listed in the README rather than here.
   net: ['net', 'netmobile', 'netbooks', 'netclock', 'netdrop', 'netforget',
-    'netpollbooks', 'netfallback', 'netmapplayers', 'netlobby', 'solo'],
+    'netpollbooks', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbydel', 'solo'],
   slow: ['netidle', 'netping', 'netmute', 'netpollquiet', 'netidletitle'],
 };
 GROUPS.all = [...new Set([

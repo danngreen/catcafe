@@ -10,7 +10,7 @@
 // in is still the thing the clock stops for and the thing the next player
 // joins.
 
-import { readdirSync, readFileSync, writeFileSync, renameSync, mkdirSync, statSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, mkdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { Room } from './room.js';
 
@@ -117,6 +117,25 @@ export class Games {
   }
 
   list() { return this.ids().map((id) => this.summary(id)).filter(Boolean); }
+
+  /**
+   * Throw a valley away. Refused while anybody is connected to it — deleting
+   * the ground from under someone mid-afternoon is not a thing to make easy,
+   * and the lobby's own check can always be a few seconds out of date.
+   */
+  remove(id) {
+    if (!this.ids().includes(id)) return { ok: false, why: 'no such valley' };
+    const room = this.rooms.get(id);
+    if (room && room.players.size) {
+      return { ok: false, why: room.count ? 'somebody is playing in there' : 'somebody is in the lobby for it' };
+    }
+    if (room) { room.close(); this.rooms.delete(id); }
+    const p = this.pathFor(id);
+    if (p && existsSync(p)) {
+      try { unlinkSync(p); } catch (err) { return { ok: false, why: err.message }; }
+    }
+    return { ok: true, id };
+  }
 
   persistAll() { for (const room of this.rooms.values()) room.persist(); }
 

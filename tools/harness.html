@@ -447,10 +447,64 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           }
           try { localStorage.removeItem('catcafe.me'); } catch (e) {}
         }
+      } else if (SCRIPT === 'netlobbydel') {
+        // Deleting a valley from the lobby: asks first, starts on No, refuses
+        // while anybody is in there, and the row goes when it is gone.
+        const { NetClient } = await import('../src/net/client.js');
+        while (((await NetClient.listGames()) || []).length < 3) await NetClient.newGame();
+        if (!g.lobbyGames || g.lobbyGames.length < 3) {
+          if (!sessionStorage.getItem('delReload')) {
+            sessionStorage.setItem('delReload', '1');
+            location.reload();
+            await wait(20000);
+          }
+        }
+        sessionStorage.removeItem('delReload');
+        const scr = g.screens[g.screens.length - 1];
+        const before = scr.games.length;
+        // Point at the last valley, which nobody has joined.
+        scr.index = before - 1;
+        const doomed = scr.rows[scr.index];
+
+        // X asks rather than doing it.
+        key('KeyX', true); await wait(160); key('KeyX', false);
+        await wait(400);
+        const asked = !!scr.confirm;
+        const startsOnNo = scr.yes === false;
+
+        // Space on No backs out and changes nothing.
+        key('Space', true); await wait(160); key('Space', false);
+        await wait(500);
+        const afterNo = scr.games.length;
+
+        // Now do it for real: X, right to Yes, Space.
+        key('KeyX', true); await wait(160); key('KeyX', false);
+        await wait(300);
+        key('ArrowRight', true); await wait(160); key('ArrowRight', false);
+        await wait(200);
+        const nowYes = scr.yes === true;
+        key('Space', true); await wait(160); key('Space', false);
+        let w = 0;
+        while (scr.games.length === afterNo && w < 9000) { await wait(250); w += 250; }
+        const left = (await NetClient.listGames()) || [];
+        window.__del = `asked=${asked} startsOnNo=${startsOnNo} afterNo=${afterNo}`
+          + ` movedToYes=${nowYes} games ${before}->${scr.games.length}`
+          + ` onServer=${left.length} gone=${!left.some((x) => x.id === doomed.id)}`;
+        if (!asked) window.__errors.push('X deleted without asking: ' + window.__del);
+        if (!startsOnNo) window.__errors.push('the confirm started on Yes: ' + window.__del);
+        if (afterNo !== before) window.__errors.push('No still deleted it: ' + window.__del);
+        if (!nowYes) window.__errors.push('could not move to Yes: ' + window.__del);
+        if (scr.games.length !== before - 1) window.__errors.push('the row did not go: ' + window.__del);
+        if (left.some((x) => x.id === doomed.id)) {
+          window.__errors.push('still on the server: ' + window.__del);
+        }
       } else if (SCRIPT === 'netlobbylook') {
         await wait(400);
         const scr = g.screens[g.screens.length - 1];
         if (scr && scr.rows) { scr.index = 0; }
+        if (location.search.includes('confirm')) {
+          key('KeyX', true); await wait(160); key('KeyX', false);
+        }
         await wait(900);
       } else if (SCRIPT === 'netlobby') {
         // With more than one valley on the server you get asked which. The
@@ -2220,6 +2274,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__mapp ? ` ${window.__mapp}` : '')
         + (window.__me ? ` ${window.__me}` : '')
         + (window.__lobby ? ` ${window.__lobby}` : '')
+        + (window.__del ? ` ${window.__del}` : '')
         + (window.__two ? ` ${window.__two}` : '')
         + (window.__live ? ` ${window.__live}` : '')
         + (window.__ghost ? ` ${window.__ghost}` : '')

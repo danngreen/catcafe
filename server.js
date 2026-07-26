@@ -68,6 +68,13 @@ const server = createServer(async (req, res) => {
   // stats of every valley before deciding which one to walk into.
   if (path === '/games' && req.method === 'GET') { json({ games: games.list() }); return; }
   if (path === '/games/new' && req.method === 'POST') { json(games.create()); return; }
+  const del = /^\/games\/(\d{3})$/.exec(path);
+  if (del && req.method === 'DELETE') {
+    const res2 = games.remove(del[1]);
+    if (res2.ok) console.log(`[games] removed valley ${del[1]}`);
+    json(res2, res2.ok ? 200 : 409);
+    return;
+  }
   // The session over plain HTTP, for machines that can't hold a socket open.
   if (path === '/poll' && req.method === 'POST') {
     let raw = '';

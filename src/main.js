@@ -1828,19 +1828,63 @@ class LobbyScreen extends Screen {
     this.index = 0;
     this.busy = false;
     this.msg = '';
+    this.confirm = null;      // the valley being thrown away, if any
+    this.yes = false;         // which way the confirm is pointing
   }
 
   get rows() { return [...this.games, { newGame: true }]; }
 
+  /** A valley can be deleted when it exists and nobody is connected to it. */
+  canDelete(row) { return !!row && !row.newGame && !row.playing && !row.here; }
+
   update(dt, input) {
     this.t += dt;
     if (this.busy) return;
+
+    // Throwing a valley away asks first, and starts on No.
+    if (this.confirm) {
+      if (input.repeat('left', dt) || input.repeat('right', dt)) {
+        this.yes = !this.yes;
+        audio.sfx('ui_move');
+      }
+      if (input.hit('cancel')) { this.confirm = null; audio.sfx('ui_back'); return; }
+      if (!input.hit('use')) return;
+      const doomed = this.confirm;
+      this.confirm = null;
+      if (!this.yes) { audio.sfx('ui_back'); return; }
+      this.busy = true;
+      this.msg = 'Removing...';
+      audio.sfx('ui_ok');
+      NetClient.deleteGame(doomed.id).then((res) => {
+        this.busy = false;
+        if (!res || !res.ok) {
+          this.msg = res && res.why ? `Not removed: ${res.why}.` : 'Not removed.';
+          audio.sfx('error');
+          return;
+        }
+        this.msg = `${doomed.cafe || `Game ${doomed.id}`} is gone.`;
+        this.refresh();
+      });
+      return;
+    }
+
     const rows = this.rows;
     if (input.repeat('up', dt)) { this.index = (this.index - 1 + rows.length) % rows.length; audio.sfx('ui_move'); }
     if (input.repeat('down', dt)) { this.index = (this.index + 1) % rows.length; audio.sfx('ui_move'); }
-    if (!input.hit('use')) return;
 
     const row = rows[this.index];
+    if (input.hit('cancel')) {
+      if (!this.canDelete(row)) {
+        if (row && !row.newGame) { this.msg = 'Somebody is in that one.'; audio.sfx('error'); }
+        return;
+      }
+      this.confirm = row;
+      this.yes = false;
+      audio.sfx('ui_back');
+      return;
+    }
+
+    if (!input.hit('use')) return;
     audio.sfx('ui_ok');
     this.busy = true;
     if (row.newGame) {
@@ -1852,6 +1896,15 @@ class LobbyScreen extends Screen {
     } else {
       this.enter(row.id);
     }
+  }
+
+  /** Re-read the list after making or removing one. */
+  refresh() {
+    NetClient.listGames().then((list) => {
+      this.games = list || [];
+      this.game.lobbyGames = this.games;
+      this.index = Math.min(this.index, this.rows.length - 1);
+    });
   }
 
   enter(id) {
@@ -1931,8 +1984,45 @@ class LobbyScreen extends Screen {
       else if (row.here) line(`${row.here} in the lobby`, P.uiGreen);
     }
 
-    drawTextCentered(ctx, this.msg || 'Up / Down to choose    Space to join',
+    const hint = this.canDelete(row)
+      ? 'Up / Down to choose    Space to join    X to delete'
+      : 'Up / Down to choose    Space to join';
+    drawTextCentered(ctx, this.msg || hint,
       VIEW_W / 2, y + h + 10, { color: this.msg ? P.uiGold : '#2f3d22' });
+
+    if (this.confirm) this.drawConfirm(ctx);
+  }
+
+  /** "Are you sure?" — starting on No, because the answer is usually no. */
+  drawConfirm(ctx) {
+    dim(ctx, 0.6);
+    const w = 250, h = 84;
+    const x = Math.round((VIEW_W - w) / 2), y = Math.round((VIEW_H - h) / 2);
+    panel(ctx, x, y, w, h);
+    panelTitle(ctx, x, y, w, 'Delete this valley?');
+    const name = this.confirm.cafe || `Game ${this.confirm.id}`;
+    drawTextCentered(ctx, name, x + w / 2, y + 18, { color: P.uiGold, shadow: P.uiShadow });
+    if (this.confirm.started) {
+      drawTextCentered(ctx, `Day ${this.confirm.daysPlayed + 1}, ${this.confirm.cats} cats, `
+        + `${money(this.confirm.money)}`, x + w / 2, y + 32, { color: P.uiTextDim, shadow: P.uiShadow });
+    }
+    drawTextCentered(ctx, 'This cannot be undone.', x + w / 2, y + 46,
+      { color: P.uiRed, shadow: P.uiShadow });
+
+    const opts = [['No', !this.yes], ['Yes, delete it', this.yes]];
+    let ox = x + 26;
+    opts.forEach(([label, on]) => {
+      const bw = textWidth(label) + 16;
+      ctx.fillStyle = on ? 'rgba(255,207,107,0.18)' : 'rgba(0,0,0,0.25)';
+      ctx.fillRect(ox, y + h - 26, bw, 15);
+      if (on) {
+        ctx.strokeStyle = P.uiGold;
+        ctx.strokeRect(ox + 0.5, y + h - 26.5, bw, 15);
+      }
+      drawText(ctx, label, ox + 8, y + h - 23,
+        { color: on ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
+      ox += bw + 14;
+    });
   }
 }
 
