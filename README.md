@@ -260,16 +260,31 @@ There's a headless smoke test that drives the game through scenarios in a real
 browser and reports console errors:
 
 ```bash
-node tools/check.js walk cafe shop furnshop build furnish exterior treats taxi sleep map night door wishlist summarylines nightfolk nightplaces ghostquest title systems1 systems2 --clean
-node tools/check.js runmobile tabmobile pausemobile dialogmobile --mobile 844x390 --clean   # touch
-node tools/check.js net netmobile netbooks netclock netdrop netforget solo --clean  # multiplayer
-node tools/check.js netping netmute netidle netpollquiet --ms 82000 --clean   # keepalive (slow)
-node tools/check.js netpollbooks netfallback --ms 40000 --clean      # the HTTP transport
-node tools/wsframes.js                                  # WebSocket framing, no browser needed
-# Paired scenarios need two browsers at once: start the first in the background,
-# then the second a few seconds later (netfound/netguest, netcafehost/netcafeguest,
-# nettitle/netpresence). netsave/netsaved bracket a server restart.
-node tools/check.js town --shotdir /tmp/shots      # also writes screenshots
+node tools/check.js all --clean       # everything unattended, about four minutes
+node tools/check.js quests --clean    # just the quest scenarios, about a minute
+node tools/pairs.js                   # the ones needing two browsers at once
+node tools/wsframes.js                # WebSocket framing, no browser needed
+
+node tools/check.js ghostquest --clean          # one scenario by name
+node tools/pairs.js netcafe                     # one pair by name
+node tools/check.js slow --clean                # the keepalive ones, minutes each
+node tools/check.js town --shotdir /tmp/shots   # also writes screenshots
+```
+
+Scenarios say when they have finished and the runner moves on the moment they
+do, so the per-scenario times in `check.js` are ceilings rather than waits: a
+run costs what it actually needs, and a ceiling being hit means something hung.
+The named groups — `quests`, `cafe`, `world`, `ui`, `mobile`, `net`, `cutscene`,
+`slow`, `all` — exist so a change can be checked against what it could
+plausibly have broken, with `all` before committing.
+
+`netsave`/`netsaved` are still run by hand, since they bracket a server restart:
+
+```bash
+SESSION_SAVE=/tmp/v.json node server.js &
+node tools/check.js netsave --clean
+# restart the server on the same file, then
+node tools/check.js netsaved --clean
 ```
 
 Scenarios cover walking the overworld, the cafe trading loop, entering shops,

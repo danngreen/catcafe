@@ -415,3 +415,45 @@ function stepText(o, st, step) {
 export function progressText(q, st) {
   return currentStep(q, st).progress || q.progress || 'Still on it, then?';
 }
+
+/**
+ * Put a job back where the world says it should be.
+ *
+ * A quest's step number and the state of the world can disagree — most obviously
+ * because two players could once both accept the same job, which reset the count
+ * under whoever was ahead. Rather than trust the number, walk the steps and skip
+ * any whose objective is already satisfied: if you are holding the collar, you
+ * are past the step that asks you to find it, whatever the save says.
+ *
+ * Only ever moves forward, and only over steps that are genuinely done, so
+ * running it on a healthy save changes nothing.
+ */
+export function repairStep(q, st) {
+  if (st.quests[q.id] !== 'active') return 0;
+  const steps = questSteps(q);
+
+  // Look for the furthest step we can *prove* has been done, and take that as
+  // where the player has got to. Scanning forward rather than walking matters:
+  // `talk` and `deliver` steps leave no trace, but a later step that has
+  // plainly been finished proves the untestable ones in between were too —
+  // you cannot be holding the collar without having met the dog who wants it.
+  let target = 0;
+  for (let i = 0; i < steps.length; i++) {
+    if (stepMet(steps[i].objective, st)) target = i + 1;
+  }
+  // Never past the last step: finishing a job takes a conversation, and the
+  // reward and the closing scene belong to that conversation.
+  target = Math.min(target, steps.length - 1);
+
+  const from = st.questStep?.[q.id] || 0;
+  if (target <= from) return 0;
+  st.setQuestStep(q.id, target);
+  return target - from;
+}
+
+/** Repair every job in play. Returns how many were moved on. */
+export function repairAllSteps(st) {
+  let moved = 0;
+  for (const q of QUESTS) if (repairStep(q, st) > 0) moved++;
+  return moved;
+}

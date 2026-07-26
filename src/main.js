@@ -26,7 +26,7 @@ import { ITEMS, STOCK, FLEA_POOL, baseId } from './game/items.js';
 import { shopOpen, hoursText } from './game/time.js';
 import { BOOK_BY_ID } from './world/places.js';
 import { QUESTS, QUESTS_BY_GIVER, objectiveMet, questSteps, currentStep,
-  stepIndex, isLastStep, progressText, objectiveText } from './game/quests.js';
+  stepIndex, isLastStep, progressText, objectiveText, repairAllSteps } from './game/quests.js';
 
 import { Dialogue, Hud, Fader, panel, panelTitle, dim, cursor } from './ui/core.js';
 import { SAFE, safeCenterX } from './engine/safe.js';
@@ -196,7 +196,9 @@ class Game {
     // The authoritative books, sent when we join and whenever a cafe is opened.
     // On the title screen we only file it away; `announce` adopts it on start.
     net.on('world', (world, clock) => {
-      if (this.mode === 'play') st.adopt(world, clock);
+      if (this.mode !== 'play') return;
+      st.adopt(world, clock);
+      this.repairQuests();
     });
     net.on('clock', (c) => { st.clock.day = c.day; st.clock.t = c.t; });
     net.on('newday', (m) => {
@@ -498,6 +500,7 @@ class Game {
     this.cam.follow(this.currentMap, this.player.x, this.player.y, true);
     this.announce();
     this.hud.toast('Welcome back.', 'good');
+    this.repairQuests();
   }
 
   /** Tell the session who we are and where we're standing. */
@@ -513,6 +516,7 @@ class Game {
       st.adopt(net.world, net.clock);
       this.maps.set('cafe', st.cafeMap);
       this.joinedExisting = true;
+      this.repairQuests();
     } else {
       net.seedWorld(st.snapshot(), st.clock.save());
     }
@@ -1439,7 +1443,21 @@ class Game {
     }
   }
 
-  checkQuestProgress() { this.refreshQuestMarks(); }
+  /**
+   * Bring every job in play back into line with what has actually been done,
+   * and say so if anything moved. Cheap, and called at the points where the
+   * world has just changed, so a job can't sit stuck behind a step you have
+   * demonstrably finished.
+   */
+  repairQuests() {
+    const moved = repairAllSteps(this.state);
+    if (!moved) return;
+    this.hud.toast(moved === 1 ? 'Your journal was out of date. Fixed.'
+      : `${moved} journal entries were out of date. Fixed.`, 'good', 6);
+    this.refreshQuestMarks();
+  }
+
+  checkQuestProgress() { this.repairQuests(); this.refreshQuestMarks(); }
 
   // ------------------------------------------------------------------ draw
 

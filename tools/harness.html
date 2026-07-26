@@ -239,6 +239,43 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         window.__pos = `slab=${bx},${by} standing=${Math.floor(p.x / 16)},${Math.floor(p.y / 16)} map=${p.map}`;
         if (Math.floor(p.x / 16) !== bx) window.__errors.push('position is wrong: ' + window.__pos);
         await wait(700);
+      } else if (SCRIPT === 'questrepair') {
+        // The save people are actually holding: the hedge job stuck at step 0
+        // with the collar already in the bag, because somebody else's accept
+        // reset it. The world says which step you are really on; trust that.
+        const st = g.state;
+        st.quests.lane_end_hedge = 'active';
+        st.questStep.lane_end_hedge = 0;
+        st.flags.saw_the_hedge = true;
+        st.flags.read_town_history = true;
+        st.give('golden_collar', 1);
+        g.repairQuests();
+        await wait(300);
+        const fixed = st.questStep.lane_end_hedge;
+
+        // It must not run past a step that needs a conversation: the last one
+        // is handing the collar over, and only Sir Woofers can accept it.
+        const { QUEST_BY_ID, objectiveText } = await import('../src/game/quests.js');
+        const now = objectiveText(QUEST_BY_ID.lane_end_hedge, st);
+
+        // A job that is genuinely at the start stays there.
+        st.quests.moth_count = 'active';
+        st.questStep.moth_count = 0;
+        g.repairQuests();
+        await wait(200);
+        const untouched = st.questStep.moth_count;
+
+        // And running it again changes nothing.
+        g.repairQuests();
+        await wait(200);
+        window.__repair = `hedge 0->${fixed} ("${now}") moth=${untouched}`
+          + ` stable=${st.questStep.lane_end_hedge === fixed}`;
+        if (fixed !== 4) window.__errors.push('did not skip the finished steps: ' + window.__repair);
+        if (!/Sir Woofers/.test(now)) window.__errors.push('wrong step after repair: ' + window.__repair);
+        if (untouched !== 0) window.__errors.push('moved a job that was not stuck: ' + window.__repair);
+        if (st.questStep.lane_end_hedge !== fixed) {
+          window.__errors.push('not stable on a second run: ' + window.__repair);
+        }
       } else if (SCRIPT === 'barriers') {
         // Where the blocked shortcuts actually are, and what they actually
         // block. A barrier that only shortens a trip is fine; a quest that
@@ -1604,12 +1641,17 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__q ? ` ${window.__q}` : '')
         + (window.__bar ? ` ${window.__bar}` : '')
         + (window.__pos ? ` ${window.__pos}` : '')
+        + (window.__repair ? ` ${window.__repair}` : '')
         + (window.__ghost ? ` ${window.__ghost}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';
       out.textContent = `RESULT ${errs.length ? 'FAIL' : 'OK'} (${errs.length} issues)\n${info}\n` + errs.slice(0, 25).join('\n');
       document.title = errs.length ? `FAIL ${errs.length}` : 'OK';
       if (window.location.search.includes('hideout')) out.style.display = 'none';
+      // The runner watches for this rather than sleeping out the clock. Most
+      // scenarios finish well inside their budget, and waiting for the budget
+      // anyway was most of the time the suite took.
+      window.__done = true;
     }
   </script>
 </body>

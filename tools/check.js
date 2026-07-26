@@ -1,9 +1,14 @@
 // Headless smoke test. Launches Chrome, drives the game through a scenario in
 // tools/harness.html, reports console errors and writes a screenshot.
 //
-//   node tools/check.js [scenario] [--shot path.png] [--ms 6000]
+//   node tools/check.js [scenario...] [--shot path.png] [--ms 6000]
+//   node tools/check.js quests            # a named group, see GROUPS
+//   node tools/check.js all               # everything that runs unattended
 //
-// Scenarios live in harness.html: walk, cafe, build, shop, town, coast, night, map.
+// Scenarios live in harness.html. Each one signals `window.__done` when it has
+// finished, and the runner moves on the moment it sees that — the times in
+// BUDGET below are ceilings, not waits, so a scenario only costs what it
+// actually needs. Pass --ms to override the ceiling for everything.
 
 import { spawn } from 'node:child_process';
 import { writeFileSync, mkdirSync } from 'node:fs';
@@ -15,14 +20,84 @@ const PORT = 9333 + (process.pid % 200);
 const BASE = process.env.BASE || 'http://localhost:8080';
 
 const args = process.argv.slice(2);
-const flagsWithValue = new Set(['--shot', '--ms', '--url', '--eval', '--shotdir', '--mobile']);
-const scenarios = args.filter((a, i) => !a.startsWith('--') && !flagsWithValue.has(args[i - 1]));
-if (!scenarios.length) scenarios.push('walk');
+const flagsWithValue = new Set(['--shot', '--ms', '--url', '--eval', '--shotdir', '--mobile', '--hold']);
+const named = args.filter((a, i) => !a.startsWith('--') && !flagsWithValue.has(args[i - 1]));
+if (!named.length) named.push('walk');
 const shotIdx = args.indexOf('--shot');
 const shot = shotIdx >= 0 ? args[shotIdx + 1] : null;
 const msIdx = args.indexOf('--ms');
-const runMs = msIdx >= 0 ? Number(args[msIdx + 1]) : 7000;
+const forcedMs = msIdx >= 0 ? Number(args[msIdx + 1]) : null;
 const hideOut = args.includes('--clean');
+// Stay open this long after the scenario reports. Only the first half of a
+// paired run needs it: the other browser has to still be there to be seen, and
+// now that a run ends the moment it is done, it otherwise wouldn't be.
+const holdIdx = args.indexOf('--hold');
+const holdMs = holdIdx >= 0 ? Number(args[holdIdx + 1]) : 0;
+
+// How long each scenario may take before we give up on it. Only the slow ones
+// need saying: anything absent gets DEFAULT_MS. These are generous — a ceiling
+// that is hit means something has hung, and a scenario that finishes in two
+// seconds costs two seconds whatever it says here.
+const DEFAULT_MS = 9000;
+const BUDGET = {
+  // Cutscenes and long walks run in real time and can't be hurried.
+  taxi: 22000,
+  sleep: 20000,
+  door: 20000,
+  ghostquest: 42000,
+  deliverquest: 26000,
+  wishlist: 30000,
+  nightfolk: 18000,
+  ghoststuck: 22000,
+  // Deliberately longer than any idle timeout, which is the point of them.
+  netidle: 60000,
+  netidletitle: 58000,
+  netping: 68000,
+  netmute: 84000,
+  netpollquiet: 84000,
+  netdrop: 26000,
+  netfallback: 42000,
+  netforget: 26000,
+  netpollbooks: 24000,
+  netbooks: 20000,
+  netclock: 16000,
+  // Halves of a pair: they wait for the other browser to turn up.
+  netwalkhost: 62000,
+  netwalkguest: 58000,
+  nettitlehost: 64000,
+  nettitleguest: 62000,
+  netcafehost: 32000,
+  netcafeguest: 28000,
+  netquesthost: 26000,
+  netquestguest: 24000,
+  netfound: 20000,
+  netguest: 12000,
+  netcreatetitle: 14000,
+};
+
+// Named sets, so a change can be checked against the things it could plausibly
+// have broken without running everything. `all` is what to run before a commit.
+const GROUPS = {
+  quests: ['ghostquest', 'deliverquest', 'journalstep', 'questrepair', 'ghoststuck',
+    'barriers', 'nightfolk', 'nightplaces'],
+  cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats'],
+  world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces', 'barriers', 'debugpos'],
+  ui: ['menus', 'build', 'furnish', 'furnshop', 'shop', 'exterior', 'summarylines', 'journalstep'],
+  cutscene: ['taxi', 'sleep', 'door'],
+  mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile'],
+  // Single-process networked runs. The paired ones need two browsers at once
+  // and are listed in the README rather than here.
+  net: ['net', 'netmobile', 'netbooks', 'netclock', 'netdrop', 'netforget',
+    'netpollbooks', 'netfallback', 'solo'],
+  slow: ['netidle', 'netping', 'netmute', 'netpollquiet', 'netidletitle'],
+};
+GROUPS.all = [...new Set([
+  ...GROUPS.world, ...GROUPS.ui, ...GROUPS.cafe, ...GROUPS.quests,
+  ...GROUPS.cutscene, ...GROUPS.mobile, ...GROUPS.net,
+])];
+
+/** Expand any group names given on the command line. */
+const scenarios = [...new Set(named.flatMap((n) => GROUPS[n] || [n]))];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -139,7 +214,26 @@ async function main() {
     await send('Page.navigate', { url: 'about:blank' });
     await sleep(120);
     await send('Page.navigate', { url });
-    await sleep(runMs);
+
+    // Wait for the scenario to say it has finished rather than sleeping out
+    // its budget. Polling costs one tiny evaluate every 250ms and saves whole
+    // minutes across a sweep.
+    const budget = forcedMs ?? BUDGET[sc] ?? DEFAULT_MS;
+    const started = Date.now();
+    let hung = false;
+    for (;;) {
+      await sleep(250);
+      const elapsed = Date.now() - started;
+      if (elapsed >= budget) { hung = true; break; }
+      const done = await send('Runtime.evaluate',
+        { expression: 'window.__done === true', returnByValue: true }, 4000);
+      if (done.result?.value === true) break;
+      // An evaluate that never comes back means the page is wedged; stop
+      // asking and let the reporting below break in and get a stack.
+      if (done.result === undefined && done.exceptionDetails === undefined) { hung = true; break; }
+    }
+    const took = Date.now() - started;
+    if (holdMs > 0) await sleep(holdMs);
 
     const out = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }, 12000);
     let summary = out.result?.value !== undefined ? String(out.result.value)
@@ -162,7 +256,7 @@ async function main() {
     }
 
     const real = problems.filter((p) => !p.includes('favicon'));
-    console.log(`--- ${sc} ---`);
+    console.log(`--- ${sc} --- ${(took / 1000).toFixed(1)}s${hung ? ` (hit its ${budget / 1000}s ceiling)` : ''}`);
     console.log(summary.trim() || '(no in-page summary)');
     if (real.length) {
       console.log(`!! ${real.length} console problems:`);
