@@ -178,15 +178,20 @@ class Game {
     // how a test says which of several it means.
     const wanted = new URLSearchParams(location.search).get('game');
     if (wanted) net.gameId = wanted;
-    // One game, or one named, and there is nothing to choose between.
-    if (wanted || !list || list.length <= 1) {
+    // The lobby shows whenever there is a server, even for a single valley —
+    // it is the only place you can start another one or throw one away, so
+    // hiding it until there are two means there can never be two.
+    if (wanted || !list) {
       try {
         const ok = await net.connect(1500);
         if (ok && Number.isFinite(net.seed)) seed = net.seed;
       } catch { /* solo */ }
     } else {
       this.lobbyGames = list;
-      seed = list[0].seed;              // something to stand in until they pick
+      // Something to build a world from until they choose; if they pick a
+      // different valley the world is rebuilt for its seed, which costs less
+      // than a tenth of a second.
+      seed = list.length ? list[0].seed : WORLD_SEED;
     }
     this.wireNet();
     this.boot(seed);
@@ -2268,11 +2273,12 @@ if (location.search.includes('autostart')) {
   await g.ready;
   // Nothing to skip past if a valley still has to be chosen: autostart means
   // "don't make me press Space through the title", not "pick for me".
-  if (!g.lobbyGames || !g.lobbyGames.length) {
+  // A lobby means a valley still has to be chosen. Autostart means "don't make
+  // me press Space through the title", so it takes the first one on offer.
+  if (g.lobbyGames && g.lobbyGames.length) await g.enterGame(g.lobbyGames[0].id);
   g.screens.length = 0;
   g.startNewGame({ species: 'cat', coat: 'ginger', cloth: CLOTHES[5] },
     { wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], awning: AWNING_CHOICES[0],
       floor: T.FLOOR_WOOD, name: CAFE_NAMES[0] });
   g.dialogue.active = false;
-  }
 }

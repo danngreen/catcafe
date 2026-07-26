@@ -39,6 +39,7 @@ const holdMs = holdIdx >= 0 ? Number(args[holdIdx + 1]) : 0;
 // that is hit means something has hung, and a scenario that finishes in two
 // seconds costs two seconds whatever it says here.
 const DEFAULT_MS = 9000;
+const DEFAULT_GAME = '001';
 const BUDGET = {
   // Cutscenes and long walks run in real time and can't be hurried.
   taxi: 22000,
@@ -68,6 +69,7 @@ const BUDGET = {
   nettitleme: 18000,
   netlobby: 26000,
   netlobbydel: 30000,
+  netlobbyone: 14000,
   netgameone: 20000,
   netgametwo: 18000,
   titleme: 20000,
@@ -101,7 +103,7 @@ const GROUPS = {
   // Single-process networked runs. The paired ones need two browsers at once
   // and are listed in the README rather than here.
   net: ['net', 'netmobile', 'netbooks', 'netclock', 'netdrop', 'netforget',
-    'netpollbooks', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbydel', 'solo'],
+    'netpollbooks', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbydel', 'netlobbyone', 'solo'],
   slow: ['netidle', 'netping', 'netmute', 'netpollquiet', 'netidletitle'],
 };
 GROUPS.all = [...new Set([
@@ -212,9 +214,9 @@ async function main() {
   let failed = 0;
   for (const sc of scenarios) {
     problems.length = 0;
-    // Title-screen scenarios need the real title, so they skip the autostart.
+    // Title and lobby scenarios need the real screens, so they skip autostart.
     const params = [];
-    if (!sc.includes('title')) params.push('autostart');
+    if (!sc.includes('title') && !sc.includes('lobby')) params.push('autostart');
     if (hideOut) params.push('hideout');
     // Everything but the net scenarios plays alone, so runs can't see each other.
     if (!sc.startsWith('net')) params.push('solo');
@@ -224,6 +226,10 @@ async function main() {
     // --game names one valley, for the scenarios about having several.
     const gameIdx = args.indexOf('--game');
     if (gameIdx >= 0) params.push(`game=${args[gameIdx + 1]}`);
+    // Title-screen scenarios are about the title screen, so they name a valley
+    // rather than being asked to pick one — otherwise they open in the lobby,
+    // where nobody is connected to anything yet.
+    else if (sc.includes('title')) params.push(`game=${DEFAULT_GAME}`);
     const url = urlIdx >= 0 ? args[urlIdx + 1]
       : `${BASE}/tools/harness.html${params.length ? '?' + params.join('&') : ''}#${sc}`;
     // A hard reload guarantees a clean world for each scenario.

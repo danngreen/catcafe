@@ -70,8 +70,9 @@ once per player. Anyone can still serve — a press of Space asks whoever is
 running the room to take the order.
 
 **Several valleys at once.** One server can host as many games as you like, and
-two groups can play different ones side by side without seeing each other. When
-there is more than one to choose from you get a lobby first, listing each game
+two groups can play different ones side by side without seeing each other. You
+land in a lobby first — always, even with one valley, since it is the only place
+you can start another or throw one away — listing each game
 with its cafe name, the day and time in there, how much money and how many cats,
 and when anybody last played it — for whichever row is highlighted, since this
 is played on a keyboard and on a phone and neither has a hover. "New valley"

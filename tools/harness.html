@@ -447,6 +447,37 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           }
           try { localStorage.removeItem('catcafe.me'); } catch (e) {}
         }
+      } else if (SCRIPT === 'netlobbyone') {
+        // A single valley still gets a lobby. It is the only place you can
+        // start another one or throw one away, so hiding it until there are
+        // two means there can never be two — which is exactly what happened.
+        const { NetClient } = await import('../src/net/client.js');
+        // Whittle the server down to one valley first: earlier scenarios in
+        // the same run leave theirs behind, and this one is about what happens
+        // when there is exactly one.
+        let all = (await NetClient.listGames()) || [];
+        for (const gme of all.slice(1)) await NetClient.deleteGame(gme.id);
+        if (((await NetClient.listGames()) || []).length !== 1) {
+          window.__errors.push('could not get down to one valley');
+        }
+        // The lobby is decided at boot, so read it again now.
+        if (!sessionStorage.getItem('oneReload')) {
+          sessionStorage.setItem('oneReload', '1');
+          location.reload();
+          await wait(20000);
+        }
+        sessionStorage.removeItem('oneReload');
+        const list = (await NetClient.listGames()) || [];
+        const scr = g.screens[g.screens.length - 1];
+        const kind = scr && scr.constructor.name;
+        const labels = scr && scr.rows
+          ? scr.rows.map((r) => (r.newGame ? 'New valley' : (r.cafe || `Game ${r.id}`))) : [];
+        window.__one = `onServer=${list.length} screen=${kind} rows=[${labels.join('|')}]`;
+        if (list.length !== 1) window.__errors.push('wanted exactly one valley: ' + window.__one);
+        if (kind !== 'LobbyScreen') window.__errors.push('no lobby for a single valley: ' + window.__one);
+        if (!labels.includes('New valley')) {
+          window.__errors.push('no way to start another: ' + window.__one);
+        }
       } else if (SCRIPT === 'netlobbydel') {
         // Deleting a valley from the lobby: asks first, starts on No, refuses
         // while anybody is in there, and the row goes when it is gone.
@@ -2275,6 +2306,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__me ? ` ${window.__me}` : '')
         + (window.__lobby ? ` ${window.__lobby}` : '')
         + (window.__del ? ` ${window.__del}` : '')
+        + (window.__one ? ` ${window.__one}` : '')
         + (window.__two ? ` ${window.__two}` : '')
         + (window.__live ? ` ${window.__live}` : '')
         + (window.__ghost ? ` ${window.__ghost}` : '')
