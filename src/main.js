@@ -292,6 +292,7 @@ class Game {
     this.towns = world.towns;
     this.doors = world.doors;
     this.landmarks = world.landmarks;
+    this.barriers = world.barriers;      // handy when asking why a pass is open
 
     // Interiors are built on demand and belong to the world we just replaced.
     this.maps = new Map();

@@ -13,6 +13,10 @@ import { buildingSprite } from '../art/objects.js';
 export const WORLD_W = 352;
 export const WORLD_H = 320;
 
+// The mill's position is needed twice: once when the roads are carved, and
+// again when the building goes down long afterwards.
+const MILL = { x: 178, y: 128 };
+
 /** How "inland" a point is: 0 at the far south-west sea, 1 at the north-east. */
 function inlandness(x, y, seed) {
   const base = (x / WORLD_W) * 0.6 + (1 - y / WORLD_H) * 0.8;
@@ -119,16 +123,28 @@ export function generateWorld(seed = 20240724) {
   link('thistlewick', 'oakhollow');
   link('thistlewick', 'hollowdown');
 
-  // The eastern pass: a second, shorter road from Hollowdown down to
-  // Thistlewick, forced across the river at a narrow point so that there is
-  // one tile of it worth blocking. Carving it in two halves through a fixed
-  // waypoint is what puts the bridge where we want it — left to itself the
-  // road would go round the water rather than over it, since crossing costs a
-  // great deal more than walking.
-  const pass = findRiverCrossing(map, 256, 109);
+  // The eastern pass: a road running due east out of Brambleford to
+  // Thistlewick in the far south-east, forced across the river at a narrow
+  // point so there is one tile of it worth blocking. Carving it in two halves
+  // through a fixed waypoint is what puts the bridge where we want it — left to
+  // itself the road would go round the water rather than over it, since
+  // crossing costs a great deal more than walking.
+  const home = towns.brambleford.hub;
+  const pass = findRiverCrossing(map, 204, home.y);
   if (pass) {
-    carveRoad(map, elev, reserved, towns.hollowdown.hub, pass, seed);
-    carveRoad(map, elev, reserved, pass, towns.thistlewick.hub, seed);
+    const ends = layBridge(map, reserved, pass);
+    carveRoad(map, elev, reserved, home, ends.west, seed);
+    carveRoad(map, elev, reserved, ends.east, towns.thistlewick.hub, seed);
+  }
+
+  // And a track up to the old mill over its own crossing. The mill sits east of
+  // a river with open country all round it, so without a bridge there is
+  // nowhere on the way where blocking anything would cost a step.
+  const millPass = findRiverCrossing(map, MILL.x - 18, MILL.y + 6);
+  if (millPass) {
+    const ends = layBridge(map, reserved, millPass);
+    carveRoad(map, elev, reserved, home, ends.west, seed);
+    carveRoad(map, elev, reserved, ends.east, { x: MILL.x, y: MILL.y + 3 }, seed);
   }
   tidyBridges(map);
 
@@ -151,7 +167,7 @@ export function generateWorld(seed = 20240724) {
   scatterNature(map, elev, moist, inland, reserved, rng, seed);
 
   // ------------------------------------------------------ blocked shortcuts
-  const barriers = placeBarriers(map, reserved, rng, pass);
+  const barriers = placeBarriers(map, reserved, rng, { eastpass: pass, millpath: millPass }, towns);
 
   map.indexObjects();
 
@@ -835,6 +851,30 @@ function scatterNature(map, elev, moist, inland, reserved, rng, seed) {
 
 /** Boulders and thickets that seal off shortcuts until you have the right kit. */
 /**
+ * Lay a deck across the water at a crossing, bank to bank, and hand back the
+ * dry ends. Building it outright rather than hoping the road lays it: crossing
+ * water costs an A* road so much more than walking that it will happily stop
+ * at the water's edge and go round, leaving a stub of deck pointing at the
+ * river and a barrier with a way past it.
+ */
+function layBridge(map, reserved, cross) {
+  const wet = (x, y) => map.inBounds(x, y) && isWater(map.ground[y * WORLD_W + x]);
+  let west = cross.x, east = cross.x;
+  while (wet(west - 1, cross.y)) west--;
+  while (wet(east + 1, cross.y)) east++;
+  for (let x = west; x <= east; x++) {
+    for (const y of [cross.y, cross.y + 1]) {
+      if (!map.inBounds(x, y)) continue;
+      const i = y * WORLD_W + x;
+      map.ground[i] = T.BRIDGE;
+      map.blocked[i] = 0;
+      reserved[i] = 1;
+    }
+  }
+  return { west: { x: west - 1, y: cross.y }, east: { x: east + 1, y: cross.y } };
+}
+
+/**
  * Somewhere to put a bridge: the narrowest run of water on a horizontal line
  * near (nearX, nearY). Returns the midpoint of that run, or null if there is
  * no river hereabouts — the coastline comes out of noise, so nothing about the
@@ -858,6 +898,7 @@ function findRiverCrossing(map, nearX, nearY) {
       }
     }
   }
+  if (best && best.detour < 30) best.tooOpen = true;
   return best;
 }
 
@@ -888,45 +929,174 @@ function bridgeBlockLine(map, near) {
   return { line, approach, eastWest, mid };
 }
 
-function placeBarriers(map, reserved, rng, pass) {
-  const spots = [
-    { id: 'millpath', x: 168, y: 136, need: 'shears',
-      text: 'Brambles have swallowed the path to the mill entirely.\n\nYou would need something sharp.' },
-    { id: 'cliffsteps', x: 84, y: 214, need: 'rope',
-      text: 'The old steps down the cliff have crumbled away.\n\nA rope would make this climbable.' },
-  ];
+/** Shortest walk between two tiles, ignoring `extra` blocked indices. -1 if none. */
+function routeLength(map, from, to, extra) {
+  const W = WORLD_W, H = WORLD_H;
+  const seen = new Uint8Array(W * H);
+  const dist = new Int32Array(W * H);
+  const start = from.y * W + from.x, goal = to.y * W + to.x;
+  const q = [start];
+  seen[start] = 1;
+  for (let h = 0; h < q.length; h++) {
+    const cur = q[h];
+    if (cur === goal) return dist[cur];
+    const cx = cur % W, cy = (cur / W) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 1 || ny < 1 || nx >= W - 1 || ny >= H - 1) continue;
+      const ni = ny * W + nx;
+      if (seen[ni] || (extra && extra.has(ni)) || map.solid(nx, ny)) continue;
+      seen[ni] = 1;
+      dist[ni] = dist[cur] + 1;
+      q.push(ni);
+    }
+  }
+  return -1;
+}
+
+function placeBarriers(map, reserved, rng, passes, towns) {
   const out = [];
 
-  // The eastern pass sits on the bridge, right across the deck.
-  const block = pass ? bridgeBlockLine(map, pass) : null;
-  if (block) {
-    const text = 'A slab of chalk the size of a cart has come down across the bridge.\n\n'
-      + 'There is deep water either side of it. You would need proper tools to shift this.';
+  /**
+   * The first tile you could stand on, stepping out from `t` that way. Not
+   * simply the neighbour: a boulder is two tiles wide, so the far side of one
+   * is its own other half, and putting the sign there leaves both faces of the
+   * barrier on the same side of it.
+   */
+  const faceOut = (t, dx, dy) => {
+    for (let k = 1; k <= 4; k++) {
+      const x = t.x + dx * k, y = t.y + dy * k;
+      if (!map.inBounds(x, y)) return null;
+      if (!map.solid(x, y)) return { x, y };
+    }
+    return null;
+  };
+
+  // Two of them sit on bridges, which is the one place a boulder or a thicket
+  // actually stops anybody: deep water either side and no way round.
+  const BRIDGES = [
+    {
+      id: 'eastpass', need: 'pickaxe', thing: 'boulder', pass: passes.eastpass,
+      text: 'A slab of chalk the size of a cart has come down across the bridge.\n\n'
+        + 'There is deep water either side of it. You would need proper tools to shift this.',
+    },
+    {
+      id: 'millpath', need: 'shears', thing: 'berrybush', pass: passes.millpath,
+      text: 'Brambles have swallowed the bridge to the mill entirely.\n\n'
+        + 'They are thick as rope and twice as unfriendly. You would need something sharp.',
+    },
+  ];
+  for (const b of BRIDGES) {
+    const block = b.pass ? bridgeBlockLine(map, b.pass) : null;
+    if (!block) continue;
     for (const t of block.line) {
-      const o = map.addObject('boulder', t.x, t.y, { variant: rng.int(3), id: 'eastpass' });
+      const o = map.addObject(b.thing, t.x, t.y, { variant: rng.int(3), id: b.id });
       if (o) out.push(o);
     }
-    // Readable from either side, so you can find out what it wants whichever
-    // way you arrived.
+    // Readable from either side, so you find out what it wants whichever way
+    // you arrived — but never from a tile you cannot stand on.
     const along = block.eastWest ? [[-1, 0], [1, 0]] : [[0, -1], [0, 1]];
     for (const t of block.line) {
       for (const [dx, dy] of along) {
-        map.setInteract(t.x + dx, t.y + dy,
-          { kind: 'barrier', barrier: 'eastpass', need: 'pickaxe', text });
+        const f = faceOut(t, dx, dy);
+        if (f) map.setInteract(f.x, f.y, { kind: 'barrier', barrier: b.id, need: b.need, text: b.text });
       }
     }
-    out.push({ id: 'eastpass', x: block.approach.x, y: block.approach.y, need: 'pickaxe', text });
+    out.push({ id: b.id, x: block.approach.x, y: block.approach.y, need: b.need, text: b.text });
   }
 
-  for (const s of spots) {
-    for (let k = -1; k <= 1; k++) {
-      const x = s.x + k, y = s.y;
-      if (!map.inBounds(x, y)) continue;
-      const o = map.addObject(s.need === 'shears' ? 'berrybush' : 'boulder', x, y, { variant: rng.int(3), id: s.id });
-      if (o) out.push(o);
+  // The crumbled steps go on a road notched through a terrace — cliff either
+  // side — and only where blocking it actually costs a walk. No quest needs
+  // them, so a valley whose roads never climb simply hasn't got any.
+  const cut = findCliffCut(map, rng, towns);
+  if (cut) {
+    const text = 'The old steps up the cliff have crumbled away, and their rubble is '
+      + 'still sitting in the gap.\n\nA rope would make this climbable.';
+    // Cut the notch, then fill it with what fell down it.
+    const i = cut.at.y * WORLD_W + cut.at.x;
+    map.ground[i] = T.GRAVEL;
+    map.blocked[i] = 0;
+    const o = map.addObject('boulder', cut.at.x, cut.at.y, { variant: rng.int(3), id: 'cliffsteps' });
+    if (o) out.push(o);
+    for (const [dx, dy] of cut.across ? [[0, -1], [0, 1]] : [[-1, 0], [1, 0]]) {
+      const f = faceOut(cut.at, dx, dy);
+      if (f) map.setInteract(f.x, f.y, { kind: 'barrier', barrier: 'cliffsteps', need: 'rope', text });
     }
-    map.setInteract(s.x, s.y + 1, { kind: 'barrier', barrier: s.id, need: s.need, text: s.text });
-    out.push({ ...s });
+    out.push({ id: 'cliffsteps', x: cut.at.x, y: cut.at.y, need: 'rope', text });
   }
+
   return out;
 }
+
+/**
+ * A place where a rope would genuinely get you somewhere: a cliff tile with
+ * walkable ground on both sides that are a very long walk apart.
+ *
+ * The other barriers block a way that exists. This one is the opposite — the
+ * steps that used to be here have crumbled, so the notch is cut through the
+ * cliff and then filled with the rubble that fell. Clearing it opens a way that
+ * was not there before, which is the only honest thing a rope can do in a
+ * valley whose terraces you can all walk round.
+ */
+/** How much ground you can walk from here, giving up once past `cap`. */
+function reachableArea(map, from, cap) {
+  const W = WORLD_W, H = WORLD_H;
+  const seen = new Set();
+  const q = [from.y * W + from.x];
+  seen.add(q[0]);
+  for (let h = 0; h < q.length && seen.size < cap; h++) {
+    const cur = q[h];
+    const cx = cur % W, cy = (cur / W) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 1 || ny < 1 || nx >= W - 1 || ny >= H - 1) continue;
+      const ni = ny * W + nx;
+      if (seen.has(ni) || map.solid(nx, ny)) continue;
+      seen.add(ni);
+      q.push(ni);
+    }
+  }
+  return seen.size;
+}
+
+function findCliffCut(map, rng, towns) {
+  const W = WORLD_W, H = WORLD_H;
+  const candidates = [];
+  for (let y = 6; y < H - 6; y += 3) {
+    for (let x = 6; x < W - 6; x += 3) {
+      if (map.ground[y * W + x] !== T.CLIFF) continue;
+      candidates.push({ x, y });
+    }
+  }
+  if (!candidates.length) return null;
+  // Each measurement floods the valley, so try a scattered handful.
+  const tried = new Set();
+  let best = null;
+  for (let n = 0; n < 40 && candidates.length; n++) {
+    const c = candidates[rng.int(candidates.length)];
+    const key = `${c.x},${c.y}`;
+    if (tried.has(key)) continue;
+    tried.add(key);
+    for (const [dx, dy] of [[0, 1], [1, 0]]) {
+      const a = { x: c.x - dx, y: c.y - dy };
+      const b = { x: c.x + dx, y: c.y + dy };
+      if (map.solid(a.x, a.y) || map.solid(b.x, b.y)) continue;
+      const round = routeLength(map, a, b, null);
+      const score = round < 0 ? Infinity : round;
+      if (score < 60) continue;                 // barely a shortcut
+      // And it has to open somewhere worth the climb. A notch onto a
+      // three-tile ledge in the corner of the map is technically unreachable
+      // and of no interest to anybody.
+      if (reachableArea(map, b, 400) < 300) continue;
+      // Between two equally impassable places, take the one people will
+      // actually walk past.
+      const near = Math.min(...Object.values(towns)
+        .map((t) => Math.hypot(t.hub.x - c.x, t.hub.y - c.y)));
+      if (!best || score > best.score || (score === best.score && near < best.near)) {
+        best = { at: c, across: dx === 0, score, near };
+      }
+    }
+  }
+  return best;
+}
+

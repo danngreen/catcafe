@@ -60,23 +60,25 @@ export const QUESTS = [
   },
   {
     id: 'clear_the_path',
-    giver: 'gorse',
+    giver: 'brook',
     title: 'The Fallen Chalk',
-    desc: 'A slab of chalk is blocking the river bridge on the short road to Thistlewick. Gorse says the right tool would shift it.',
+    desc: 'A slab of chalk is blocking the river bridge on the road east. Brook says the right tool would shift it.',
     objective: { type: 'flag', flag: 'barrier_eastpass' },
     reward: { money: 260, rep: 0.05 },
-    offer: "The river bridge south-east of here has been shut since the storm. Great lump of "
-      + "chalk came down right across the middle of the deck, and it is deep water either side.\n\n"
-      + "You can still get to Thistlewick the long way, round by Oakhollow, but it is the best "
-      + "part of an hour nobody should have to walk twice.\n\n"
-      + "Get a pick from the Chalk Pit Store and shift it. Everyone in this town will be quietly "
-      + "grateful and not one of them will say so.",
-    progress: 'A chalk pick, from the Chalk Pit Store here in Hollowdown. Then follow the road '
-      + 'south-east out of town until you reach the river. You will not miss it: the bridge is '
+    offer: "Water's high after the rain, and it took the bank out from under a chalk face "
+      + "east of here. Great lump of it came down right across the middle of the bridge, and it "
+      + "is deep water either side.\n\n"
+      + "That was the road to Thistlewick, that was. You can still get there the long way round, "
+      + "by Hollowdown and Oakhollow, but it is the best part of an hour nobody should have to "
+      + "walk twice.\n\n"
+      + "Get a pick — the Chalk Pit Store up in Hollowdown has them — and shift it. Everyone in "
+      + "this town will be quietly grateful and not one of them will say so.",
+    progress: 'A chalk pick, from the Chalk Pit Store up in Hollowdown. Then follow the road '
+      + 'due east out of town until you reach the river. You will not miss it: the bridge is '
       + 'there, and so is the chalk.',
     complete: "You shifted it? On your own?\n\nRight. That is the bridge open again, and the "
-      + "short way to Thistlewick with it — no more trailing round by Oakhollow every time.\n\n"
-      + "Take this, and don't argue.",
+      + "road east with it — no more trailing all the way round by Hollowdown to get to "
+      + "Thistlewick.\n\nTake this, and don't argue.",
   },
   {
     id: 'bramble_path',
@@ -85,8 +87,11 @@ export const QUESTS = [
     desc: 'Brambles have swallowed the path to the old mill. Grist would like it opened.',
     objective: { type: 'flag', flag: 'barrier_millpath' },
     reward: { money: 220, items: [['valley_map', 1]] },
-    offer: "The old mill's my family's, technically. Can't reach it — brambles have taken the whole path.\n\nShears would do it. The hardware place up in Hollowdown sells them.",
-    progress: 'Hedge shears from the Chalk Pit Store, then the path north of the river.',
+    offer: "The old mill's my family's, technically. Can't reach it — the brambles have taken "
+      + "the whole bridge across to it. Grown right over the deck, thick as rope.\n\n"
+      + "Shears would do it. The hardware place up in Hollowdown sells them.",
+    progress: 'Hedge shears from the Chalk Pit Store in Hollowdown, then the little bridge on '
+      + 'the mill track, north-east of here.',
     complete: "You got through! And you didn't fall through the floor. Both good.\n\nHere. Map of the valley. It's wrong about the north but it's better than nothing.",
   },
   {

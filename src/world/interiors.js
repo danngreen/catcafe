@@ -7,6 +7,11 @@ import { T } from '../art/tiles.js';
 import { SHOPS, BOOKS } from './places.js';
 import { makeRng } from '../engine/util.js';
 
+// Windows hang on the wall rather than standing on the floor. The natural
+// resting place for an object is the bottom of its tile, which for a window in
+// the wall row puts its sill exactly on the floorboards.
+const WALL_MOUNT = -6;
+
 /**
  * Turn a set of room rectangles into a walled interior.
  * Walls are derived rather than authored: any tile touching floor becomes wall,
@@ -92,7 +97,7 @@ export function buildShopInterior(shopId) {
   // Windows and pictures along the back wall.
   for (let i = 0; i < 2; i++) {
     const wx = room.x + 2 + i * (room.w - 5);
-    map.addObject('windowIn', wx, room.y - 1, { offY: 10 });
+    map.addObject('windowIn', wx, room.y - 1, { offY: WALL_MOUNT });
   }
 
   // Counter across the back with the shopkeeper behind it.
@@ -178,7 +183,7 @@ export function buildSpecialInterior(id) {
     map.spawn = { x: doorX, y: doorY - 1 };
     map.addObject('crate', 3, 5); map.addObject('barrel', 4, 10);
     map.addObject('shelf', 11, 5); map.addObject('stump', 6, 7);
-    map.addObject('windowIn', 5, 2, { offY: 10 });
+    map.addObject('windowIn', 5, 2, { offY: WALL_MOUNT });
     map.setInteract(8, 6, { kind: 'sign', text: 'The great millstone, still and cold.\n\nSomething small and warm is asleep in the flour hopper. It opens one eye, decides you are acceptable, and goes back to sleep.' });
     map.meta = { special: 'oldmill' };
     map.lights.push({ x: 8 * 16, y: 7 * 16, r: 90, color: '#c9b48a' });
@@ -277,7 +282,8 @@ export function buildCafeMap(cafe) {
   for (const f of cafe.furniture) {
     const x = f.x + offX, y = f.y + offY;
     if (!map.inBounds(x, y)) continue;
-    const o = map.addObject(f.type, x, y, { variant: f.variant || 0, offY: f.type === 'windowIn' || f.type === 'painting' ? 10 : 0 });
+    const o = map.addObject(f.type, x, y,
+      { variant: f.variant || 0, offY: f.type === 'windowIn' ? WALL_MOUNT : (f.type === 'painting' ? 10 : 0) });
     if (!o) continue;
     o.furniture = f;
     if (['chair', 'chairUp', 'stool', 'barStool', 'sofa'].includes(f.type)) {
@@ -294,7 +300,7 @@ export function buildCafeMap(cafe) {
 
   // Windows along the top wall, so the room feels like it has an outside.
   for (let x = home.x + 1; x < home.x + home.w - 1; x += 4) {
-    if (map.get(x, home.y - 1) === T.WALL_IN) map.addObject('windowIn', x, home.y - 1, { offY: 10 });
+    if (map.get(x, home.y - 1) === T.WALL_IN) map.addObject('windowIn', x, home.y - 1, { offY: WALL_MOUNT });
   }
 
   map.lights.push({ x: (home.x + home.w / 2) * 16, y: (home.y + home.h / 2) * 16, r: 150, color: '#ffdcae' });

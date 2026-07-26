@@ -240,6 +240,13 @@ Five settlements — Brambleford, Hollowdown, Saltmere, Thistlewick and Oakhollo
 sea in the south-west. Around sixty villagers live there, all animals, all with
 something to say and some with jobs for you. Several shops only open on certain
 days and certain hours; some paths are blocked until you have the right tool.
+Those three blockages are placed by measurement rather than by eye: a chalk slab
+sits mid-deck on the river bridge due east of home, brambles grow across the
+crossing to the mill, and a boulder plugs a notch cut through a cliff. In each
+case the world generator checks the walk around before it commits, so clearing
+one genuinely opens something — the bridge alone saves 272 steps of a 491-step
+walk to Thistlewick, and the cliff notch leads somewhere with no way round at
+all.
 
 Mail birds carry letters between friends. Taxi birds will fly you to anywhere
 you've already visited, for a fare, between 7am and 7pm — one comes down,

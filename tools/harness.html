@@ -320,6 +320,133 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.player.x = cx * 16 + 8; g.player.y = (cy - 2) * 16;
         g.cam.follow(g.overworld, g.player.x, g.player.y, true);
         await wait(1400);
+      } else if (SCRIPT === 'barrierreach') {
+        // Every barrier has to be findable, reachable, and worth clearing.
+        // A boulder you can walk around blocks nothing; one you cannot get
+        // next to cannot be cleared at all.
+        const { T } = await import('../src/art/tiles.js');
+        const map = g.overworld;
+        const W = map.w, H = map.h;
+        // A boulder is two tiles wide, so "is this a stone" has to mean its
+        // whole footprint — which is what removing one actually frees.
+        const covers = (list, x, y) => list.some((o) => {
+          const tw = o.tw || 1, th = o.th || 1;   // the object knows its own size
+          return x >= o.tx && x < o.tx + tw && y <= o.ty && y > o.ty - th;
+        });
+        const out = [];
+        const placed = (g.barriers || []).filter((b) => b.need).map((b) => b.id);
+        out.push(`placed=[${placed.join(' ')}]`);
+        const seen = new Set();
+        for (const [key, v] of map.interacts) {
+          if (v.kind !== 'barrier' || seen.has(v.barrier)) continue;
+          seen.add(v.barrier);
+          const [bx, by] = key.split(',').map(Number);
+          const stones = map.objects.filter((o) => o.id === v.barrier);
+
+          // Somewhere to stand: on the interact tile, or beside it facing in.
+          const stand = [];
+          if (!map.solid(bx, by)) stand.push([bx, by]);
+          for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+            if (!map.solid(bx + dx, by + dy)) stand.push([bx + dx, by + dy]);
+          }
+
+          // Put the player there and read the prompt the game would show.
+          let prompt = null;
+          if (stand.length) {
+            const [sx, sy] = stand[0];
+            g.player.x = sx * 16 + 8; g.player.y = (sy + 1) * 16 - 2;
+            g.player.dir = sy > by ? 'up' : sy < by ? 'down' : (sx > bx ? 'left' : 'right');
+            g.cam.follow(map, g.player.x, g.player.y, true);
+            await wait(500);
+            prompt = g.promptLabel;
+          }
+
+          // Does removing the stones open anything? Flood with and without.
+          const walk = (from, to, open) => {
+            const s2 = new Uint8Array(W * H);
+            const d = new Int32Array(W * H).fill(-1);
+            const q = [from.y * W + from.x];
+            s2[q[0]] = 1; d[q[0]] = 0;
+            for (let h = 0; h < q.length; h++) {
+              const cur = q[h];
+              if (cur === to.y * W + to.x) return d[cur];
+              const cx = cur % W, cy = (cur / W) | 0;
+              for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                const nx = cx + dx, ny = cy + dy;
+                if (nx < 1 || ny < 1 || nx >= W - 1 || ny >= H - 1) continue;
+                const ni = ny * W + nx;
+                if (s2[ni]) continue;
+                const isStone = open && covers(stones, nx, ny);
+                if (map.solid(nx, ny) && !isStone) continue;
+                s2[ni] = 1; d[ni] = d[cur] + 1; q.push(ni);
+              }
+            }
+            return -1;
+          };
+          // From one side of it to the other. Flood from one face with the
+          // stones in place and see how far the others are: whichever face is
+          // furthest (or unreachable) is by definition on the other side, and
+          // that is the comparison worth making. Picking tiles near the stones
+          // by hand lands in the river when the barrier is on a bridge.
+          const faces = [];
+          for (const [k2, v2] of map.interacts) {
+            if (v2.barrier !== v.barrier) continue;
+            const [fx, fy] = k2.split(',').map(Number);
+            if (!map.solid(fx, fy)) faces.push({ x: fx, y: fy });
+          }
+          const flood = (from, open) => {
+            const d = new Int32Array(W * H).fill(-1);
+            const q = [from.y * W + from.x];
+            d[q[0]] = 0;
+            for (let h = 0; h < q.length; h++) {
+              const cur = q[h];
+              const cx = cur % W, cy = (cur / W) | 0;
+              for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                const nx = cx + dx, ny = cy + dy;
+                if (nx < 1 || ny < 1 || nx >= W - 1 || ny >= H - 1) continue;
+                const ni = ny * W + nx;
+                if (d[ni] >= 0) continue;
+                const isStone = open && covers(stones, nx, ny);
+                if (map.solid(nx, ny) && !isStone) continue;
+                d[ni] = d[cur] + 1; q.push(ni);
+              }
+            }
+            return d;
+          };
+          let shut = 0, open = 0;
+          if (faces.length > 1) {
+            const dShut = flood(faces[0], false);
+            // The face that is hardest to get to with the stones there.
+            let worst = faces[1], worstD = -2;
+            for (const f of faces.slice(1)) {
+              const dd = dShut[f.y * W + f.x];
+              const score = dd < 0 ? Infinity : dd;
+              if (score > worstD) { worstD = score; worst = f; }
+            }
+            shut = worstD === Infinity ? -1 : worstD;
+            const dOpen = flood(faces[0], true);
+            open = dOpen[worst.y * W + worst.x];
+          }
+          out.push(`${v.barrier}@${bx},${by} stones=${stones.length} stand=${stand.length}`
+            + ` prompt="${prompt}" faces=${faces.map((f) => f.x + ',' + f.y).join('/')}`
+
+            + ` around=${shut < 0 ? 'no way' : shut} through=${open}`);
+        }
+        window.__reach = out.join(' | ');
+        for (const want of ['eastpass', 'millpath', 'cliffsteps']) {
+          if (!placed.includes(want)) window.__errors.push(`${want} was never placed`);
+        }
+        for (const linebit of out) {
+          if (/prompt="null"/.test(linebit)) window.__errors.push('no prompt: ' + linebit);
+          if (/stand=0/.test(linebit)) window.__errors.push('cannot get to it: ' + linebit);
+          // Walking round it should cost a lot more than going through, or the
+          // barrier is scenery.
+          // "no way" is the strongest possible result: nothing gets round it.
+          const m = /around=(\d+) through=(\d+)/.exec(linebit);
+          if (m && Number(m[1]) - Number(m[2]) < 25) {
+            window.__errors.push('blocks nothing worth blocking: ' + linebit);
+          }
+        }
       } else if (SCRIPT === 'eastpass') {
         // The blocked shortcut has to be three things at once: actually
         // blocked, actually a shortcut, and actually blocking — a boulder in
@@ -347,7 +474,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
               if (nx < 1 || ny < 1 || nx >= W - 1 || ny >= H - 1) continue;
               const ni = ny * W + nx;
               if (seen[ni]) continue;
-              const isStone = open && stones.some((o) => o.tx === nx && o.ty === ny);
+              // Footprints, not anchors: a boulder is two tiles wide, and
+              // removing one frees both.
+              const isStone = open && stones.some((o) =>
+                nx >= o.tx && nx < o.tx + (o.tw || 1) && ny <= o.ty && ny > o.ty - (o.th || 1));
               if (map.solid(nx, ny) && !isStone) continue;
               seen[ni] = 1; dist[ni] = dist[cur] + 1; q.push(ni);
             }
@@ -355,9 +485,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           return -1;
         };
 
+        // Home to the far south-east town: the walk the bridge is there for.
         const hub = (id) => g.towns[id].hub;
-        const shut = walk(hub('hollowdown'), hub('thistlewick'), false);
-        const open = walk(hub('hollowdown'), hub('thistlewick'), true);
+        const shut = walk(hub('brambleford'), hub('thistlewick'), false);
+        const open = walk(hub('brambleford'), hub('thistlewick'), true);
         const onDeck = stones.filter((o) => {
           // A stone counts as on the crossing if there is deck under or beside it.
           for (const [dx, dy] of [[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]]) {
@@ -366,7 +497,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           return false;
         }).length;
 
+        const home = hub('brambleford');
         window.__pass = `stones=${stones.length}@${bx},${by} onDeck=${onDeck}`
+          + ` home=${home.x},${home.y} due-east-by=${by - home.y}`
           + ` route shut=${shut} open=${open} saving=${shut - open}`;
         if (!stones.length) window.__errors.push('no eastern pass at all: ' + window.__pass);
         if (onDeck < stones.length) {
@@ -379,6 +512,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           window.__errors.push('clearing it saves nothing worth the walk: ' + window.__pass);
         }
         if (open > 240) window.__errors.push('the shortcut is not short: ' + window.__pass);
+        // Due east of home, so it reads as "over there" rather than a detour.
+        if (bx < home.x + 60) window.__errors.push('the crossing is not out east: ' + window.__pass);
+        if (Math.abs(by - home.y) > 20) window.__errors.push('the crossing is not due east: ' + window.__pass);
       } else if (SCRIPT.startsWith('terrain')) {
         // An ASCII dump of a patch of the valley, for working out what is
         // actually where. `#terrain:x,y,w,h`.
@@ -2300,6 +2436,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__keys ? ` ${window.__keys}` : '')
         + (window.__furn ? ` ${window.__furn}` : '')
         + (window.__pass ? ` ${window.__pass}` : '')
+        + (window.__reach ? ` ${window.__reach}` : '')
         + (window.__cleared ? ` ${window.__cleared}` : '')
         + (window.__emp ? ` ${window.__emp}` : '')
         + (window.__mapp ? ` ${window.__mapp}` : '')
