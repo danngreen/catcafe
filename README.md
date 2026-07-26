@@ -34,6 +34,19 @@ everyone's pantry; take a fare and everyone's money goes down; sleep at the inn
 and morning comes for all of you. Whoever started the cafe picked its paint and
 its name — everyone after that just picks a face and a name for themselves.
 
+**People come in wanting particular things.** Everyone arrives with three or
+four items in mind and asks for them in turn, fanciest first. Have it and they
+buy it and sit down; don't and they shrug, you hear it, and they ask for the
+next thing on the list. Get to the end of their list and they leave without
+buying anything.
+
+That is what makes the pantry a decision rather than a chore. Basics sell to
+almost everyone but cheaply; the expensive things are what people ask for first,
+and are worth stocking precisely because that is where the money is. Not
+everyone has something plain they'll settle for, so some walk out no matter what.
+The morning card tells you what was asked for that you hadn't got, which is
+tomorrow's shopping list.
+
 The customer simulation runs on exactly one client (the longest-standing player),
 which publishes where its customers are standing so the rest can draw them. That
 matters: if every client simulated the room, the same cup of coffee would be sold
@@ -221,7 +234,7 @@ There's a headless smoke test that drives the game through scenarios in a real
 browser and reports console errors:
 
 ```bash
-node tools/check.js walk cafe shop furnshop build furnish exterior treats taxi sleep map night door title systems1 systems2 --clean
+node tools/check.js walk cafe shop furnshop build furnish exterior treats taxi sleep map night door wishlist summarylines title systems1 systems2 --clean
 node tools/check.js runmobile tabmobile pausemobile dialogmobile --mobile 844x390 --clean   # touch
 node tools/check.js net netmobile netbooks netclock netdrop netforget solo --clean  # multiplayer
 node tools/check.js netping netmute netidle netpollquiet --ms 82000 --clean   # keepalive (slow)

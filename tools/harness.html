@@ -88,6 +88,106 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (waiting.length && waiting.some((c) => !c.emoteIcon)) {
           window.__errors.push('a waiting customer had no order bubble: ' + window.__bubbles);
         }
+      } else if (SCRIPT === 'summarylines') {
+        // A busy night's card: it has to hold every line it shows, above the
+        // Space prompt rather than over it.
+        const { SummaryScreen } = await import('../src/ui/menus.js');
+        const lines = [
+          { text: 'Cats fed on fresh fish.', tone: 'good' },
+          { text: 'Marmalade is sneezing. Take them to the vet.', tone: 'bad' },
+          { text: 'Cat upkeep: 12', tone: 'cost' },
+          { text: "Saffron's wage: 90", tone: 'cost' },
+          { text: '4 x Croissant went off.', tone: 'warn' },
+          { text: '3 asked for Matcha. You had none.', tone: 'warn' },
+          { text: '2 left without buying anything.', tone: 'bad' },
+        ];
+        g.push(new SummaryScreen(g, {
+          day: 4, customers: 14, revenue: 260, costs: 102, profit: 158, lines, slept: false,
+        }));
+        await wait(4200);
+        const s = g.screens[g.screens.length - 1];
+        window.__sum = `screen=${s && s.constructor.name} lines=${lines.length}`;
+        if (!s || s.constructor.name !== 'SummaryScreen') {
+          window.__errors.push('no summary card: ' + window.__sum);
+        }
+      } else if (SCRIPT === 'wishlist') {
+        // Customers arrive wanting three or four particular things and ask for
+        // them in turn. Each press of Space answers one ask: in stock they buy
+        // it and sit down, out of stock they shrug and name the next.
+        const st = g.state;
+        const sim = st.cafeSim;
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        st.shopOpen = true;
+        st.clock.t = 11 * (1200 / 24);
+        st.stock = {};
+        sim.addStock('black_tea', 40, st.clock.day);
+        await wait(900);
+        for (let i = 0; i < 5; i++) { sim.trySpawn(st.cafeMap); await wait(260); }
+        await wait(2600);
+
+        // --- the shape of what they came in wanting ---
+        const { ITEMS } = await import('../src/game/items.js');
+        const lists = sim.customers.map((c) => c.wish).filter(Boolean);
+        const sizes = lists.map((l) => l.length);
+        const sorted = lists.every((l) => l.every((id, i) =>
+          i === 0 || ITEMS[l[i - 1]].appeal >= ITEMS[id].appeal));
+        window.__wish = `lists=${sizes.join('/')} fanciestFirst=${sorted}`;
+        if (!lists.length) window.__errors.push('nobody arrived with a list');
+        if (sizes.some((n) => n < 3 || n > 4)) window.__errors.push('list is not 3-4 long: ' + window.__wish);
+        if (!sorted) window.__errors.push('list is not in asking order: ' + window.__wish);
+
+        // --- asking for something we have none of, all the way down ---
+        const a = sim.customers.find((c) => c.state === 'waiting');
+        if (!a) window.__errors.push('nobody reached the counter');
+        else {
+          a.wish = ['pie', 'cake', 'parfait'];      // stocked: none of them
+          a.wishIndex = 0;
+          a.order = 'pie';
+          sim.missed = {};
+          sim.walkedOut = 0;
+          const asks = [];
+          for (let i = 0; i < 3; i++) {
+            asks.push(a.order);
+            a.served = true; a.servedByPlayer = true;
+            await wait(500);
+          }
+          window.__asked = `asked=${asks.join('>')} then=${a.state}`
+            + ` missed=${Object.keys(sim.missed).length} walkedOut=${sim.walkedOut}`;
+          if (asks.join('>') !== 'pie>cake>parfait') {
+            window.__errors.push('did not work down the list: ' + window.__asked);
+          }
+          if (a.state !== 'leaving') window.__errors.push('did not give up and leave: ' + window.__asked);
+          if (Object.keys(sim.missed).length !== 3) {
+            window.__errors.push('missed asks not recorded: ' + window.__asked);
+          }
+          if (sim.walkedOut !== 1) window.__errors.push('walkout not counted: ' + window.__asked);
+        }
+
+        // --- and one who settles for the thing we do have ---
+        const b = sim.customers.find((c) => c.state === 'waiting');
+        if (!b) window.__errors.push('no second customer at the counter');
+        else {
+          b.wish = ['pie', 'black_tea'];
+          b.wishIndex = 0;
+          b.order = 'pie';
+          const money0 = st.money;
+          const stock0 = sim.stockCount('black_tea');
+          b.served = true; b.servedByPlayer = true;
+          await wait(500);
+          const afterMiss = b.order;
+          b.served = true; b.servedByPlayer = true;
+          await wait(500);
+          window.__settle = `afterMiss=${afterMiss} state=${b.state}`
+            + ` money ${money0}->${st.money} tea ${stock0}->${sim.stockCount('black_tea')}`;
+          if (afterMiss !== 'black_tea') window.__errors.push('did not ask for the next thing: ' + window.__settle);
+          if (st.money <= money0) window.__errors.push('the sale never happened: ' + window.__settle);
+          if (sim.stockCount('black_tea') !== stock0 - 1) {
+            window.__errors.push('the pantry was not drawn down: ' + window.__settle);
+          }
+          if (b.state !== 'toSeat' && b.state !== 'seated' && b.state !== 'leaving') {
+            window.__errors.push('did not go and sit down: ' + window.__settle);
+          }
+        }
       } else if (SCRIPT === 'build') {
         // Go in the way a player does: through Trowel & Sons.
         g.state.workers = 2; g.state.materials = 3; g.state.money = 5000;
@@ -241,8 +341,12 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           }
           ws.close();
           await wait(900);
-          window.__afterLeave = g.net.remotes.size - before;
-          if (window.__afterLeave !== 0) window.__errors.push('player was not removed on disconnect');
+          // Name them rather than count heads: bots left over from the previous
+          // scenario disconnect on their own schedule, and a total would swing
+          // either way for reasons that have nothing to do with this.
+          const stillThere = [...g.net.remotes.values()].some((r) => r.n === 'Testbot');
+          window.__afterLeave = stillThere ? 'still here' : 'gone';
+          if (stillThere) window.__errors.push('player was not removed on disconnect');
 
           // Leave two standing beside us for the screenshot.
           const proto2 = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -266,7 +370,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             await wait(400);
           }
           await wait(1200);
-          window.__standing = g.remotes.size - before;
+          const names = new Set([...g.remotes.values()].map((r) => r.name));
+          window.__standing = extras.filter((e) => names.has(e.name)).length;
           if (window.__standing < extras.length) {
             window.__errors.push('extra players did not appear: ' + window.__standing);
           }
@@ -1115,6 +1220,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__shop ? ` shop=${window.__shop} ${window.__stockIcons} variant=${window.__variant} bag=${window.__bagKeys}` : '')
         + (window.__cut ? ` hover=${window.__hover} cut=${window.__cut}->${window.__cut2} landed=${window.__landed}` : '')
         + (window.__walk ? ` inn=${window.__innMap} stairs=${window.__stairs} walk=${window.__walk} summary=${window.__summary} slept=${window.__slept}` : '')
+        + (window.__wish ? ` ${window.__wish} | ${window.__asked || ''} | ${window.__settle || ''}` : '')
+        + (window.__sum ? ` ${window.__sum}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';
       out.textContent = `RESULT ${errs.length ? 'FAIL' : 'OK'} (${errs.length} issues)\n${info}\n` + errs.slice(0, 25).join('\n');

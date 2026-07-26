@@ -681,6 +681,13 @@ export class AudioEngine {
       case 'error':
         this.tone(dest, { type: 'square', freq: 220, t0: t, attack: 0.003, decay: 0.12, sustain: 0.2, release: 0.1, dur: 0.14, gain: 0.06 * vol });
         break;
+      // "Sorry, we're out of that." A small falling shrug — disappointing, but
+      // it happens a lot, so it mustn't sound like a mistake you've made.
+      case 'outof': {
+        this.fmVoice(dest, { t0: t, freq: mtof(69), ratio: 1, index: 1.2, dur: 0.1, release: 0.12, gain: 0.07 * vol });
+        this.fmVoice(dest, { t0: t + 0.1, freq: mtof(65), ratio: 1, index: 1.4, dur: 0.16, release: 0.22, gain: 0.065 * vol });
+        break;
+      }
       case 'fanfare': {
         const notes = [72, 76, 79, 84];
         notes.forEach((n, i) => {

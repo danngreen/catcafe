@@ -1210,6 +1210,9 @@ export class MapScreen extends Screen {
 // Morning summary
 // ---------------------------------------------------------------------------
 
+// As many overnight lines as the morning card will hold.
+const MAX_SUMMARY_LINES = 7;
+
 export class SummaryScreen extends Screen {
   constructor(game, summary) {
     super();
@@ -1221,14 +1224,18 @@ export class SummaryScreen extends Screen {
     this.t += dt;
     this.reveal += dt * 2.4;
     if (input.hit('use') || input.hit('cancel')) {
-      if (this.reveal < this.s.lines.length + 3) this.reveal = 99;
+      if (this.reveal < Math.min(this.s.lines.length, MAX_SUMMARY_LINES) + 3) this.reveal = 99;
       else { this.done = true; audio.sfx('ui_ok'); }
     }
   }
   draw(ctx) {
     dim(ctx, 0.75);
     const slept = !!this.s.slept;
-    const w = 250, h = slept ? 214 : 176;
+    // Grow with the night's news rather than clipping it. A day with spoilage,
+    // a sick cat and three things people asked for that you hadn't got fills
+    // this easily, and the last lines used to be drawn over the Space prompt.
+    const shown = Math.min(this.s.lines.length, MAX_SUMMARY_LINES);
+    const w = 250, h = (slept ? 144 : 106) + shown * 11 + 26;
     const x = (VIEW_W - w) / 2, y = (VIEW_H - h) / 2;
     panel(ctx, x, y, w, h);
     const st = this.game.state;
@@ -1281,7 +1288,7 @@ export class SummaryScreen extends Screen {
     ctx.fillRect(x + 14, ly, w - 28, 1);
     ly += 8;
 
-    this.s.lines.slice(0, 6).forEach((l, i) => {
+    this.s.lines.slice(0, MAX_SUMMARY_LINES).forEach((l, i) => {
       if (this.reveal < 4 + i) return;
       const col = l.tone === 'bad' ? P.uiRed : l.tone === 'warn' ? P.uiGold : l.tone === 'good' ? P.uiGreen : P.uiTextDim;
       drawText(ctx, l.text.slice(0, 44), x + 18, ly + i * 11, { color: col, shadow: P.uiShadow });

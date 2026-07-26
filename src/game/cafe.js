@@ -14,6 +14,13 @@ import { TILE } from '../art/tiles.js';
 
 const rng = makeRng(0x0cafe);
 
+// Everything anyone might ask for, and the plain things most people will settle
+// for. Built once: the menu doesn't change while the game is running.
+const MENU_IDS = Object.keys(ITEMS).filter((id) => isMenuItem(id));
+const STAPLE_IDS = MENU_IDS.filter((id) => ITEMS[id].appeal <= 1.05);
+// How long an unstaffed "sorry, none of that either" takes to come back.
+const MISS_DELAY = 1.1;
+
 /** How busy the valley is at a given hour — two humps, lunch and early evening. */
 function hourDemand(h) {
   if (h < 7 || h >= 21) return 0.05;
@@ -33,6 +40,8 @@ export class Cafe {
     this.todayRevenue = 0;
     this.todayCosts = 0;
     this.passedBy = 0;
+    this.walkedOut = 0;       // came in, asked, and we had none of it
+    this.missed = {};         // id -> times asked for and not in stock today
     this.servedStreak = 0;
     this.lastPassMessage = 0;
   }
@@ -321,11 +330,10 @@ export class Cafe {
         if (c.followPath(dt, map)) {
           c.state = 'waiting';
           c.stateT = 0;
-          c.order = this.pickOrder();
           c.dir = 'up';
+          this.startWishlist(c);
           // Show what they're waiting for, so you can see the room's orders at a glance.
-          if (c.order) c.showItemEmote(ITEMS[c.order].icon, 999);
-          else c.showEmote('alert', 999);
+          this.showAsk(c);
         }
         break;
       }
@@ -336,14 +344,19 @@ export class Cafe {
         const staffed = this.minded || (st.employee && st.employee.onDuty);
         // Serving them yourself is faster and they like you more for it.
         const autoDelay = st.employee && st.employee.onDuty ? 4.5 - st.employee.quality * 2 : 5;
+        // Saying "no, sorry" is quick — you know what's on the shelf. Only
+        // actually making the thing takes the full serving beat, which is why
+        // a customer working down a long list isn't four times the wait.
+        const delay = c.wishIndex === 0 ? autoDelay : MISS_DELAY;
         if (c.served) {
-          this.completeOrder(c, c.servedByPlayer);
+          this.answerAsk(c, c.servedByPlayer);
           break;
         }
         if (!staffed) {
           if (c.stateT > 8) { c.satisfaction = 0.1; c.state = 'leaving'; c.showEmote('alert', 2); st.toast('A customer waited, gave up, and left.', 'bad'); }
-        } else if (c.stateT > autoDelay) {
-          this.completeOrder(c, false);
+        } else if (c.stateT > delay) {
+          // Staff work down the same list, a beat per item.
+          this.answerAsk(c, false);
         }
         break;
       }
@@ -443,6 +456,92 @@ export class Cafe {
     return avail[0];
   }
 
+  /**
+   * What somebody walks in wanting — three or four things, in the order they'd
+   * ask for them, drawn from the whole menu rather than from your shelves.
+   *
+   * That is the point of it: what people want is not what you happen to have,
+   * and finding out is how you learn what to stock. The list runs fanciest
+   * first, the way anybody orders ("a matcha? ...no? just a tea then"), so a
+   * cafe with the basics in usually still makes a sale — a smaller one.
+   */
+  buildWishlist() {
+    const pool = MENU_IDS.slice();
+    const weights = pool.map((id) => 0.35 + ITEMS[id].appeal);
+    const picks = [];
+    const want = 2 + Math.floor(rng() * 2);                 // two or three fancies
+    for (let n = 0; n < want && pool.length; n++) {
+      let total = weights.reduce((s, v) => s + v, 0);
+      let r = rng() * total;
+      let i = 0;
+      for (; i < pool.length - 1; i++) { r -= weights[i]; if (r <= 0) break; }
+      picks.push(pool[i]);
+      pool.splice(i, 1);
+      weights.splice(i, 1);
+    }
+    // Most people have something plain they'd settle for. Some don't, and those
+    // are the ones who walk out — which is what makes the rest worth stocking.
+    if (rng() < 0.72) {
+      const staples = STAPLE_IDS.filter((id) => !picks.includes(id));
+      if (staples.length) picks.push(staples[Math.floor(rng() * staples.length)]);
+    }
+    picks.sort((a, b) => ITEMS[b].appeal - ITEMS[a].appeal);
+    return picks;
+  }
+
+  /** Give somebody a fresh list and start them on the first thing. */
+  startWishlist(c) {
+    c.wish = this.buildWishlist();
+    c.wishIndex = 0;
+    c.order = c.wish[0] || null;
+  }
+
+  /** Show what they're asking for right now. */
+  showAsk(c) {
+    if (c.order) c.showItemEmote(ITEMS[c.order].icon, 999);
+    else c.showEmote('alert', 999);
+  }
+
+  /**
+   * Answer whatever they just asked for. In stock, they buy it and go and sit
+   * down; out of stock, they shrug and name the next thing on their list. One
+   * answer per press, so running out is something you hear and see happen.
+   */
+  answerAsk(c, byPlayer) {
+    const st = this.state;
+    c.served = false;
+    c.servedByPlayer = false;
+
+    const id = c.order;
+    if (id && this.stockCount(id) > 0) {
+      this.completeOrder(c, id, byPlayer);
+      return;
+    }
+
+    // Out of it. Remember who asked for what — it's the shopping list.
+    if (id) {
+      this.missed[id] = (this.missed[id] || 0) + 1;
+      st.floatText(`no ${ITEMS[id].name.toLowerCase()}`, c.x, c.y - 30, '#e8a0a0');
+    }
+    audio.sfx('outof', { gain: 0.6 });
+    c.satisfaction = clamp(c.satisfaction - 0.12, 0, 1.6);
+    c.wishIndex++;
+    c.stateT = 0;                       // they'll wait again for the next answer
+
+    if (c.wishIndex >= (c.wish ? c.wish.length : 0)) {
+      // Nothing they wanted. They're not cross, but they're not staying.
+      c.order = null;
+      c.satisfaction = clamp(c.satisfaction * 0.5, 0, 1.6);
+      c.state = 'leaving';
+      c.path = null;
+      c.showEmote('alert', 2.2);
+      this.walkedOut++;
+      return;
+    }
+    c.order = c.wish[c.wishIndex];
+    this.showAsk(c);
+  }
+
   /** Called by the player pressing Space at a waiting customer. */
   serveNearest(px, py) {
     const best = this.waitingNear(px, py);
@@ -463,12 +562,14 @@ export class Cafe {
     return best;
   }
 
-  completeOrder(c, byPlayer) {
+  /** They asked for `id`, we have it: ring it up and find them a seat. */
+  completeOrder(c, id, byPlayer) {
     const st = this.state;
-    const id = c.order || this.pickOrder();
     if (!id || !this.takeStock(id, 1)) {
-      c.satisfaction = 0.15;
+      // Somebody else took the last one between the ask and the answer.
+      c.satisfaction = clamp(c.satisfaction - 0.2, 0, 1.6);
       c.state = 'leaving';
+      c.path = null;
       c.showEmote('alert', 2);
       st.toast('You ran out of something a customer wanted.', 'warn');
       return;
@@ -643,6 +744,23 @@ export class Cafe {
     st.spend(summary.costs);
     summary.profit = summary.revenue - summary.costs;
 
+    // --- what people wanted and we didn't have ---
+    // The whole point of the asking: you can only stock for tomorrow if you
+    // know what was asked for today. Name the two most-wanted.
+    const wanted = Object.entries(this.missed).sort((a, b) => b[1] - a[1]).slice(0, 2);
+    for (const [id, n] of wanted) {
+      summary.lines.push({
+        text: `${n} asked for ${ITEMS[id]?.name || id}. You had none.`,
+        tone: 'warn',
+      });
+    }
+    if (this.walkedOut) {
+      summary.lines.push({
+        text: `${this.walkedOut} left without buying anything.`,
+        tone: 'bad',
+      });
+    }
+
     if (this.passedBy > 3) {
       summary.lines.push({ text: `${this.passedBy} people looked in and kept walking.`, tone: 'warn' });
     }
@@ -654,6 +772,8 @@ export class Cafe {
     this.todayRevenue = 0;
     this.todayCosts = 0;
     this.passedBy = 0;
+    this.walkedOut = 0;
+    this.missed = {};
     for (const c of this.customers) { if (c.seat) c.seat.taken = null; }
     this.customers.length = 0;
 

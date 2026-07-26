@@ -474,7 +474,9 @@ export class Customer extends Actor {
     this.seat = null;
     this.path = null;
     this.pathIndex = 0;
-    this.order = null;
+    this.order = null;        // what they're asking for right this moment
+    this.wish = null;         // the three or four things they came in wanting
+    this.wishIndex = 0;
     this.spend = 0;
     this.satisfaction = 0.5;
     this.stayT = 0;

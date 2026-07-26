@@ -488,7 +488,12 @@ class Game {
   tryServe() {
     const st = this.state;
     if (net.simOwner) return st.cafeSim.serveNearest(this.player.x, this.player.y);
-    if (!st.cafeSim.waitingNear(this.player.x, this.player.y)) return false;
+    const c = st.cafeSim.waitingNear(this.player.x, this.player.y);
+    if (!c) return false;
+    // The answer is worked out on whoever runs the room, so play the "we're out
+    // of that" note here from our own copy of the pantry, which is the same
+    // pantry. Waiting for the round trip would put the sound after the shrug.
+    if (c.order && st.cafeSim.stockCount(c.order) <= 0) audio.sfx('outof', { gain: 0.6 });
     net.askServe(this.player.x, this.player.y);
     return true;
   }
