@@ -51,6 +51,26 @@ export const ICONS = {
   matcha: (b) => mug(b, P.matcha),
   cocoa: (b) => { mug(b, '#5c3a26'); b.ellipse(7, 7, 1.6, 1, rgb('#f6f0e0')); b.ellipse(9, 8, 1.2, 0.9, rgb('#f6f0e0')); },
   lemonade: (b) => { glass(b, '#f5d84a'); b.ellipse(11, 4, 2, 1.6, rgb('#ffe97a')); },
+  // The cold half of the menu. Ice cubes read at this size where condensation
+  // does not, so all three say cold the same way.
+  icedCoffee: (b) => {
+    glass(b, '#6b4630');
+    b.rect(5, 6, 3, 3, rgb('#cfe4f0', 210)); b.rect(8, 9, 3, 3, rgb('#e6f2fa', 190));
+    b.rect(6, 7, 1, 1, rgb('#ffffff'));
+  },
+  icedTea: (b) => {
+    glass(b, '#b8722c');
+    b.rect(5, 7, 3, 3, rgb('#d8ecf6', 210)); b.rect(8, 6, 3, 3, rgb('#eef7fc', 190));
+    b.ellipse(11, 4, 1.8, 1.4, rgb('#f5d84a'));      // the lemon nobody eats
+  },
+  iceCream: (b) => {
+    for (let i = 0; i < 5; i++) b.hline(6 - i * 0 + i, 9 + i, 5 - i * 1.2 | 0, rgb('#e0a45c'));
+    b.rect(5, 9, 7, 1, rgb('#c9863f'));
+    b.ellipse(8, 6.5, 4, 3.4, rgb('#f6efe0'));
+    b.ellipse(7, 5.4, 2.2, 1.8, rgb('#ffffff'));
+    b.ellipse(10, 5, 2, 1.7, rgb('#f4a8b0'));
+    b.ellipse(9.6, 3.2, 1, 0.9, rgb(P.strawberry));
+  },
   milk: (b) => { b.rect(4, 3, 8, 11, rgb('#f8f4ea')); b.rect(4, 3, 8, 3, rgb('#5b8fd6')); b.rect(6, 7, 4, 4, rgb('#dfeaf6')); b.set(7, 8, rgb('#5b8fd6')); },
   water: (b) => glass(b, '#9fd6ee'),
   cider: (b) => glass(b, '#e0894a'),

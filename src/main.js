@@ -25,6 +25,7 @@ import { Player, Villager, RemotePlayer, Employee, canStand } from './game/entit
 import { HIRE_BY_ID } from './game/cafe.js';
 import { ITEMS, STOCK, FLEA_POOL, baseId } from './game/items.js';
 import { shopOpen, hoursText, HOUR_SECONDS, DAY_FULL } from './game/time.js';
+import { weatherNow, weatherAmbience, weatherLight, weatherLine, WeatherFx } from './game/weather.js';
 import { BOOK_BY_ID } from './world/places.js';
 import { QUESTS, QUESTS_BY_GIVER, objectiveMet, questSteps, currentStep,
   stepIndex, isLastStep, progressText, objectiveText, repairAllSteps } from './game/quests.js';
@@ -287,6 +288,10 @@ class Game {
    */
   buildWorld(seed) {
     this.worldSeed = seed;
+    if (this.state) this.state.worldSeed = seed;
+    // Screen-space, so it survives a change of valley untouched.
+    this.weatherFx ||= new WeatherFx(VIEW_W, VIEW_H);
+    this.sky = weatherNow(seed, this.state?.clock || { day: 0, t: 999 });
     const world = generateWorld(seed);
     this.overworld = world.map;
     this.towns = world.towns;
@@ -659,6 +664,7 @@ class Game {
       }
       this.hud.update(dt, st);
       this.input.endFrame();
+      this.updateWeather(dt);
       audio.update(dt, { night: st.clock.lighting().night });
       return;
     }
@@ -697,6 +703,7 @@ class Game {
     net.update(dt, this.player, st.mapId);
     this.updateCafeSim(dt);
     this.updateEmployee(dt);
+    this.updateWeather(dt);
     this.updateAudio(dt);
     this.hud.update(dt, st);
     this.cam.follow(map, this.player.x, this.player.y - 6);
@@ -787,6 +794,22 @@ class Game {
     }
   }
 
+  /**
+   * The sky is worked out rather than stored: same seed, same day, same
+   * weather on every machine in the valley, with nothing sent between them.
+   */
+  updateWeather(dt) {
+    const st = this.state;
+    st.worldSeed = this.worldSeed;
+    this.sky = st.sky;
+    const was = this.weatherName;
+    this.weatherName = this.sky.now.id;
+    if (was && was !== this.weatherName && this.sky.blend > 0.5) {
+      this.hud.toast(weatherLine(this.sky.now), 'info', 5);
+    }
+    this.weatherFx.update(dt, this.sky, !this.currentMap.outdoor);
+  }
+
   updateAudio(dt) {
     const st = this.state;
     const map = this.currentMap;
@@ -806,16 +829,20 @@ class Game {
         const forest = map.countNear(tx, ty, (id) => id === T.FOREST_FLOOR, 6) / total;
         const sand = map.countNear(tx, ty, (id) => id === T.SAND, 6) / total;
         const nearOcean = tx < 90 && ty > 180;
+        const sky = weatherAmbience(this.sky, false);
         audio.setAmbience({
           water: nearOcean ? 0 : clamp(water * 2.6, 0, 1),
           waves: nearOcean ? clamp((water + sand) * 2.2, 0, 1) : 0,
           forest: clamp(forest * 2.2, 0, 1),
           wind: clamp(0.3 + (1 - forest) * 0.25, 0, 1),
+          ...sky,
         });
       }
     } else {
       const chatter = st.inCafe ? clamp(st.cafeSim.customers.length / 6, 0, 1) : 0;
-      audio.setAmbience({ indoor: 0.45, chatter });
+      // Rain on the roof is worth hearing from inside — it is the reason the
+      // room is empty.
+      audio.setAmbience({ indoor: 0.45, chatter, ...weatherAmbience(this.sky, true) });
     }
     audio.update(dt, { night: light.night });
   }
@@ -1622,12 +1649,19 @@ class Game {
       if (r.mapId === st.mapId) actors.push(r);
     }
 
-    this.renderer.draw(ctx, map, this.cam, actors, { night: light.night, tint: light.tint, lights });
+    // Weather takes light out of the day on top of the hour, and colours what
+    // is left: fog goes pale, rain and snow go blue.
+    const wl = weatherLight(this.sky);
+    const dimmed = map.outdoor ? clamp(light.night + wl.dim, 0, 1) : light.night;
+    const tint = map.outdoor && wl.dim > light.night ? wl.tint : light.tint;
+    this.renderer.draw(ctx, map, this.cam, actors, { night: dimmed, tint, lights });
     if (this.cutscene) this.cutscene.draw(ctx, this.cam.ox, this.cam.oy);
+    // Over the top of the tint, so rain in the dark is lit by the lamps below.
+    this.weatherFx.draw(ctx, this.sky, !map.outdoor);
 
     this.hud.drawFloats(ctx, this.cam.ox, this.cam.oy);
     this.drawInteractPrompt(ctx);
-    this.hud.draw(ctx, st, this.t);
+    this.hud.draw(ctx, st, this.t, this.sky);
     this.dialogue.draw(ctx, this.t);
 
     for (const s of this.screens) s.draw(ctx, this, this.t);

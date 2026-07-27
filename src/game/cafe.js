@@ -11,6 +11,7 @@ import { COAT_LIST, CLOTHES, SPECIES_LIST } from '../art/chars.js';
 import { makeRng, clamp } from '../engine/util.js';
 import { audio } from '../engine/audio.js';
 import { TILE } from '../art/tiles.js';
+import { mix, weatherOn } from './weather.js';
 
 const rng = makeRng(0x0cafe);
 
@@ -258,11 +259,36 @@ export class Cafe {
     ctx.chatter = busy;
   }
 
+  /**
+   * A fire is worth something only when there is weather to come in out of.
+   * It is the difference between a wet afternoon emptying the room and a wet
+   * afternoon filling it, which is why the thing costs what it does.
+   */
+  hearthComfort() {
+    const fires = this.state.cafe.furniture.filter((f) => f.type === 'fireplace').length;
+    if (!fires) return 0;
+    return Math.min(1, 0.75 + (fires - 1) * 0.25);
+  }
+
+  /**
+   * How much of the weather the cafe shrugs off. Nobody walks out in the snow
+   * for a cup of tea, but they will walk out for a fire, and the sums say so.
+   */
+  weatherPull() {
+    const sky = this.state.sky;
+    const crowd = mix(sky, 'crowd');
+    if (crowd >= 1) return crowd;                 // nothing to shelter from
+    const shelter = this.hearthComfort() * mix(sky, 'warmth');
+    // A fire recovers most of what the weather took, never quite all of it.
+    return crowd + (1 - crowd) * Math.min(0.85, shelter);
+  }
+
   arrivalRate() {
     const st = this.state;
     const h = st.clock.hourFloat;
     let rate = this.charm() * 0.45 * hourDemand(h);
     if (st.clock.isWeekend) rate *= 1.65;
+    rate *= this.weatherPull();
     if (st.employee && !this.minded) rate *= 0.55 + st.employee.quality * 0.5;
     // A visibly full room turns people away before they even try the door.
     const free = this.freeSeats().length;
@@ -501,7 +527,16 @@ export class Cafe {
    */
   buildWishlist() {
     const pool = MENU_IDS.slice();
-    const weights = pool.map((id) => 0.35 + ITEMS[id].appeal);
+    // The weather decides what sounds nice before appeal gets a say: nobody
+    // orders cocoa in a heatwave, however good the cocoa is.
+    const sky = this.state.sky;
+    const taste = (id) => {
+      const t = ITEMS[id].temp;
+      if (!t) return 1;
+      const a = sky.from.drink?.[t] ?? 1, b = sky.now.drink?.[t] ?? 1;
+      return a + (b - a) * sky.blend;
+    };
+    const weights = pool.map((id) => (0.35 + ITEMS[id].appeal) * taste(id));
     const picks = [];
     const want = 2 + Math.floor(rng() * 2);                 // two or three fancies
     for (let n = 0; n < want && pool.length; n++) {
@@ -702,6 +737,29 @@ export class Cafe {
       lines: [],
       passedBy: this.passedBy,
     };
+
+    // --- the weather, and whether the fire earned its keep ---
+    // The day just gone, not the one starting: the summary is a report on it.
+    const sky = weatherOn(st.worldSeed, st.clock.day - 1);
+    if (sky.crowd < 0.95) {
+      const fire = this.hearthComfort() * sky.warmth;
+      summary.lines.push({
+        text: fire >= 0.5
+          ? `${sky.name} out. The fire kept them coming.`
+          : `${sky.name} out. Fewer people about.`,
+        tone: fire >= 0.5 ? 'good' : 'warn',
+      });
+    } else if (sky.crowd > 1.05) {
+      summary.lines.push({ text: `${sky.name} all day. The valley was out and about.`, tone: 'good' });
+    }
+    // The day you are about to walk into — the clock has already rolled by the
+    // time we cash up. This is what makes the morning shop a decision: you know
+    // it is going to snow before you choose between cocoa and lemonade.
+    const next = weatherOn(st.worldSeed, st.clock.day);
+    summary.lines.push({
+      text: `Today: ${next.name.toLowerCase()}. ${next.blurb}`,
+      tone: next.crowd < 0.95 ? 'warn' : 'info',
+    });
 
     // --- feed the cats ---
     const catCount = st.cats.length;

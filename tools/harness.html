@@ -320,6 +320,202 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.player.x = cx * 16 + 8; g.player.y = (cy - 2) * 16;
         g.cam.follow(g.overworld, g.player.x, g.player.y, true);
         await wait(1400);
+      } else if (SCRIPT === 'weather') {
+        // Two things worth proving: every machine in a valley gets the same
+        // sky from the seed alone, and the sky is actually drawn. A weather
+        // system that only exists in a variable is not weather.
+        const { weatherOn, weatherNow } = await import('../src/game/weather.js');
+        const st = g.state;
+        const seed = g.worldSeed;
+
+        // Determinism, and a spread wide enough to be worth having.
+        const seen = {};
+        for (let d = 0; d < 120; d++) {
+          const w = weatherOn(seed, d);
+          if (weatherOn(seed, d).id !== w.id) window.__errors.push('weather is not stable for a day');
+          seen[w.id] = (seen[w.id] || 0) + 1;
+        }
+        const kinds = Object.keys(seen).sort();
+        // Snow belongs to winter. Day 84-111 is the winter of the first year.
+        let snowOut = 0;
+        for (let d = 0; d < 84; d++) if (weatherOn(seed, d).id === 'snow') snowOut++;
+
+        // The sky follows the day, checked against the pure function rather
+        // than by moving the clock: in a shared valley the server owns the
+        // clock and puts back any day we set behind its back.
+        let follows = true;
+        for (let d = 0; d < 40; d++) {
+          const sky = weatherNow(seed, { day: d, t: 3600 });
+          if (sky.now.id !== weatherOn(seed, d).id) follows = false;
+        }
+        // Midnight is a fade, not a jump: a second into a new day you are
+        // still mostly in yesterday's weather.
+        const turning = weatherNow(seed, { day: 5, t: 1 });
+        const settled = weatherNow(seed, { day: 5, t: 9999 });
+
+        // Drawn. Two valleys, same day, different sky — which is the sync
+        // story as well: the seed alone decides, so nothing is sent.
+        const seedWhere = (want) => {
+          for (let k = 1; k < 4000; k++) if (weatherOn(k, st.clock.day).id === want) return k;
+          return -1;
+        };
+        // A patch of ground clear of everything that animates on its own: the
+        // clock panel at the top, the location banner under it, and the toasts
+        // along the bottom — including the one this system raises itself.
+        const shot = () => {
+          const c = document.getElementById('screen');
+          return c.getContext('2d').getImageData(30, 80, c.width - 60, 90).data;
+        };
+        const diff = (a, b) => {
+          let n = 0;
+          for (let i = 0; i < a.length; i += 4) {
+            if (Math.abs(a[i] - b[i]) > 10 || Math.abs(a[i + 2] - b[i + 2]) > 10) n++;
+          }
+          return n;
+        };
+        // On and off, the way the employee test does it: shoot the frame with
+        // the real effect, swap in one that draws nothing, shoot again. What
+        // changes is exactly what the overlay puts on the screen —
+        // a frame-to-frame diff would also catch the tint, and rain and cloud
+        // both take light out of the sky.
+        const { WeatherFx, WEATHER } = await import('../src/game/weather.js');
+        const seeFrom = async (kind) => {
+          g.worldSeed = seedWhere(kind);
+          await wait(1100);
+          const real = g.weatherFx;
+          const on = shot();
+          g.weatherFx = { update() {}, draw() {}, drops: [], flakes: [] };
+          await wait(120);
+          const off = shot();
+          g.weatherFx = real;
+          return { id: g.sky.now.id, drawn: diff(on, off), particles: real.drops.length };
+        };
+
+        const still = await seeFrom('cloudy');
+        const wet = await seeFrom('rain');
+        const drops = wet.particles;
+        const wasOutdoor = g.currentMap.outdoor;
+
+        // Snow is winter's, and the server owns the calendar, so it gets
+        // driven through the effect directly rather than by waiting for
+        // February. Same code, onto a canvas we can count.
+        const snowSky = { now: WEATHER.snow, from: WEATHER.snow, blend: 1, today: WEATHER.snow };
+        const fx = new WeatherFx(200, 120);
+        for (let i = 0; i < 40; i++) fx.update(1 / 30, snowSky, false);
+        const flakes = fx.flakes.length;
+        const off = document.createElement('canvas');
+        off.width = 200; off.height = 120;
+        const og = off.getContext('2d');
+        fx.draw(og, snowSky, false);
+        const pix = og.getImageData(0, 0, 200, 120).data;
+        let white = 0;
+        for (let i = 0; i < pix.length; i += 4) if (pix[i] > 240 && pix[i + 3] > 200) white++;
+        // And indoors you are out of it entirely.
+        og.clearRect(0, 0, 200, 120);
+        fx.draw(og, snowSky, true);
+        const inPix = og.getImageData(0, 0, 200, 120).data;
+        let indoorWhite = 0;
+        for (let i = 0; i < inPix.length; i += 4) if (inPix[i] > 240 && inPix[i + 3] > 200) indoorWhite++;
+
+        window.__weather = `kinds=${kinds.join('/')} snowBeforeWinter=${snowOut} follows=${follows}`
+          + ` turn=${turning.from.id}->${turning.now.id}@${turning.blend.toFixed(2)}`
+          + ` settled=${settled.blend}`
+          + ` saw=${still.id}/${wet.id} drops=${drops} flakes=${flakes}`
+          + ` snowPixels=${white} indoorPixels=${indoorWhite}`
+          + ` onScreen cloudy=${still.drawn} rain=${wet.drawn} outdoor=${wasOutdoor}`;
+        if (kinds.length < 5) window.__errors.push('the sky barely changes: ' + window.__weather);
+        if (snowOut) window.__errors.push('it snowed outside winter: ' + window.__weather);
+        if (!follows) window.__errors.push('weatherNow disagrees with weatherOn: ' + window.__weather);
+        if (turning.blend > 0.1) window.__errors.push('midnight jumps instead of fading: ' + window.__weather);
+        if (settled.blend !== 1) window.__errors.push('the changeover never finishes: ' + window.__weather);
+        if (still.id !== 'cloudy' || wet.id !== 'rain') {
+          window.__errors.push('the sky did not follow the valley: ' + window.__weather);
+        }
+        if (!drops) window.__errors.push('rain with no raindrops: ' + window.__weather);
+        if (!flakes) window.__errors.push('snow with no snowflakes: ' + window.__weather);
+        if (wet.drawn < 300) window.__errors.push('the rain is not drawn: ' + window.__weather);
+        if (white < 30) window.__errors.push('the snow is not drawn: ' + window.__weather);
+        if (indoorWhite) window.__errors.push('it is snowing indoors: ' + window.__weather);
+      } else if (SCRIPT.startsWith('skyshot')) {
+        // A look at one kind of weather, for the eye rather than the counter.
+        const { weatherOn } = await import('../src/game/weather.js');
+        const kind = SCRIPT.split(':')[1] || 'rain';
+        const st = g.state;
+        for (let k = 1; k < 4000; k++) {
+          if (weatherOn(k, st.clock.day).id === kind) { g.worldSeed = k; break; }
+        }
+        await wait(2200);
+        window.__pass = `sky=${g.sky.now.id}`;
+      } else if (SCRIPT === 'weathercafe') {
+        // The sky has to reach the till, not just the screen. Three claims:
+        // bad weather thins the crowd, a fire wins most of it back, and what
+        // people ask for follows the temperature.
+        const { WEATHER } = await import('../src/game/weather.js');
+        const st = g.state;
+        const sim = st.cafeSim;
+        // A stocked, furnished cafe, so charm is not the thing that varies.
+        for (const id of ['house_coffee', 'cocoa', 'lemonade', 'iced_tea', 'cookie', 'cake']) {
+          sim.addStock(id, 40, st.clock.day);
+        }
+        const forceSky = (kind) => {
+          const w = WEATHER[kind];
+          Object.defineProperty(st, 'sky', {
+            configurable: true,
+            get: () => ({ now: w, from: w, blend: 1, today: w }),
+          });
+        };
+
+        const rateIn = (kind) => { forceSky(kind); return sim.arrivalRate(); };
+        const sunny = rateIn('sunny');
+        const rainy = rateIn('rain');
+        const snowy = rateIn('snow');
+
+        // Now light a fire and ask again. Same cafe, same day, same hour.
+        // The arrival rate moves for two reasons at once — a fireplace is
+        // handsome furniture as well as shelter — so the shelter claim is made
+        // against weatherPull, which is the shelter term on its own.
+        const pullIn = (kind) => { forceSky(kind); return sim.weatherPull(); };
+        const rainPull = pullIn('rain');
+        const sunPull = pullIn('sunny');
+        st.cafe.furniture.push({ type: 'fireplace', x: 3, y: 3, variant: 0 });
+        const rainyFire = rateIn('rain');
+        const rainPullFire = pullIn('rain');
+        const sunPullFire = pullIn('sunny');
+        st.cafe.furniture.pop();
+
+        // What gets asked for. Enough lists to average out the randomness.
+        const tally = (kind) => {
+          forceSky(kind);
+          const count = { hot: 0, cold: 0 };
+          const { ITEMS } = window.__items;
+          for (let i = 0; i < 400; i++) {
+            for (const id of sim.buildWishlist()) {
+              const t = ITEMS[id].temp;
+              if (t) count[t]++;
+            }
+          }
+          return count;
+        };
+        window.__items = await import('../src/game/items.js');
+        const hotDay = tally('sunny');
+        const coldDay = tally('snow');
+        delete st.sky;
+
+        window.__wcafe = `rate sunny=${sunny.toFixed(2)} rain=${rainy.toFixed(2)} snow=${snowy.toFixed(2)}`
+          + ` withFire rain=${rainyFire.toFixed(2)}`
+          + ` pull rain=${rainPull.toFixed(2)}->${rainPullFire.toFixed(2)}`
+          + ` sun=${sunPull.toFixed(2)}->${sunPullFire.toFixed(2)}`
+          + ` sunnyAsks hot=${hotDay.hot} cold=${hotDay.cold}`
+          + ` snowyAsks hot=${coldDay.hot} cold=${coldDay.cold}`;
+        if (rainy >= sunny * 0.75) window.__errors.push('rain barely thins the crowd: ' + window.__wcafe);
+        if (snowy >= rainy) window.__errors.push('snow is no worse than rain: ' + window.__wcafe);
+        if (rainyFire <= rainy * 1.2) window.__errors.push('the fire does not offset the rain: ' + window.__wcafe);
+        if (rainyFire > sunny) window.__errors.push('a fire beats a sunny day, which is too good: ' + window.__wcafe);
+        if (rainPullFire <= rainPull * 1.2) window.__errors.push('the fire is no shelter: ' + window.__wcafe);
+        // Shelter, not charm: there is nothing to shelter from in the sun.
+        if (Math.abs(sunPullFire - sunPull) > 0.001) window.__errors.push('the fire shelters you from sunshine: ' + window.__wcafe);
+        if (hotDay.cold <= hotDay.hot) window.__errors.push('nobody wants a cold drink in the sun: ' + window.__wcafe);
+        if (coldDay.hot <= coldDay.cold * 3) window.__errors.push('snow does not sell hot drinks: ' + window.__wcafe);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -2397,6 +2593,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__run ? ` ${window.__run}` : '')
         + (window.__tabs2 ? ` modes=${window.__tabs2}` : '')
         + (window.__shore ? ` shore=${window.__shore}` : '')
+        + (window.__weather ? ` ${window.__weather}` : '')
+        + (window.__wcafe ? ` ${window.__wcafe}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

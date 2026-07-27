@@ -233,6 +233,50 @@ export function drawMoreArrow(ctx, x, y, t) {
 // HUD
 // ---------------------------------------------------------------------------
 
+/**
+ * A 12x12 weather pictogram for the clock panel, drawn straight onto the frame
+ * — it changes every day, which is more churn than a baked sprite is worth.
+ */
+export function drawWeatherGlyph(ctx, id, x, y) {
+  const px = (dx, dy, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x + dx, y + dy, w, h); };
+  const sun = (cx, cy, r, c) => {
+    px(cx - r, cy - r + 1, r * 2, r * 2 - 2, c);
+    px(cx - r + 1, cy - r, r * 2 - 2, r * 2, c);
+  };
+  const cloud = (cy, c) => {
+    px(2, cy + 2, 9, 3, c); px(3, cy, 4, 3, c); px(6, cy - 1, 4, 3, c);
+  };
+  switch (id) {
+    case 'sunny':
+      sun(6, 6, 4, '#ffcf4a');
+      sun(6, 6, 3, '#fff0a8');
+      for (const [dx, dy] of [[6, 0], [6, 11], [0, 6], [11, 6]]) px(dx, dy, 1, 1, '#ffcf4a');
+      break;
+    case 'cloudy':
+      sun(9, 3, 3, '#ffcf4a');
+      cloud(4, '#c9d2e0'); cloud(3, '#eef2f8');
+      break;
+    case 'windy':
+      cloud(2, '#d8dee8');
+      for (let i = 0; i < 3; i++) px(1 + i, 8 + i * 2, 8 - i * 2, 1, '#a8b8d0');
+      break;
+    case 'fog':
+      cloud(1, '#dfe4ec');
+      for (let i = 0; i < 3; i++) px(1, 7 + i * 2, 10 - (i % 2) * 3, 1, '#c2cad8');
+      break;
+    case 'rain':
+      cloud(2, '#a8b2c6'); cloud(1, '#cad2e0');
+      for (let i = 0; i < 4; i++) px(2 + i * 3, 8 + (i % 2), 1, 3, '#7fb8e8');
+      break;
+    case 'snow':
+      cloud(2, '#c0c8d8'); cloud(1, '#eef2f8');
+      for (const [dx, dy] of [[3, 9], [6, 8], [9, 10], [5, 11]]) px(dx, dy, 1, 1, '#ffffff');
+      break;
+    default:
+      cloud(4, '#c9d2e0');
+  }
+}
+
 export class Hud {
   constructor() {
     this.toasts = [];
@@ -314,13 +358,16 @@ export class Hud {
     });
   }
 
-  draw(ctx, st, t) {
+  draw(ctx, st, t, sky) {
     // --- clock / date, top left ---
     const clock = st.clock;
-    panel(ctx, 4, 4, 96, 26, { fill: 'rgba(30,25,45,0.86)' });
+    // The weather sits in the same panel as the clock because it is the same
+    // kind of fact: something about today you plan around rather than act on.
+    panel(ctx, 4, 4, 112, 26, { fill: 'rgba(30,25,45,0.86)' });
     drawText(ctx, clock.format(), 10, 8, { color: P.uiText, shadow: P.uiShadow });
     const dayCol = clock.isWeekend ? P.uiGold : P.uiTextDim;
     drawTextRight(ctx, clock.dayName, 96, 8, { color: dayCol, shadow: P.uiShadow });
+    if (sky) drawWeatherGlyph(ctx, sky.now.id, 102, 5);
     // A little day/night dial.
     const frac = clock.hourFloat / 24;
     bar(ctx, 10, 20, 84, 5, frac, clock.isDark ? '#5f74c4' : '#ffcf6b');

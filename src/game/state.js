@@ -7,6 +7,7 @@ import { Cat } from './entities.js';
 import { item, baseId } from './items.js';
 import { CAT_BREEDS } from '../art/chars.js';
 import { startingCafe, buildCafeMap } from '../world/interiors.js';
+import { weatherNow } from './weather.js';
 import { VILLAGERS } from '../world/places.js';
 import { TILE } from '../art/tiles.js';
 
@@ -43,6 +44,9 @@ export class GameState {
     this.daysPlayed = 0;
     this.worldW = 352;
     this.worldH = 320;
+    // Set once the valley is built. The weather is derived from it rather than
+    // stored, so it never needs saving or sending.
+    this.worldSeed = 0;
     this.playerLook = { species: 'cat', coat: 'ginger', cloth: '#5b8fd6' };
     this.playerName = null;   // chosen when joining a shared valley
     this.mail = [];             // letters waiting to be read
@@ -263,6 +267,9 @@ export class GameState {
     this.touch('visited');
     return true;
   }
+
+  /** What the sky is doing. Cheap enough to ask for per frame. */
+  get sky() { return weatherNow(this.worldSeed, this.clock); }
 
   knownPlaces() {
     return Object.entries(this.visited).map(([id, v]) => ({ id, ...v }));

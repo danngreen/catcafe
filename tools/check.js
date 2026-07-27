@@ -75,6 +75,9 @@ const BUDGET = {
   netgametwo: 18000,
   titleme: 20000,
   netlivesave: 22000,
+  weather: 16000,
+  weathercafe: 9000,
+  skyshot: 6000,
   // Halves of a pair: they wait for the other browser to turn up.
   netwalkhost: 62000,
   netwalkguest: 58000,
@@ -94,9 +97,10 @@ const BUDGET = {
 const GROUPS = {
   quests: ['ghostquest', 'deliverquest', 'journalstep', 'questrepair', 'ghoststuck',
     'barriers', 'nightfolk', 'nightplaces'],
-  cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers', 'employee'],
+  cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers', 'employee',
+    'weathercafe'],
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',
-    'barriers', 'eastpass', 'barrierreach', 'passcleared', 'debugpos'],
+    'barriers', 'eastpass', 'barrierreach', 'passcleared', 'debugpos', 'weather'],
   ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'exterior',
     'summarylines', 'journalstep', 'titleme'],
   cutscene: ['taxi', 'sleep', 'door'],

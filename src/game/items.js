@@ -17,17 +17,19 @@ export const CAT = {
 
 export const ITEMS = {
   // ---------------------------------------------------------------- drinks
-  house_coffee: { name: 'House Coffee', cat: CAT.DRINK, icon: 'coffee', cost: 4, price: 12, appeal: 1.0, shelf: 8, desc: 'Dependable. Nobody has ever complained about it, which is its own kind of praise.' },
-  espresso: { name: 'Espresso', cat: CAT.DRINK, icon: 'espresso', cost: 5, price: 16, appeal: 1.15, shelf: 8, desc: 'Small, dark, and extremely serious.' },
-  latte: { name: 'Latte', cat: CAT.DRINK, icon: 'latte', cost: 7, price: 21, appeal: 1.3, shelf: 4, desc: 'The foam has a cat face on it. It takes you nine tries each time.' },
-  black_tea: { name: 'Black Tea', cat: CAT.DRINK, icon: 'tea', cost: 3, price: 11, appeal: 1.0, shelf: 24, desc: 'Strong enough to stand a spoon in, if that is your preference.' },
-  herbal_tea: { name: 'Herbal Tea', cat: CAT.DRINK, icon: 'herbal', cost: 5, price: 17, appeal: 1.2, shelf: 24, desc: 'Chamomile, mostly. People fall asleep in the window seat.' },
-  matcha: { name: 'Matcha', cat: CAT.DRINK, icon: 'matcha', cost: 9, price: 27, appeal: 1.5, shelf: 14, desc: 'Bright green and quietly expensive.' },
-  cocoa: { name: 'Hot Cocoa', cat: CAT.DRINK, icon: 'cocoa', cost: 6, price: 19, appeal: 1.3, shelf: 12, desc: 'Two marshmallows. Three if you like them.' },
-  lemonade: { name: 'Lemonade', cat: CAT.DRINK, icon: 'lemonade', cost: 4, price: 14, appeal: 1.1, shelf: 4, desc: 'Made fresh, which is why it never lasts.' },
-  milk: { name: 'Warm Milk', cat: CAT.DRINK, icon: 'milk', cost: 3, price: 9, appeal: 0.95, shelf: 3, desc: 'The cats become extremely interested whenever you pour it.' },
-  cider: { name: 'Cloudy Cider', cat: CAT.DRINK, icon: 'cider', cost: 8, price: 24, appeal: 1.4, shelf: 20, desc: 'Pressed from the orchard up the valley. Very cloudy. Very good.' },
-  smoked_tea: { name: 'Smoked Lapsang', cat: CAT.DRINK, icon: 'tea', cost: 14, price: 42, appeal: 1.95, shelf: 24, rare: true, desc: 'Tastes like a bonfire in the best possible way. Divisive. Profitable.' },
+  house_coffee: { name: 'House Coffee', cat: CAT.DRINK, icon: 'coffee', cost: 4, price: 12, appeal: 1.0, temp: 'hot', shelf: 8, desc: 'Dependable. Nobody has ever complained about it, which is its own kind of praise.' },
+  espresso: { name: 'Espresso', cat: CAT.DRINK, icon: 'espresso', cost: 5, price: 16, appeal: 1.15, temp: 'hot', shelf: 8, desc: 'Small, dark, and extremely serious.' },
+  latte: { name: 'Latte', cat: CAT.DRINK, icon: 'latte', cost: 7, price: 21, appeal: 1.3, temp: 'hot', shelf: 4, desc: 'The foam has a cat face on it. It takes you nine tries each time.' },
+  black_tea: { name: 'Black Tea', cat: CAT.DRINK, icon: 'tea', cost: 3, price: 11, appeal: 1.0, temp: 'hot', shelf: 24, desc: 'Strong enough to stand a spoon in, if that is your preference.' },
+  herbal_tea: { name: 'Herbal Tea', cat: CAT.DRINK, icon: 'herbal', cost: 5, price: 17, appeal: 1.2, temp: 'hot', shelf: 24, desc: 'Chamomile, mostly. People fall asleep in the window seat.' },
+  matcha: { name: 'Matcha', cat: CAT.DRINK, icon: 'matcha', cost: 9, price: 27, appeal: 1.5, temp: 'hot', shelf: 14, desc: 'Bright green and quietly expensive.' },
+  cocoa: { name: 'Hot Cocoa', cat: CAT.DRINK, icon: 'cocoa', cost: 6, price: 19, appeal: 1.3, temp: 'hot', shelf: 12, desc: 'Two marshmallows. Three if you like them.' },
+  lemonade: { name: 'Lemonade', cat: CAT.DRINK, icon: 'lemonade', cost: 4, price: 14, appeal: 1.1, temp: 'cold', shelf: 4, desc: 'Made fresh, which is why it never lasts.' },
+  milk: { name: 'Warm Milk', cat: CAT.DRINK, icon: 'milk', cost: 3, price: 9, appeal: 0.95, temp: 'hot', shelf: 3, desc: 'The cats become extremely interested whenever you pour it.' },
+  iced_coffee: { name: 'Iced Coffee', cat: CAT.DRINK, icon: 'icedCoffee', cost: 5, price: 17, appeal: 1.2, temp: 'cold', shelf: 3, desc: 'Over a lot of ice, in a tall glass, on the one week a year it is warranted.' },
+  iced_tea: { name: 'Iced Tea', cat: CAT.DRINK, icon: 'icedTea', cost: 4, price: 15, appeal: 1.15, temp: 'cold', shelf: 3, desc: 'With a slice of lemon balanced on the rim, which nobody eats.' },
+  cider: { name: 'Cloudy Cider', cat: CAT.DRINK, icon: 'cider', cost: 8, price: 24, appeal: 1.4, temp: 'cold', shelf: 20, desc: 'Pressed from the orchard up the valley. Very cloudy. Very good.' },
+  smoked_tea: { name: 'Smoked Lapsang', cat: CAT.DRINK, icon: 'tea', cost: 14, price: 42, appeal: 1.95, temp: 'hot', shelf: 24, rare: true, desc: 'Tastes like a bonfire in the best possible way. Divisive. Profitable.' },
 
   // ------------------------------------------------------------------ food
   cookie: { name: 'Butter Cookie', cat: CAT.FOOD, icon: 'cookie', cost: 3, price: 10, appeal: 1.0, shelf: 10, desc: 'Shaped like a paw. Badly, but sincerely.' },
@@ -35,13 +37,14 @@ export const ITEMS = {
   croissant: { name: 'Croissant', cat: CAT.FOOD, icon: 'croissant', cost: 6, price: 18, appeal: 1.3, shelf: 2, desc: 'Leaves flakes everywhere. The cats consider this a feature.' },
   muffin: { name: 'Berry Muffin', cat: CAT.FOOD, icon: 'muffin', cost: 5, price: 15, appeal: 1.15, shelf: 3, desc: 'Berries from the hedgerow, mostly picked by you.' },
   sandwich: { name: 'Sandwich', cat: CAT.FOOD, icon: 'sandwich', cost: 7, price: 20, appeal: 1.2, shelf: 2, desc: 'Cut into triangles, because squares are for weekdays.' },
-  toast: { name: 'Honey Toast', cat: CAT.FOOD, icon: 'toast', cost: 6, price: 19, appeal: 1.3, shelf: 2, desc: 'Thick cut, dripping. Deeply unserious food.' },
+  toast: { name: 'Honey Toast', cat: CAT.FOOD, icon: 'toast', cost: 6, price: 19, appeal: 1.3, temp: 'hot', shelf: 2, desc: 'Thick cut, dripping. Deeply unserious food.' },
   cake: { name: 'Sponge Cake', cat: CAT.FOOD, icon: 'cake', cost: 9, price: 28, appeal: 1.55, shelf: 3, desc: 'A slice big enough to justify a second visit.' },
-  pancakes: { name: 'Pancake Stack', cat: CAT.FOOD, icon: 'pancakes', cost: 8, price: 25, appeal: 1.45, shelf: 1, desc: 'Weekend food. People come specifically.' },
-  parfait: { name: 'Berry Parfait', cat: CAT.FOOD, icon: 'parfait', cost: 11, price: 32, appeal: 1.65, shelf: 2, desc: 'Layered in a tall glass so it looks like it took effort.' },
-  pie: { name: 'Fruit Pie', cat: CAT.FOOD, icon: 'pie', cost: 12, price: 36, appeal: 1.75, shelf: 4, desc: 'Whole pie, sold by the slice, gone by three.' },
-  honey_scone: { name: 'Honey Scone', cat: CAT.FOOD, icon: 'scone', cost: 8, price: 26, appeal: 1.6, shelf: 3, rare: true, desc: "Clover's honey, warm from the oven. People have written letters about this." },
-  fishcake: { name: 'Fishcake', cat: CAT.FOOD, icon: 'fishcake', cost: 10, price: 30, appeal: 1.5, shelf: 2, desc: 'Every cat in the building will supervise you making these.' },
+  pancakes: { name: 'Pancake Stack', cat: CAT.FOOD, icon: 'pancakes', cost: 8, price: 25, appeal: 1.45, temp: 'hot', shelf: 1, desc: 'Weekend food. People come specifically.' },
+  parfait: { name: 'Berry Parfait', cat: CAT.FOOD, icon: 'parfait', cost: 11, price: 32, appeal: 1.65, temp: 'cold', shelf: 2, desc: 'Layered in a tall glass so it looks like it took effort.' },
+  pie: { name: 'Fruit Pie', cat: CAT.FOOD, icon: 'pie', cost: 12, price: 36, appeal: 1.75, temp: 'hot', shelf: 4, desc: 'Whole pie, sold by the slice, gone by three.' },
+  honey_scone: { name: 'Honey Scone', cat: CAT.FOOD, icon: 'scone', cost: 8, price: 26, appeal: 1.6, temp: 'hot', shelf: 3, rare: true, desc: "Clover's honey, warm from the oven. People have written letters about this." },
+  ice_cream: { name: 'Ice Cream', cat: CAT.FOOD, icon: 'iceCream', cost: 6, price: 20, appeal: 1.35, temp: 'cold', shelf: 2, desc: 'Two scoops. Melts faster than anybody plans for.' },
+  fishcake: { name: 'Fishcake', cat: CAT.FOOD, icon: 'fishcake', cost: 10, price: 30, appeal: 1.5, temp: 'hot', shelf: 2, desc: 'Every cat in the building will supervise you making these.' },
 
   // -------------------------------------------------------------- cat food
   kibble: { name: 'Everyday Kibble', cat: CAT.CATFOOD, icon: 'catfood', cost: 8, quality: 1, portions: 6, shelf: 30, desc: 'Keeps a cat alive and mildly disappointed.' },
@@ -104,14 +107,14 @@ export const ITEMS = {
 
 /** Shop catalogues. Each entry is an item id, optionally with a stock limit. */
 export const STOCK = {
-  grocer: ['house_coffee', 'black_tea', 'milk', 'cookie', 'muffin', 'sandwich', 'lemonade', 'kibble', 'treats'],
-  bakery: ['scone', 'croissant', 'cake', 'muffin', 'pancakes', 'toast', 'cookie', 'pie'],
+  grocer: ['house_coffee', 'black_tea', 'milk', 'cookie', 'muffin', 'sandwich', 'lemonade', 'iced_tea', 'kibble', 'treats'],
+  bakery: ['scone', 'croissant', 'cake', 'muffin', 'pancakes', 'toast', 'cookie', 'pie', 'ice_cream'],
   petshop: ['kibble', 'good_food', 'treats', 'toy_ball', 'toy_yarn', 'toy_wand', 'ribbon', 'bell', 'f_catbed', 'f_bowl', 'f_scratch'],
   hardware: ['pickaxe', 'shears', 'rope', 'lantern', 'f_counter', 'f_chair', 'f_table'],
   fish: ['fresh_fish', 'fishcake', 'good_food'],
   harbour: ['black_tea', 'house_coffee', 'cookie', 'kibble', 'rope', 'valley_map'],
   furniture: ['f_chair', 'f_stool', 'f_barstool', 'f_table', 'f_table_cloth', 'f_table_long', 'f_bar', 'f_sofa', 'f_plant', 'f_lamp', 'f_painting', 'f_bookshelf', 'f_rug', 'f_case', 'f_machine', 'f_fireplace'],
-  tea: ['black_tea', 'herbal_tea', 'matcha', 'cocoa', 'smoked_tea', 'cider'],
+  tea: ['black_tea', 'herbal_tea', 'matcha', 'cocoa', 'smoked_tea', 'cider', 'iced_coffee', 'iced_tea'],
   herbalist: ['herbal_tea', 'catnip', 'medicine', 'vitamins', 'kibble'],
   beekeeper: ['honey', 'toast', 'cider'],
 };
