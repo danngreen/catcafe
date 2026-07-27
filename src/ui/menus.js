@@ -15,7 +15,7 @@ import { catSprite, playerCatSprite } from '../art/chars.js';
 import { audio } from '../engine/audio.js';
 import { clamp, money, wrapText } from '../engine/util.js';
 import { QUESTS, objectiveText, progressText } from '../game/quests.js';
-import { HIRE_POOL } from '../game/cafe.js';
+import { HIRE_POOL, shiftHours, fmtHour } from '../game/cafe.js';
 
 export class Screen {
   constructor() { this.t = 0; this.done = false; }

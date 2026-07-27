@@ -323,6 +323,7 @@ node tools/check.js all --clean       # everything unattended, about four minute
 node tools/check.js quests --clean    # just the quest scenarios, about a minute
 node tools/pairs.js                   # the ones needing two browsers at once
 node tools/wsframes.js                # WebSocket framing, no browser needed
+node tools/imports.js                 # names a module uses but never imports
 
 node tools/check.js ghostquest --clean          # one scenario by name
 node tools/pairs.js netcafe                     # one pair by name

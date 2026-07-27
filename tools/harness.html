@@ -859,6 +859,59 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (withMap.length <= walked) window.__errors.push('the map adds no destinations: ' + window.__dead);
         if (dupes) window.__errors.push('the map lists somewhere twice: ' + window.__dead);
         if (liedAboutHome) window.__errors.push('the map claims credit for a place you walked to: ' + window.__dead);
+      } else if (SCRIPT === 'booktabs') {
+        // Every tab of the cafe book, actually drawn. A missing import is
+        // invisible to `node --check` and invisible to any test that only
+        // opens the book on its first page — which is how the Staff tab
+        // shipped throwing on a name that was never imported.
+        const st = g.state;
+        st.money = 9000;
+        st.reputation = 0.8;
+        st.materials = 4;
+        st.workers = 2;
+        const tabs = ['Cafe', 'Pantry', 'Cats', 'Staff', 'Hours'];
+        const drawn = [];
+        // Both sides of every branch that depends on what you own: an empty
+        // pantry and a full one, nobody hired and somebody hired.
+        const runs = [
+          { name: 'bare', setup: () => { st.employee = null; } },
+          {
+            name: 'hired',
+            setup: () => {
+              st.employee = { name: 'Saffron', id: 'saffron', wage: 9, fairWage: 9, quality: 0.6, onDuty: true, hourly: true };
+              st.cafeSim.addStock('house_coffee', 5, st.clock.day);
+              st.shopHours = [8, 16];
+            },
+          },
+        ];
+        for (const run of runs) {
+          run.setup();
+          key('KeyC', true); await wait(120); key('KeyC', false);
+          await wait(350);
+          const scr = g.screens[g.screens.length - 1];
+          if (!scr || scr.constructor.name !== 'CafeScreen') {
+            window.__errors.push('the cafe book would not open');
+            break;
+          }
+          for (let i = 0; i < tabs.length; i++) {
+            scr.tab = i;
+            scr.index = 0;
+            scr.scroll = 0;
+            // Two frames: one to draw it, one so anything the draw set up on
+            // the first pass gets exercised on the second.
+            await wait(160);
+            drawn.push(`${run.name}:${tabs[i]}`);
+            // Move about inside the tab — empty lists are where these throw.
+            for (let k = 0; k < 2; k++) { key('ArrowDown', true); await wait(70); key('ArrowDown', false); }
+            await wait(120);
+          }
+          key('Escape', true); await wait(120); key('Escape', false);
+          await wait(300);
+        }
+        window.__book2 = `drew=${drawn.length}/${tabs.length * runs.length}`;
+        if (drawn.length < tabs.length * runs.length) {
+          window.__errors.push('not every tab was drawn: ' + window.__book2);
+        }
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -2942,6 +2995,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__signs ? ` ${window.__signs}` : '')
         + (window.__patio ? ` ${window.__patio}` : '')
         + (window.__dead ? ` ${window.__dead}` : '')
+        + (window.__book2 ? ` ${window.__book2}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')
