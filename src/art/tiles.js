@@ -41,7 +41,22 @@ export const T = {
   WALL_TOP: 26,
   WATER_SHOAL: 27,
   WATER_MID: 28,
+  // Floors you can lay in a room. The patio ones put a railing round the room
+  // instead of a wall, because a room with a gravel floor and plaster walls is
+  // neither one thing nor the other.
+  FLOOR_WOOD_DK: 29,
+  FLOOR_TILE_RED: 30,
+  CARPET_BLUE: 31,
+  PATIO_SLAB: 32,
+  PATIO_BRICK: 33,
+  PATIO_DECK: 34,
+  RAIL_IN: 35,
+  RAIL_TOP: 36,
+  RAIL_V: 37,
 };
+
+/** Floors that mean "outside": these rooms get railings, not walls. */
+export const OUTDOOR_FLOORS = new Set([32, 33, 34]);
 
 const rgb = (hex, a = 255) => PixBuf.rgba(hex, a);
 
@@ -350,6 +365,137 @@ function paintDeck(buf, v) {
   for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) if (n(x, y, v) < 0.08) buf.set(x, y, rgb(P.woodDk));
 }
 
+// --- the outdoor surfaces, and two more indoor colourways ------------------
+
+function paintFloorWoodDk(buf, v) {
+  paintFloorWood(buf, v);
+  // Same boards, stained dark. Painted over rather than duplicated so the
+  // grain and the seams stay identical and the two read as one floor in two
+  // colours, which is what they are.
+  for (let i = 0; i < buf.data.length; i++) {
+    const px = buf.data[i];
+    const r = px & 255, g = (px >> 8) & 255, b = (px >> 16) & 255;
+    // Warm, not grey — a walnut stain rather than a shadow. Packing is
+    // 0xAABBGGRR, so blue is the high byte of the three.
+    buf.data[i] = (px & 0xff000000) | (Math.round(b * 0.36) << 16)
+      | (Math.round(g * 0.46) << 8) | Math.round(r * 0.62);
+  }
+}
+
+function paintFloorTileRed(buf, v) {
+  // Terracotta and cream, on the same chequer as the black-and-white.
+  const a = '#c9765c', b2 = '#f2e2cc';
+  for (let y = 0; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      const dark = ((x >> 3) + (y >> 3) + v) % 2 === 0;
+      buf.set(x, y, rgb(dark ? a : b2));
+    }
+  }
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    if (n(x, y, v + 4) < 0.09) buf.set(x, y, rgb(shade(((x >> 3) + (y >> 3) + v) % 2 === 0 ? a : b2, -0.12)));
+  }
+  buf.hline(0, 7, TILE, rgb('#b8a894'));
+  buf.vline(7, 0, TILE, rgb('#b8a894'));
+}
+
+function paintCarpetBlue(buf, v) {
+  buf.fill(rgb('#3f5f8f'));
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    if (n(x, y, v) < 0.2) buf.set(x, y, rgb('#4a6f9e'));
+    else if (n(x, y, v + 9) < 0.1) buf.set(x, y, rgb('#35507a'));
+  }
+}
+
+function paintPatioSlab(buf, v) {
+  // Big riven slabs with a mortar joint, laid half-offset by variant.
+  buf.fill(rgb('#a8a49a'));
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    if (n(x, y, v) < 0.18) buf.set(x, y, rgb('#b6b2a8'));
+    else if (n(x, y, v + 17) < 0.12) buf.set(x, y, rgb('#98948a'));
+  }
+  const joint = rgb('#7d7a72');
+  buf.hline(0, (v % 2) * 8, TILE, joint);
+  buf.vline((v % 2) * 8 + 3, (v % 2) * 8, 8, joint);
+  buf.vline((v % 2) * 8 + 11 & 15, ((v % 2) * 8 + 8) & 15, 8, joint);
+}
+
+function paintPatioBrick(buf, v) {
+  // Herringbone, near enough: short courses alternating direction.
+  buf.fill(rgb('#a85f48'));
+  const dk = rgb('#8a4a36'), lt = rgb('#c47a5e');
+  for (let y = 0; y < TILE; y += 4) {
+    const off = ((y >> 2) + v) % 2 ? 0 : 4;
+    buf.hline(0, y, TILE, dk);
+    for (let x = off; x < TILE; x += 8) buf.vline(x, y, 4, dk);
+    for (let x = 0; x < TILE; x++) buf.set(x, y + 1, lt);
+  }
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    if (n(x, y, v + 3) < 0.08) buf.set(x, y, rgb('#94523c'));
+  }
+}
+
+function paintPatioDeck(buf, v) {
+  // Weathered decking: greyer and rougher than the boards indoors.
+  buf.fill(rgb('#9a8a70'));
+  for (let x = 0; x < TILE; x += 5) {
+    buf.vline(x, 0, TILE, rgb('#6f6350'));
+    buf.vline(x + 1, 0, TILE, rgb('#b0a086'));
+  }
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    if (n(x, y, v) < 0.1) buf.set(x, y, rgb('#84765f'));
+    else if (n(x, y, v + 6) < 0.06) buf.set(x, y, rgb('#b8a88e'));
+  }
+  buf.hline(0, (v % 2) ? 15 : 0, TILE, rgb('#6f6350'));
+}
+
+function paintRailIn(buf, v) {
+  // Black metal railing seen face-on: uprights, a top rail, a bottom rail and
+  // a spike on each, standing on a strip of ground. Without the ground the
+  // fence floats in the dark outside the room.
+  const bar = rgb('#2a2933'), hi = rgb('#585667');
+  buf.rect(0, 11, TILE, 5, rgb('#6f6a60'));
+  for (let x = 0; x < TILE; x++) for (let y = 11; y < TILE; y++) {
+    if (n(x, y, v + 2) < 0.2) buf.set(x, y, rgb('#7d786c'));
+  }
+  for (let x = 1; x < TILE; x += 4) {
+    buf.vline(x, 5, 10, bar);
+    buf.set(x + 1, 5, hi);
+    buf.set(x, 3, bar);            // spike
+    buf.set(x, 4, bar);
+  }
+  buf.hline(0, 6, TILE, bar);
+  buf.hline(0, 7, TILE, hi);
+  buf.hline(0, 13, TILE, bar);
+  buf.hline(0, 14, TILE, rgb('#15141b'));
+}
+
+function paintRailV(buf, v) {
+  // A run of railing going away from you. Same fence, turned ninety degrees —
+  // without this, a vertical side drawn with the horizontal tile reads as a
+  // row of unconnected dashes rather than a fence.
+  const bar = rgb('#2a2933'), hi = rgb('#585667');
+  buf.rect(4, 0, 9, TILE, rgb('#6f6a60'));
+  for (let x = 4; x < 13; x++) for (let y = 0; y < TILE; y++) {
+    if (n(x, y, v + 2) < 0.2) buf.set(x, y, rgb('#7d786c'));
+  }
+  buf.vline(7, 0, TILE, bar);
+  buf.vline(8, 0, TILE, hi);
+  for (let y = 1; y < TILE; y += 4) buf.rect(6, y - 1, 4, 3, bar);
+}
+
+function paintRailTop(buf, v) {
+  // The same railing seen from above — a bar with posts, so a run of it round
+  // the back of a patio reads as one fence rather than a row of unrelated bits.
+  const bar = rgb('#2a2933');
+  buf.rect(0, 4, TILE, 9, rgb('#6f6a60'));
+  for (let x = 0; x < TILE; x++) for (let y = 4; y < 13; y++) {
+    if (n(x, y, v + 2) < 0.2) buf.set(x, y, rgb('#7d786c'));
+  }
+  buf.hline(0, 7, TILE, bar);
+  buf.hline(0, 8, TILE, rgb('#4a4856'));
+  for (let x = 1; x < TILE; x += 4) buf.rect(x - 1, 6, 3, 4, bar);
+}
+
 function paintBridge(buf, v) {
   paintDeck(buf, v);
   buf.hline(0, 0, 16, rgb(P.woodDeep));
@@ -464,6 +610,15 @@ export const TERRAIN = {
   [T.BRIDGE]:      { name: 'bridge', prio: 10, paint: paintBridge, solid: false, edge: true, variants: 2 },
   [T.WALL_IN]:     { name: 'wall', prio: 12, paint: paintWallIn, solid: true, edge: false, variants: 3 },
   [T.WALL_TOP]:    { name: 'wall', prio: 12, paint: paintWallTop, solid: true, edge: false, variants: 3 },
+  [T.FLOOR_WOOD_DK]: { name: 'floor', prio: 10, paint: paintFloorWoodDk, solid: false, edge: false, variants: 4 },
+  [T.FLOOR_TILE_RED]: { name: 'tiles', prio: 10, paint: paintFloorTileRed, solid: false, edge: false, variants: 3 },
+  [T.CARPET_BLUE]: { name: 'carpet', prio: 11, paint: paintCarpetBlue, solid: false, edge: true, variants: 2 },
+  [T.PATIO_SLAB]:  { name: 'paving', prio: 10, paint: paintPatioSlab, solid: false, edge: false, variants: 4 },
+  [T.PATIO_BRICK]: { name: 'brick', prio: 10, paint: paintPatioBrick, solid: false, edge: false, variants: 4 },
+  [T.PATIO_DECK]:  { name: 'decking', prio: 10, paint: paintPatioDeck, solid: false, edge: false, variants: 4 },
+  [T.RAIL_IN]:     { name: 'railing', prio: 12, paint: paintRailIn, solid: true, edge: false, variants: 2 },
+  [T.RAIL_TOP]:    { name: 'railing', prio: 12, paint: paintRailTop, solid: true, edge: false, variants: 2 },
+  [T.RAIL_V]:      { name: 'railing', prio: 12, paint: paintRailV, solid: true, edge: false, variants: 2 },
   [T.COUNTER]:     { name: 'counter', prio: 12, paint: paintCounter, solid: true, edge: false, variants: 2 },
 };
 

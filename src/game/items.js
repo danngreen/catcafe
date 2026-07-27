@@ -81,6 +81,15 @@ export const ITEMS = {
   f_catbed: { name: 'Cat Bed', cat: CAT.FURNITURE, icon: 'catbed', cost: 85, place: 'catBed', appeal: 0.6, catJoy: 1.4, desc: 'They will sleep in the box it came in. Then, eventually, in this.' },
   f_scratch: { name: 'Scratching Post', cat: CAT.FURNITURE, icon: 'scratchpost', cost: 95, place: 'scratchPost', appeal: 0.3, catJoy: 1.6, desc: 'Saves the sofa. Worth every fish.' },
   f_bowl: { name: 'Feeding Bowl', cat: CAT.FURNITURE, icon: 'catbowl', cost: 35, place: 'catBowl', appeal: 0.1, catJoy: 0.6, desc: 'More bowls, fewer arguments.' },
+  // Patio. Same shops as the indoor furniture — Velvet & Oak sell it new, the
+  // flea market turns some of it up secondhand.
+  f_patio_chair: { name: 'Patio Chair', cat: CAT.FURNITURE, icon: 'patioChair', cost: 65, place: 'patioChair', seats: 1, appeal: 0.45, outdoor: true, desc: 'Slatted, stackable, and surprisingly comfortable for what it is.' },
+  f_patio_stool: { name: 'Patio Stool', cat: CAT.FURNITURE, icon: 'patioStool', cost: 55, place: 'patioStool', seats: 1, appeal: 0.4, outdoor: true, desc: 'Light enough to move, heavy enough to stay put in a breeze.' },
+  f_patio_table: { name: 'Patio Table', cat: CAT.FURNITURE, icon: 'patioTable', cost: 130, place: 'patioTable', appeal: 0.7, outdoor: true, desc: 'Mesh top. Rain goes straight through, which is the entire idea.' },
+  f_patio_bench: { name: 'Garden Bench', cat: CAT.FURNITURE, icon: 'patioBench', cost: 260, place: 'patioBench', seats: 3, appeal: 1.5, outdoor: true, desc: 'Seats three politely, two comfortably, one gloriously.' },
+  f_umbrella: { name: 'Umbrella Table', cat: CAT.FURNITURE, icon: 'umbrella', cost: 340, place: 'umbrella', appeal: 2.2, outdoor: true, desc: 'Shade on the hot days, shelter on the sudden ones. Earns its keep either way.' },
+  f_fountain: { name: 'Stone Fountain', cat: CAT.FURNITURE, icon: 'fountain', cost: 1400, place: 'fountain', appeal: 4.2, rare: true, outdoor: true, catJoy: 1.2, desc: 'Absurdly expensive. People sit near it and forget to leave, and the cats stare at it for hours.' },
+
   f_counter: { name: 'Service Counter', cat: CAT.FURNITURE, icon: 'counterUnit', cost: 260, place: 'counter', appeal: 0.5, desc: 'Where the money happens.' },
   f_case: { name: 'Pastry Case', cat: CAT.FURNITURE, icon: 'cake', cost: 320, place: 'pastryCase', appeal: 1.4, desc: 'Cake at eye level sells itself.' },
   f_machine: { name: 'Coffee Machine', cat: CAT.FURNITURE, icon: 'grinder', cost: 380, place: 'coffeeMachine', appeal: 1.2, desc: 'Hisses impressively. Customers trust a machine that hisses.' },
@@ -113,7 +122,8 @@ export const STOCK = {
   hardware: ['pickaxe', 'shears', 'rope', 'lantern', 'f_counter', 'f_chair', 'f_table'],
   fish: ['fresh_fish', 'fishcake', 'good_food'],
   harbour: ['black_tea', 'house_coffee', 'cookie', 'kibble', 'rope', 'valley_map'],
-  furniture: ['f_chair', 'f_stool', 'f_barstool', 'f_table', 'f_table_cloth', 'f_table_long', 'f_bar', 'f_sofa', 'f_plant', 'f_lamp', 'f_painting', 'f_bookshelf', 'f_rug', 'f_case', 'f_machine', 'f_fireplace'],
+  furniture: ['f_chair', 'f_stool', 'f_barstool', 'f_table', 'f_table_cloth', 'f_table_long', 'f_bar', 'f_sofa', 'f_plant', 'f_lamp', 'f_painting', 'f_bookshelf', 'f_rug', 'f_case', 'f_machine', 'f_fireplace',
+    'f_patio_chair', 'f_patio_stool', 'f_patio_table', 'f_patio_bench', 'f_umbrella', 'f_fountain'],
   tea: ['black_tea', 'herbal_tea', 'matcha', 'cocoa', 'smoked_tea', 'cider', 'iced_coffee', 'iced_tea'],
   herbalist: ['herbal_tea', 'catnip', 'medicine', 'vitamins', 'kibble'],
   beekeeper: ['honey', 'toast', 'cider'],
@@ -123,6 +133,7 @@ export const STOCK = {
 export const FLEA_POOL = [
   'f_sofa', 'f_bookshelf', 'f_painting', 'f_lamp', 'f_plant', 'f_rug', 'f_table_cloth',
   'f_piano', 'f_fireplace', 'f_cattower', 'valley_map', 'rope', 'toy_wand', 'bell',
+  'f_patio_chair', 'f_patio_stool', 'f_patio_table', 'f_patio_bench', 'f_umbrella',
 ];
 
 // Furniture is carried in the bag as "id#variant" so a green chair and an oak

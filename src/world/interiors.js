@@ -3,7 +3,7 @@
 // the build mode changes the room you walk around in.
 
 import { GameMap } from './tilemap.js';
-import { T } from '../art/tiles.js';
+import { T, OUTDOOR_FLOORS } from '../art/tiles.js';
 import { SHOPS, BOOKS } from './places.js';
 import { makeRng } from '../engine/util.js';
 
@@ -18,25 +18,40 @@ const WALL_MOUNT = -6;
  * with the row above a north wall getting the blank upper course.
  */
 function wallInRooms(map, rooms, floorId) {
-  const isFloor = (x, y) => rooms.some((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+  const roomAt = (x, y) => rooms.find((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+  const isFloor = (x, y) => !!roomAt(x, y);
+  const floorOf = (r) => r.floor ?? floorId;
+  const isOutside = (r) => r && OUTDOOR_FLOORS.has(floorOf(r));
 
-  for (const r of rooms) map.fillRect(r.x, r.y, r.w, r.h, floorId);
+  for (const r of rooms) map.fillRect(r.x, r.y, r.w, r.h, floorOf(r));
 
   for (let y = 0; y < map.h; y++) {
     for (let x = 0; x < map.w; x++) {
       if (isFloor(x, y)) continue;
-      let touches = false;
-      for (let j = -1; j <= 1 && !touches; j++) {
+      // Which rooms this edge tile is the edge of. A tile between a parlour
+      // and a patio belongs to the parlour: the room that needs a wall wins,
+      // or the cafe would have a railing where its outside wall should be.
+      const near = [];
+      for (let j = -1; j <= 1; j++) {
         for (let i = -1; i <= 1; i++) {
-          if (isFloor(x + i, y + j)) { touches = true; break; }
+          const r = roomAt(x + i, y + j);
+          if (r && !near.includes(r)) near.push(r);
         }
       }
-      if (!touches) continue;
-      // A wall with floor directly below it is a wall we look at face-on.
-      map.set(x, y, isFloor(x, y + 1) ? T.WALL_IN : T.WALL_TOP);
+      if (!near.length) continue;
+      const railing = near.every(isOutside);
+      // Something with floor directly below it is what we look at face-on.
+      const faceOn = isFloor(x, y + 1);
+      if (!railing) { map.set(x, y, faceOn ? T.WALL_IN : T.WALL_TOP); continue; }
+      // A fence, unlike a wall, has to know which way it runs: the side of a
+      // patio drawn with the front-facing tile reads as a row of dashes.
+      const sideOn = !faceOn && (isFloor(x - 1, y) || isFloor(x + 1, y));
+      map.set(x, y, faceOn ? T.RAIL_IN : sideOn ? T.RAIL_V : T.RAIL_TOP);
     }
   }
   // One more blank course above every face wall, so rooms have visible height.
+  // Railings get none: a fence is the height of a fence, and stacking a second
+  // course on it would wall the patio in, which is the opposite of the point.
   for (let y = map.h - 1; y >= 1; y--) {
     for (let x = 0; x < map.w; x++) {
       if (map.get(x, y) === T.WALL_IN && !isFloor(x, y - 1) && map.get(x, y - 1) === T.VOID) {
@@ -264,14 +279,14 @@ export function buildCafeMap(cafe) {
     music: 'cafe', ambience: { indoor: 0.5 },
   });
 
-  const rooms = cafe.rooms.map((r) => ({ x: r.x + offX, y: r.y + offY, w: r.w, h: r.h, name: r.name }));
+  const rooms = cafe.rooms.map((r) => ({ x: r.x + offX, y: r.y + offY, w: r.w, h: r.h, name: r.name, floor: r.floor }));
   wallInRooms(map, rooms, cafe.floor ?? T.FLOOR_WOOD);
 
   // Front door on the bottom edge of the first room.
   const home = rooms[0];
   const doorX = home.x + Math.min(home.w - 1, Math.max(0, cafe.doorX ?? Math.floor(home.w / 2)));
   const doorY = home.y + home.h;
-  map.set(doorX, doorY, cafe.floor ?? T.FLOOR_WOOD);
+  map.set(doorX, doorY, home.floor ?? cafe.floor ?? T.FLOOR_WOOD);
   map.addObject('doormat', doorX, doorY, { flat: true });
   map.addWarp(doorX, doorY, 'overworld', 0, 0, { sound: 'door' });
   map.spawn = { x: doorX, y: doorY - 1 };
@@ -286,11 +301,13 @@ export function buildCafeMap(cafe) {
       { variant: f.variant || 0, offY: f.type === 'windowIn' ? WALL_MOUNT : (f.type === 'painting' ? 10 : 0) });
     if (!o) continue;
     o.furniture = f;
-    if (['chair', 'chairUp', 'stool', 'barStool', 'sofa'].includes(f.type)) {
-      const slots = f.type === 'sofa' ? 3 : 1;
+    if (['chair', 'chairUp', 'stool', 'barStool', 'sofa',
+      'patioChair', 'patioStool', 'patioBench'].includes(f.type)) {
+      const slots = f.type === 'sofa' || f.type === 'patioBench' ? 3 : 1;
       for (let i = 0; i < slots; i++) seats.push({ x: x + i, y, taken: null });
     }
-    if (f.type.startsWith('table') || f.type === 'bar') tables.push({ x, y, w: o.tw });
+    if (f.type.startsWith('table') || f.type.startsWith('patioTable')
+      || f.type === 'bar' || f.type === 'umbrella') tables.push({ x, y, w: o.tw });
   }
 
   // Seats need a table nearby to be worth sitting at; the rest are perches.

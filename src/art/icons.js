@@ -163,6 +163,62 @@ export const ICONS = {
     b.rect(3, 1, 2, 4, rgb(P.glass)); b.rect(9, 1, 2, 4, rgb(P.glass));
     b.set(3, 1, rgb('#ffffff')); b.set(9, 1, rgb('#ffffff'));
   },
+  // ---- patio ----
+  patioChair: (b) => {
+    const c = '#6f8f7a', dk = '#4f6b58', lt = '#93b09c';
+    for (let i = 0; i < 3; i++) b.rect(5 + i * 2, 2 + (i === 1 ? 0 : 1), 1, 6 - (i === 1 ? 0 : 1), rgb(i === 1 ? lt : c));
+    b.rect(4, 1, 8, 1, rgb(dk));
+    b.rect(3, 8, 10, 1, rgb(lt)); b.rect(3, 9, 10, 2, rgb(c));
+    b.rect(4, 11, 2, 4, rgb(dk)); b.rect(10, 11, 2, 4, rgb(dk));
+  },
+  patioStool: (b) => {
+    const c = '#6f8f7a', dk = '#4f6b58', lt = '#93b09c';
+    b.ellipse(8, 6, 5.4, 2.6, rgb(c));
+    b.ellipse(8, 5, 4.6, 2, rgb(lt));
+    b.hline(3, 8, 11, rgb(dk));
+    b.line(5, 8, 4, 14, rgb(dk)); b.line(11, 8, 12, 14, rgb(dk));
+    b.vline(8, 9, 5, rgb(dk));
+  },
+  patioTable: (b) => {
+    const c = '#8f9a8a', dk = '#636c5f', lt = '#b4bdae';
+    b.ellipse(8, 6, 6.6, 3, rgb(dk));
+    b.ellipse(8, 5.6, 5.8, 2.4, rgb(lt));
+    for (let x = 4; x < 13; x += 2) b.set(x, 5 + (x % 4 ? 1 : 0), rgb(c));
+    b.rect(7, 8, 2, 5, rgb(dk));
+    b.ellipse(8, 13, 4, 1.6, rgb(dk));
+  },
+  patioBench: (b) => {
+    const c = '#6f8f7a', dk = '#4f6b58', lt = '#93b09c';
+    for (let i = 0; i < 3; i++) b.rect(2, 2 + i * 2, 12, 1, rgb(i % 2 ? lt : c));
+    b.rect(1, 1, 1, 9, rgb(dk)); b.rect(14, 1, 1, 9, rgb(dk));
+    b.rect(1, 9, 14, 1, rgb(lt)); b.rect(1, 10, 14, 2, rgb(c));
+    b.rect(2, 12, 2, 3, rgb(dk)); b.rect(12, 12, 2, 3, rgb(dk));
+  },
+  umbrella: (b) => {
+    for (let i = 0; i < 7; i++) {
+      const w = 14 - i * 2;
+      b.rect(8 - w / 2, 2 + i, w, 1, rgb(i % 2 ? '#d95f5f' : '#f08484'));
+    }
+    b.set(8, 1, rgb('#b84a4a'));
+    for (let x = 1; x < 15; x += 4) b.set(x, 7, rgb('#b84a4a'));
+    b.vline(8, 7, 5, rgb(P.woodDk));
+    b.ellipse(8, 12, 5.4, 2.2, rgb('#8f9a8a'));
+    b.ellipse(8, 11.4, 4.4, 1.6, rgb('#b4bdae'));
+    b.rect(7, 13, 2, 2, rgb('#636c5f'));
+  },
+  fountain: (b) => {
+    b.ellipse(8, 12, 7, 3, rgb('#7d786c'));
+    b.ellipse(8, 11.4, 6, 2.4, rgb('#b0aa9a'));
+    b.ellipse(8, 11.4, 4.6, 1.7, rgb('#5f9dc4'));
+    b.rect(7, 6, 3, 5, rgb('#b0aa9a'));
+    b.vline(7, 6, 5, rgb('#d0cabc'));
+    b.ellipse(8, 6, 4.6, 1.8, rgb('#7d786c'));
+    b.ellipse(8, 5.6, 3.6, 1.3, rgb('#8fc4dc'));
+    b.vline(8, 2, 4, rgb('#c8e6f2'));
+    b.set(6, 3, rgb('#ffffff')); b.set(10, 4, rgb('#ffffff'));
+    b.set(4, 8, rgb('#a8d8ee')); b.set(12, 8, rgb('#a8d8ee'));
+  },
+
   plant: (b) => {
     b.rect(4, 10, 8, 5, rgb(P.terracotta));
     b.rect(3, 9, 10, 2, rgb(P.terracottaLt));

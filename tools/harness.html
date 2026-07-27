@@ -677,6 +677,130 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (missing.length) window.__errors.push(`no glyph for ${missing.join(',')}: ` + window.__signs);
         if (nobg.length) window.__errors.push(`no board colour for ${nobg.join(',')}: ` + window.__signs);
         if (thin.length) window.__errors.push('a sign is too faint to read: ' + window.__signs);
+      } else if (SCRIPT === 'patio') {
+        // A room with an outdoor floor is a patio: paving underfoot, railings
+        // round it instead of plaster, and patio furniture you can sit on.
+        const { T, OUTDOOR_FLOORS } = await import('../src/art/tiles.js');
+        const { buildCafeMap } = await import('../src/world/interiors.js');
+        const { ITEMS } = await import('../src/game/items.js');
+        const st = g.state;
+
+        // Two rooms joined: the cafe as it is, and a yard off the side of it.
+        const cafe = JSON.parse(JSON.stringify(st.cafe));
+        cafe.rooms = [
+          { x: 0, y: 0, w: 11, h: 8, name: 'Cafe' },
+          { x: 11, y: 0, w: 8, h: 8, name: 'Yard' },
+        ];
+        const countTiles = (map) => {
+          const c = {};
+          for (let i = 0; i < map.ground.length; i++) c[map.ground[i]] = (c[map.ground[i]] || 0) + 1;
+          return c;
+        };
+        // Indoors first, for a baseline.
+        cafe.rooms[1].floor = T.FLOOR_WOOD;
+        const inside = countTiles(buildCafeMap(cafe));
+        // Then paved.
+        cafe.rooms[1].floor = T.PATIO_SLAB;
+        const map = buildCafeMap(cafe);
+        const out = countTiles(map);
+
+        const slabs = out[T.PATIO_SLAB] || 0;
+        const rails = (out[T.RAIL_IN] || 0) + (out[T.RAIL_TOP] || 0) + (out[T.RAIL_V] || 0);
+        const railsInside = (inside[T.RAIL_IN] || 0) + (inside[T.RAIL_TOP] || 0) + (inside[T.RAIL_V] || 0);
+        // The cafe itself keeps its boards and its walls — only the yard changed.
+        const boards = out[T.FLOOR_WOOD] || 0;
+        const walls = (out[T.WALL_IN] || 0) + (out[T.WALL_TOP] || 0);
+
+        // Every edge tile touching the indoor room has to stay a wall. A
+        // patio next door must not open up the side of the cafe itself, which
+        // is what happens if a tile counts as outdoor because *any* of its
+        // neighbours is rather than all of them.
+        const home = { x: 0, y: 0, w: 11, h: 8 };
+        const off = map.meta;
+        let openedUp = [];
+        for (let j = -1; j <= home.h; j++) {
+          for (let i = -1; i <= home.w; i++) {
+            const inHome = i >= 0 && i < home.w && j >= 0 && j < home.h;
+            if (inHome) continue;
+            const x = i + off.offX, y = j + off.offY;
+            // Only the tiles that are edge, not the ones inside the yard.
+            const t = map.get(x, y);
+            if (t === T.RAIL_IN || t === T.RAIL_TOP || t === T.RAIL_V) openedUp.push(`${i},${j}`);
+          }
+        }
+
+        // Railings have to stop you walking out, same as a wall.
+        let solidRail = true;
+        for (let y = 0; y < map.h; y++) {
+          for (let x = 0; x < map.w; x++) {
+            const t = map.get(x, y);
+            if ((t === T.RAIL_IN || t === T.RAIL_TOP || t === T.RAIL_V) && !map.solid(x, y)) solidRail = false;
+          }
+        }
+
+        // Patio seats seat people, and patio tables count as tables.
+        cafe.furniture = cafe.furniture.concat([
+          { type: 'patioTable', x: 14, y: 4 },
+          { type: 'patioChair', x: 13, y: 4 },
+          { type: 'patioBench', x: 15, y: 6 },
+          { type: 'umbrella', x: 17, y: 3 },
+          { type: 'fountain', x: 12, y: 1 },
+        ]);
+        const furnished = buildCafeMap(cafe);
+        const seatsBefore = st.cafeMap.meta.seats.length;
+        const seats = furnished.meta.seats.length;
+        const seated = furnished.meta.seats.filter((s2) => s2.table).length;
+
+        // Everything on sale that says it is for outside can actually be drawn.
+        const { objSprite } = await import('../src/art/objects.js');
+        const outdoorItems = Object.entries(ITEMS).filter(([, v]) => v.outdoor);
+        const undrawable = outdoorItems.filter(([, v]) => !objSprite(v.place, 0)).map(([k]) => k);
+        const noIcon = outdoorItems.filter(([, v]) => !v.icon).map(([k]) => k);
+
+        window.__patio = `slabs=${slabs} rails=${rails}/v${out[T.RAIL_V] || 0} railsWhenIndoor=${railsInside}`
+          + ` boardsKept=${boards} wallsKept=${walls} railSolid=${solidRail}`
+          + ` cafeEdgeRailed=[${openedUp.slice(0, 6).join(' ')}]`
+          + ` seats=${seatsBefore}->${seats} atTables=${seated}`
+          + ` outdoorItems=${outdoorItems.length} undrawable=[${undrawable}] noIcon=[${noIcon}]`;
+        if (slabs < 40) window.__errors.push('the paving was not laid: ' + window.__patio);
+        if (rails < 8) window.__errors.push('a patio with no railings: ' + window.__patio);
+        if (railsInside) window.__errors.push('railings round an indoor room: ' + window.__patio);
+        if (boards < 40) window.__errors.push('the cafe lost its own floor: ' + window.__patio);
+        if (walls < 8) window.__errors.push('the cafe lost its walls to the patio: ' + window.__patio);
+        if (openedUp.length) window.__errors.push('the patio opened up the side of the cafe: ' + window.__patio);
+        if (!solidRail) window.__errors.push('you can walk through the railings: ' + window.__patio);
+        if (seats < seatsBefore + 4) window.__errors.push('patio seating seats nobody: ' + window.__patio);
+        if (seated < 2) window.__errors.push('no patio seat is at a patio table: ' + window.__patio);
+        if (undrawable.length) window.__errors.push('outdoor furniture with no sprite: ' + window.__patio);
+        if (noIcon.length) window.__errors.push('outdoor furniture with no icon: ' + window.__patio);
+      } else if (SCRIPT === 'patioshot') {
+        // Stand in a finished patio and look at it.
+        const { T } = await import('../src/art/tiles.js');
+        const st = g.state;
+        st.cafe.rooms = [
+          { x: 0, y: 0, w: 11, h: 8, name: 'Cafe' },
+          { x: 11, y: 0, w: 9, h: 8, name: 'Terrace', floor: T.PATIO_SLAB },
+        ];
+        st.cafe.furniture = st.cafe.furniture.concat([
+          { type: 'umbrella', x: 13, y: 3, variant: 0 },
+          { type: 'patioChair', x: 12, y: 3, variant: 0 },
+          { type: 'patioChair', x: 16, y: 3, variant: 1 },
+          { type: 'patioTable', x: 17, y: 6, variant: 0 },
+          { type: 'patioStool', x: 16, y: 6, variant: 0 },
+          { type: 'patioStool', x: 18, y: 6, variant: 2 },
+          { type: 'patioBench', x: 12, y: 6, variant: 0 },
+          { type: 'fountain', x: 17, y: 1, variant: 0 },
+        ]);
+        st.rebuildCafe();
+        await wait(300);
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        await wait(1200);
+        const off = st.cafeMap.meta;
+        g.player.x = (14 + off.offX) * 16 + 8;
+        g.player.y = (5 + off.offY) * 16;
+        g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
+        await wait(900);
+        window.__pass = `map=${st.mapId} seats=${st.cafeMap.meta.seats.length}`;
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -2758,6 +2882,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__wcafe ? ` ${window.__wcafe}` : '')
         + (window.__hourly ? ` ${window.__hourly}` : '')
         + (window.__signs ? ` ${window.__signs}` : '')
+        + (window.__patio ? ` ${window.__patio}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

@@ -902,6 +902,141 @@ export const SIGN_ICONS = {
 };
 
 // ---------------------------------------------------------------------------
+// Patio furniture. Metal rather than upholstery: slatted seats, thin painted
+// frames, and everything a little lighter than its indoor cousin, because a
+// patio set is meant to be dragged about.
+// ---------------------------------------------------------------------------
+
+function paintPatioChair(buf, v, col) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 6, 2.2);
+  const c = col || '#6f8f7a';
+  const dk = shade(c, -0.3), lt = shade(c, 0.24);
+  const seatY = buf.h - 12;
+  // Fan back: three slats rising out of the seat, which is what says "garden
+  // chair" rather than "kitchen chair" at this size.
+  for (let i = 0; i < 3; i++) {
+    const bx = 4 + i * 4;
+    buf.rect(bx, 3 + Math.abs(i - 1), 2, seatY - 3 - Math.abs(i - 1), rgb(i === 1 ? lt : c));
+  }
+  buf.rect(3, 2, buf.w - 6, 2, rgb(dk));
+  buf.rect(3, seatY, buf.w - 6, 2, rgb(lt));
+  buf.rect(3, seatY + 2, buf.w - 6, 3, rgb(c));
+  buf.hline(3, seatY + 4, buf.w - 6, rgb(dk));
+  buf.rect(3, buf.h - 7, 2, 5, rgb(dk));
+  buf.rect(buf.w - 5, buf.h - 7, 2, 5, rgb(dk));
+  outline(buf);
+}
+
+function paintPatioStool(buf, v, col) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 5, 2);
+  const c = col || '#6f8f7a';
+  const dk = shade(c, -0.32), lt = shade(c, 0.26);
+  buf.ellipse(buf.w / 2, buf.h - 9, 6, 3, rgb(c));
+  buf.ellipse(buf.w / 2, buf.h - 10, 5.4, 2.4, rgb(lt));
+  buf.hline(2, buf.h - 7, buf.w - 4, rgb(dk));
+  buf.rect(3, buf.h - 7, 2, 6, rgb(dk));
+  buf.rect(buf.w - 5, buf.h - 7, 2, 6, rgb(dk));
+  buf.rect(buf.w / 2 - 1, buf.h - 6, 2, 5, rgb(dk));
+  outline(buf);
+}
+
+function paintPatioTable(buf, v, col) {
+  groundShadow(buf, buf.w / 2, buf.h - 3, 10, 3.2);
+  const c = col || '#8f9a8a';
+  const dk = shade(c, -0.32), lt = shade(c, 0.28);
+  buf.rect(buf.w / 2 - 2, buf.h - 13, 5, 10, rgb(dk));
+  buf.ellipse(buf.w / 2, buf.h - 4, 7, 2.6, rgb(dk));
+  buf.ellipse(buf.w / 2, buf.h - 15, 12, 7, rgb(c));
+  buf.ellipse(buf.w / 2, buf.h - 16, 11, 6, rgb(lt));
+  // A mesh top, which is the one thing every patio table has in common.
+  for (let i = -8; i <= 8; i += 3) {
+    buf.line(buf.w / 2 + i, buf.h - 21, buf.w / 2 + i, buf.h - 11, rgb(shade(c, -0.1)));
+  }
+  buf.ellipse(buf.w / 2, buf.h - 16, 11.4, 6.4, rgb(dk));
+  buf.ellipse(buf.w / 2, buf.h - 16, 10, 5, rgb(lt));
+  for (let i = -7; i <= 7; i += 3) {
+    for (let j = -3; j <= 3; j += 3) buf.set(buf.w / 2 + i, buf.h - 16 + j, rgb(shade(c, -0.16)));
+  }
+  outline(buf);
+}
+
+function paintUmbrellaTable(buf, v, col) {
+  const cw = buf.w;
+  groundShadow(buf, cw / 2, buf.h - 3, 13, 4);
+  const c = '#8f9a8a', dk = shade(c, -0.32), lt = shade(c, 0.28);
+  const cloth = col || '#d95f5f';
+  // Table first, then the pole and canopy over it.
+  buf.rect(cw / 2 - 2, buf.h - 14, 5, 11, rgb(dk));
+  buf.ellipse(cw / 2, buf.h - 4, 9, 3, rgb(dk));
+  buf.ellipse(cw / 2, buf.h - 17, 16, 8, rgb(dk));
+  buf.ellipse(cw / 2, buf.h - 18, 15, 7, rgb(lt));
+  buf.ellipse(cw / 2, buf.h - 18.5, 13, 5.6, rgb(c));
+  buf.rect(cw / 2 - 1, buf.h - 46, 3, 30, rgb(P.woodDk));
+  buf.vline(cw / 2 - 1, buf.h - 46, 30, rgb(P.wood));
+  // Canopy: alternating panels, with a scalloped hem and a finial.
+  for (let i = 0; i < 8; i++) {
+    const a0 = (i / 8) * Math.PI * 2;
+    const col2 = i % 2 ? cloth : shade(cloth, 0.3);
+    for (let r = 0; r < 20; r++) {
+      const x = cw / 2 + Math.cos(a0) * r * 1.05;
+      const y = buf.h - 50 + Math.sin(a0) * r * 0.42 + r * 0.22;
+      buf.ellipse(x, y, 2.4, 1.6, rgb(col2));
+    }
+  }
+  buf.ellipse(cw / 2, buf.h - 50, 6, 3, rgb(shade(cloth, 0.42)));
+  for (let i = -20; i <= 20; i += 5) {
+    buf.ellipse(cw / 2 + i, buf.h - 41 + Math.abs(i) * 0.12, 2.6, 1.6, rgb(shade(cloth, -0.24)));
+  }
+  buf.rect(cw / 2 - 1, buf.h - 54, 3, 4, rgb(P.metalDk));
+  outline(buf);
+}
+
+function paintFountain(buf, v) {
+  const cw = buf.w;
+  groundShadow(buf, cw / 2, buf.h - 3, 17, 5);
+  const st = '#b0aa9a', dk = '#7d786c', lt = '#d0cabc';
+  // Basin
+  buf.ellipse(cw / 2, buf.h - 10, 20, 9, rgb(dk));
+  buf.ellipse(cw / 2, buf.h - 11, 19, 8, rgb(st));
+  buf.ellipse(cw / 2, buf.h - 12, 16.5, 6.4, rgb(lt));
+  buf.ellipse(cw / 2, buf.h - 12, 15, 5.6, rgb('#5f9dc4'));
+  buf.ellipse(cw / 2, buf.h - 12.6, 12, 4, rgb('#8fc4dc'));
+  // Pedestal and upper bowl
+  buf.rect(cw / 2 - 3, buf.h - 26, 7, 14, rgb(st));
+  buf.rect(cw / 2 - 3, buf.h - 26, 2, 14, rgb(lt));
+  buf.ellipse(cw / 2, buf.h - 27, 11, 4.4, rgb(dk));
+  buf.ellipse(cw / 2, buf.h - 28, 10, 3.8, rgb(st));
+  buf.ellipse(cw / 2, buf.h - 28.6, 8, 2.8, rgb('#5f9dc4'));
+  // The spout, and water falling off the rim in two curtains
+  buf.rect(cw / 2 - 1, buf.h - 36, 3, 8, rgb(st));
+  buf.ellipse(cw / 2, buf.h - 37, 2.4, 2, rgb('#c8e6f2'));
+  for (const dx of [-9, -5, 5, 9]) {
+    buf.vline(cw / 2 + dx, buf.h - 27, 11 - Math.abs(dx) * 0.3, rgb('#a8d8ee', 200));
+  }
+  for (const [dx, dy] of [[-13, -14], [13, -15], [-6, -9], [7, -8], [0, -16]]) {
+    buf.set(cw / 2 + dx, buf.h + dy, rgb('#ffffff'));
+  }
+  outline(buf);
+}
+
+function paintPatioBench(buf, v, col) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 13, 2.6);
+  const c = col || '#6f8f7a';
+  const dk = shade(c, -0.32), lt = shade(c, 0.26);
+  for (let i = 0; i < 3; i++) {
+    buf.rect(4, 3 + i * 3, buf.w - 8, 2, rgb(i % 2 ? lt : c));
+  }
+  buf.rect(3, 2, 2, buf.h - 6, rgb(dk));
+  buf.rect(buf.w - 5, 2, 2, buf.h - 6, rgb(dk));
+  buf.rect(3, buf.h - 12, buf.w - 6, 2, rgb(lt));
+  buf.rect(3, buf.h - 10, buf.w - 6, 3, rgb(c));
+  buf.hline(3, buf.h - 8, buf.w - 6, rgb(dk));
+  buf.rect(5, buf.h - 7, 2, 5, rgb(dk));
+  buf.rect(buf.w - 7, buf.h - 7, 2, 5, rgb(dk));
+  outline(buf);
+}
+
+// ---------------------------------------------------------------------------
 // Interior furniture
 // ---------------------------------------------------------------------------
 
@@ -1293,6 +1428,14 @@ export const OBJECTS = {
   chairUp:    { w: 16, h: 22, tw: 1, th: 1, solid: false, variants: 3, paint: (b, v) => paintChair(b, v, [P.wood, '#8a72d6', '#6b9e8f'][v % 3], 'up') },
   stool:      { w: 16, h: 16, tw: 1, th: 1, solid: false, variants: 3, paint: (b, v) => paintStool(b, v, ['#b6524f', '#5b8fd6', '#eec453'][v % 3]) },
   sofa:       { w: 48, h: 26, tw: 3, th: 1, solid: false, variants: 3, paint: (b, v) => paintSofa(b, v, ['#8a72d6', '#6b9e8f', '#c05a7a'][v % 3]) },
+  // patio
+  patioChair: { w: 16, h: 22, tw: 1, th: 1, solid: false, variants: 3, paint: (b, v) => paintPatioChair(b, v, ['#6f8f7a', '#c8c2b4', '#5b8fd6'][v % 3]) },
+  patioStool: { w: 16, h: 16, tw: 1, th: 1, solid: false, variants: 3, paint: (b, v) => paintPatioStool(b, v, ['#6f8f7a', '#c8c2b4', '#d95f5f'][v % 3]) },
+  patioTable: { w: 28, h: 28, tw: 1, th: 1, solid: true, variants: 3, paint: (b, v) => paintPatioTable(b, v, ['#8f9a8a', '#c8c2b4', '#7d8794'][v % 3]) },
+  patioBench: { w: 48, h: 26, tw: 3, th: 1, solid: false, variants: 3, paint: (b, v) => paintPatioBench(b, v, ['#6f8f7a', '#c8c2b4', '#8a7258'][v % 3]) },
+  umbrella:   { w: 48, h: 60, tw: 2, th: 2, solid: true, variants: 4, paint: (b, v) => paintUmbrellaTable(b, v, ['#d95f5f', '#5b8fd6', '#7fbe57', '#eec453'][v % 4]) },
+  fountain:   { w: 48, h: 48, tw: 2, th: 2, solid: true, variants: 1, paint: paintFountain },
+
   counter:    { w: 32, h: 24, tw: 2, th: 1, solid: true, variants: 1, paint: paintCounterUnit },
   bar:        { w: 48, h: 34, tw: 3, th: 1, solid: true, variants: 1, paint: paintBar },
   barStool:   { w: 16, h: 22, tw: 1, th: 1, solid: false, variants: 3, paint: paintBarStool },
@@ -1327,6 +1470,11 @@ export const OBJECTS = {
  */
 export const VARIANT_SWATCHES = {
   chair: [P.wood, '#8a72d6', '#6b9e8f'],
+  patioChair: ['#6f8f7a', '#c8c2b4', '#5b8fd6'],
+  patioStool: ['#6f8f7a', '#c8c2b4', '#d95f5f'],
+  patioTable: ['#8f9a8a', '#c8c2b4', '#7d8794'],
+  patioBench: ['#6f8f7a', '#c8c2b4', '#8a7258'],
+  umbrella: ['#d95f5f', '#5b8fd6', '#7fbe57', '#eec453'],
   chairUp: [P.wood, '#8a72d6', '#6b9e8f'],
   stool: ['#b6524f', '#5b8fd6', '#eec453'],
   barStool: ['#c9863f', '#b6524f', '#5b8fd6'],
@@ -1339,6 +1487,11 @@ export const VARIANT_SWATCHES = {
 
 export const VARIANT_NAMES = {
   chair: ['Oak', 'Violet', 'Sage'],
+  patioChair: ['Sage', 'Chalk', 'Blue'],
+  patioStool: ['Sage', 'Chalk', 'Rust'],
+  patioTable: ['Slate', 'Chalk', 'Grey'],
+  patioBench: ['Sage', 'Chalk', 'Teak'],
+  umbrella: ['Rust', 'Blue', 'Leaf', 'Butter'],
   chairUp: ['Oak', 'Violet', 'Sage'],
   stool: ['Rust', 'Blue', 'Butter'],
   barStool: ['Tan', 'Rust', 'Blue'],

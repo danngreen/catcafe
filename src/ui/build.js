@@ -18,15 +18,23 @@ import { objSprite, buildingSprite, OBJECTS } from '../art/objects.js';
 // Furnish first: it is what you come in here to do nearly every time, and it
 // is the only tab you can use before hiring anyone. Laying out rooms needs a
 // crew, so that tab simply isn't offered until you have builders.
-const ALL_MODES = ['Furnish', 'Rooms', 'Style'];
-const CREW_ONLY = new Set(['Rooms']);
+const ALL_MODES = ['Furnish', 'Rooms', 'Floors', 'Style'];
+const CREW_ONLY = new Set(['Rooms', 'Floors']);
 
+// Laid per room, not per cafe. The outdoor ones put a black railing round the
+// room instead of a plaster wall, which is what turns a room into a patio.
 const FLOORS = [
-  { id: T.FLOOR_WOOD, name: 'Boards' },
+  { id: T.FLOOR_WOOD, name: 'Oak boards' },
+  { id: T.FLOOR_WOOD_DK, name: 'Walnut boards' },
   { id: T.FLOOR_TILE, name: 'Chequer tile' },
+  { id: T.FLOOR_TILE_RED, name: 'Terracotta tile' },
   { id: T.FLOOR_STONE, name: 'Flagstones' },
   { id: T.RUG, name: 'Red carpet' },
   { id: T.CARPET_GREEN, name: 'Green carpet' },
+  { id: T.CARPET_BLUE, name: 'Blue carpet' },
+  { id: T.PATIO_SLAB, name: 'Paving slabs', outdoor: true },
+  { id: T.PATIO_BRICK, name: 'Brick paving', outdoor: true },
+  { id: T.PATIO_DECK, name: 'Decking', outdoor: true },
 ];
 
 const WALLS = ['#efe2c8', '#e6dcc2', '#dfe6e8', '#f0e4cc', '#e8d9c0', '#d9e2d2', '#f2e0e0'];
@@ -146,6 +154,8 @@ export class BuildScreen extends Screen {
 
     if (this.modeName === 'Style') {
       this.updateStyle(dt, input);
+    } else if (this.modeName === 'Floors') {
+      this.updateFloors(dt, input);
     } else {
       // Cursor movement is shared by room and furnish modes.
       if (input.repeat('left', dt)) { this.cur.x--; audio.sfx('ui_move', { gain: 0.35 }); }
@@ -189,7 +199,7 @@ export class BuildScreen extends Screen {
         if (st.materials - this.spentMaterials < 1) { this.flash('You need timber and tile. Buy materials from Trowel.', true); return; }
         this.spentMoney += cost;
         this.spentMaterials += 1;
-        this.draft.rooms.push({ ...rect, name: `Room ${this.draft.rooms.length + 1}` });
+        this.draft.rooms.push({ ...rect, name: `Room ${this.draft.rooms.length + 1}`, floor: this.draft.floor });
         this.rebuild();
         audio.sfx('hammer', { gain: 0.9 });
         setTimeout(() => audio.sfx('saw', { gain: 0.6 }), 180);
@@ -219,6 +229,37 @@ export class BuildScreen extends Screen {
         this.finish();
       }
     }
+  }
+
+  /**
+   * Pick a floor for one room at a time. Up and down walk the rooms, left and
+   * right lay the floor, and the plan behind redraws as you go — the whole
+   * point is seeing a patio appear where a parlour was.
+   */
+  updateFloors(dt, input) {
+    const rooms = this.draft.rooms;
+    this.floorRoom = clamp(this.floorRoom || 0, 0, rooms.length - 1);
+    if (input.repeat('up', dt)) { this.floorRoom = (this.floorRoom + rooms.length - 1) % rooms.length; audio.sfx('ui_move'); }
+    if (input.repeat('down', dt)) { this.floorRoom = (this.floorRoom + 1) % rooms.length; audio.sfx('ui_move'); }
+    const r = rooms[this.floorRoom];
+    if (r && (input.repeat('left', dt) || input.repeat('right', dt))) {
+      const d = input.repeat('right', dt) ? 1 : -1;
+      const cur = r.floor ?? this.draft.floor ?? FLOORS[0].id;
+      const i = Math.max(0, FLOORS.findIndex((f) => f.id === cur));
+      const pick = FLOORS[((i + d) % FLOORS.length + FLOORS.length) % FLOORS.length];
+      r.floor = pick.id;
+      // The first room is the cafe proper, so its floor is still the one the
+      // building takes its cue from.
+      if (this.floorRoom === 0) this.draft.floor = pick.id;
+      this.rebuild();
+      audio.sfx(pick.outdoor ? 'place' : 'ui_move', { gain: 0.5 });
+    }
+    // Follow the room you are choosing for.
+    if (r) {
+      this.cur.x = r.x + Math.floor(r.w / 2);
+      this.cur.y = r.y + Math.floor(r.h / 2);
+    }
+    if (input.hit('cancel')) this.finish();
   }
 
   returnFurniture(f) {
@@ -419,7 +460,7 @@ export class BuildScreen extends Screen {
     }
 
     // Cursor.
-    if (this.modeName !== 'Style') {
+    if (this.modeName !== 'Style' && this.modeName !== 'Floors') {
       const bob = Math.sin(this.t * 6) > 0 ? 0 : 1;
       ctx.strokeStyle = P.uiGold;
       ctx.lineWidth = 1;
@@ -500,12 +541,46 @@ export class BuildScreen extends Screen {
     }
 
     if (this.modeName === 'Style') this.drawStylePanel(ctx);
+    if (this.modeName === 'Floors') this.drawFloorsPanel(ctx);
 
     if (this.msgT > 0) {
       const w = textWidth(this.msg) + 18;
       panel(ctx, (VIEW_W - w) / 2, 32, w, 20, { fill: 'rgba(30,25,45,0.94)' });
       drawTextCentered(ctx, this.msg, VIEW_W / 2, 38, { color: P.uiGold, shadow: P.uiShadow });
     }
+  }
+
+  drawFloorsPanel(ctx) {
+    const rooms = this.draft.rooms;
+    const sel = rooms[clamp(this.floorRoom || 0, 0, rooms.length - 1)];
+
+    // Ring the room being changed, so it is obvious which floor is in play.
+    if (sel) {
+      const sx = (tx) => (tx + this.offX) * TILE - this.cam.ox;
+      const sy = (ty) => (ty + this.offY) * TILE - this.cam.oy;
+      ctx.strokeStyle = P.uiGold;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(sx(sel.x) - 0.5, sy(sel.y) - 0.5, sel.w * TILE + 1, sel.h * TILE + 1);
+    }
+
+    const w = 190, h = 30 + rooms.length * 14 + 26;
+    const x = VIEW_W - w - 8 - SAFE.right, y = 40;
+    panel(ctx, x, y, w, h);
+    panelTitle(ctx, x, y, w, 'Floors');
+    rooms.forEach((r, i) => {
+      const ry = y + 24 + i * 14;
+      const on = i === (this.floorRoom || 0);
+      if (on) { ctx.fillStyle = 'rgba(255,207,107,0.14)'; ctx.fillRect(x + 5, ry - 2, w - 10, 13); }
+      const f = FLOORS.find((o) => o.id === (r.floor ?? this.draft.floor)) || FLOORS[0];
+      drawText(ctx, r.name, x + 10, ry, { color: on ? P.uiGold : P.uiText, shadow: P.uiShadow });
+      drawTextRight(ctx, on ? `< ${f.name} >` : f.name, x + w - 10, ry,
+        { color: on ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
+    });
+    const cur = FLOORS.find((o) => o.id === (sel?.floor ?? this.draft.floor)) || FLOORS[0];
+    drawText(ctx, cur.outdoor ? 'Outside — railings, not walls' : 'Inside — plaster walls',
+      x + 10, y + h - 18, { color: cur.outdoor ? P.uiGreen : P.uiTextDim, shadow: P.uiShadow });
+    drawText(ctx, 'Up/Down room   Left/Right floor   Esc done',
+      10 + SAFE.left, VIEW_H - 17, { color: P.uiTextDim, shadow: P.uiShadow });
   }
 
   drawStylePanel(ctx) {
