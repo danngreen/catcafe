@@ -614,7 +614,7 @@ function placeShop(map, shop, x, y, townSpec, doors, rng) {
     timbered: shop.timbered ?? (townSpec.style.timbered && rng.chance(0.5)),
     wallH: shop.wallH || 28, roofH: shop.roofH || 24, windows: 2,
     storeys: shop.storeys || 1,
-    signKey: shop.sign, signBg: '#f3e3c6',
+    signKey: shop.sign, signBg: shop.signBg || null,
     awning: shop.awning || null,
     v: rng.int(4),
   };

@@ -516,6 +516,167 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (Math.abs(sunPullFire - sunPull) > 0.001) window.__errors.push('the fire shelters you from sunshine: ' + window.__wcafe);
         if (hotDay.cold <= hotDay.hot) window.__errors.push('nobody wants a cold drink in the sun: ' + window.__wcafe);
         if (coldDay.hot <= coldDay.cold * 3) window.__errors.push('snow does not sell hot drinks: ' + window.__wcafe);
+      } else if (SCRIPT === 'hourly') {
+        // Paid by the hour, and only standing there for the hours you post.
+        const st = g.state;
+        const sim = st.cafeSim;
+        st.money = 9000;
+        st.reputation = 0.7;
+        st.employee = { name: 'Saffron', id: 'saffron', wage: 9, fairWage: 9, quality: 0.6, onDuty: true, hourly: true };
+        st.shopOpen = true;
+
+        // The bill follows the sign. Same person, two rotas.
+        const billFor = (hours) => {
+          st.shopHours = hours;
+          const before = st.money;
+          const sum = sim.endOfDay();
+          st.money = before;                    // endOfDay spends; put it back
+          const line = sum.lines.find((l) => l.text.startsWith('Saffron'));
+          return { text: line ? line.text : 'no wage line', costs: sum.costs };
+        };
+        const long = billFor([8, 18]);
+        const short = billFor([8, 16]);
+        st.employee.onDuty = false;
+        const none = billFor([8, 16]);
+        st.employee.onDuty = true;
+
+        // Clocked in only inside the posted hours.
+        st.shopHours = [8, 16];
+        const atHour = (h) => { st.clock.t = h * (20 * 60 / 24); return sim.staffOn; };
+        const early = atHour(7);
+        const mid = atHour(12);
+        const late = atHour(17);
+
+        // ...but a player behind their own counter trades at any hour.
+        const shutWithNobody = (() => { st.cafeOccupied = false; st.inCafe = false; return sim.isOpen; })();
+        st.inCafe = true;
+        const openWithPlayer = sim.isOpen;
+        st.inCafe = false;
+        st.cafeOccupied = false;
+
+        // The figure standing there follows the same rule.
+        st.inCafe = true;
+        atHour(12);
+        g.updateEmployee(0.016);
+        const actorMid = !!g.employeeActor;
+        atHour(17);
+        g.updateEmployee(0.016);
+        const actorLate = !!g.employeeActor;
+        const told = g.hud.toasts.some((t) => /clocking out/i.test(t.text));
+        atHour(12);
+        g.updateEmployee(0.016);
+        const toldIn = g.hud.toasts.some((t) => /clocking in/i.test(t.text));
+        st.inCafe = false;
+
+        // An old save has a daily wage in the same field. It converts once.
+        st.shopHours = [8, 18];
+        st.employee = { name: 'Moss', id: 'moss', wage: 70, fairWage: 70, quality: 0.6, onDuty: true };
+        st.migrateEmployee();
+        const migrated = `${st.employee.wage}/${st.employee.fairWage}`;
+        st.migrateEmployee();                   // twice must not halve it again
+        const migratedTwice = `${st.employee.wage}/${st.employee.fairWage}`;
+
+        window.__hourly = `long="${long.text}" short="${short.text}" offRota="${none.text}"`
+          + ` clockedIn 7am=${early} noon=${mid} 5pm=${late}`
+          + ` closedAlone=${shutWithNobody} openWithPlayer=${openWithPlayer}`
+          + ` actor noon=${actorMid} 5pm=${actorLate} told=${told}/${toldIn}`
+          + ` migrated=${migrated} again=${migratedTwice}`;
+        if (!/10h at 9 = 90/.test(long.text)) window.__errors.push('a 10-hour day is not 10 hours pay: ' + window.__hourly);
+        if (!/8h at 9 = 72/.test(short.text)) window.__errors.push('shorter hours cost the same: ' + window.__hourly);
+        if (!/not called in/.test(none.text)) window.__errors.push('paid while off the rota: ' + window.__hourly);
+        if (early || late) window.__errors.push('clocked in outside the posted hours: ' + window.__hourly);
+        if (!mid) window.__errors.push('not clocked in during the posted hours: ' + window.__hourly);
+        if (shutWithNobody) window.__errors.push('open at 5pm with nobody there: ' + window.__hourly);
+        if (!openWithPlayer) window.__errors.push('a player cannot trade outside posted hours: ' + window.__hourly);
+        if (!actorMid) window.__errors.push('nobody behind the counter at noon: ' + window.__hourly);
+        if (actorLate) window.__errors.push('still behind the counter after clocking off: ' + window.__hourly);
+        if (!told || !toldIn) window.__errors.push('clocking in and out went unsaid: ' + window.__hourly);
+        if (migrated !== '7/7') window.__errors.push('an old daily wage did not convert: ' + window.__hourly);
+        if (migratedTwice !== migrated) window.__errors.push('the wage converted twice: ' + window.__hourly);
+      } else if (SCRIPT === 'signs') {
+        // Every trade's board, side by side, at three times size — the only
+        // way to tell whether a pictogram this small actually reads.
+        const { SIGN_ICONS, SIGN_BG } = await import('../src/art/objects.js');
+        const { PixBuf } = await import('../src/engine/pixel.js');
+        const { P } = await import('../src/art/palette.js');
+        const { SHOPS } = await import('../src/world/places.js');
+        const keys = Object.keys(SIGN_ICONS);
+        // On its own canvas over the top: the game keeps drawing to #screen
+        // every frame and would paint the sheet out before the shot lands.
+        const c = document.createElement('canvas');
+        c.width = 480; c.height = 300;
+        c.style.cssText = 'position:fixed;left:0;top:0;width:960px;height:600px;'
+          + 'image-rendering:pixelated;z-index:9999;background:#1b1626';
+        document.body.appendChild(c);
+        const ctx = c.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        const byKey = {};
+        for (const sh of SHOPS) if (!byKey[sh.sign]) byKey[sh.sign] = sh.name;
+        const cols = 6, S = 2.4;
+        const paint = () => {
+        ctx.fillStyle = '#1b1626'; ctx.fillRect(0, 0, c.width, c.height);
+        keys.forEach((k, i) => {
+          const buf = new PixBuf(34, 22);
+          const bg = SIGN_BG[k] || P.plaster;
+          const rgbv = (h) => {
+            const n = parseInt(h.slice(1), 16);
+            return (255 << 24) | ((n & 255) << 16) | (((n >> 8) & 255) << 8) | ((n >> 16) & 255);
+          };
+          buf.rect(2, 2, 30, 18, rgbv(bg));
+          SIGN_ICONS[k](buf, 17, 12);
+          const cv = buf.toCanvas();
+          const px = 12 + (i % cols) * 78, py = 16 + Math.floor(i / cols) * 82;
+          ctx.drawImage(cv, px, py, Math.round(34 * S), Math.round(22 * S));
+          ctx.fillStyle = '#ffcf6b';
+          ctx.font = '9px monospace';
+          ctx.fillText(k, px, py + 62);
+          ctx.fillStyle = '#a8a0b8';
+          ctx.fillText((byKey[k] || 'signposts').slice(0, 14), px, py + 72);
+        });
+        };
+        paint();
+        window.__pass = `signs=${keys.length}`;
+        await wait(400);
+      } else if (SCRIPT === 'signkeys') {
+        // Two shops that sell different things must not hang the same board.
+        // The old valley had six pairs sharing one, which is how you end up
+        // with two hammers over two unrelated shops.
+        const { SIGN_ICONS, SIGN_BG } = await import('../src/art/objects.js');
+        const { PixBuf } = await import('../src/engine/pixel.js');
+        const { SHOPS } = await import('../src/world/places.js');
+        const used = {};
+        for (const sh of SHOPS) (used[sh.sign] ||= []).push(sh.id);
+        const dupes = Object.entries(used).filter(([, v]) => v.length > 1)
+          .map(([k, v]) => `${k}:${v.join('+')}`);
+        const missing = Object.keys(used).filter((k) => !SIGN_ICONS[k]);
+        const nobg = Object.keys(SIGN_ICONS).filter((k) => !SIGN_BG[k]);
+
+        // Each glyph has to actually put something on the board, and put it
+        // over a decent part of it: a two-pixel mark is not a pictogram.
+        const ink = {};
+        let thin = [];
+        for (const k of Object.keys(SIGN_ICONS)) {
+          const buf = new PixBuf(30, 18);
+          SIGN_ICONS[k](buf, 15, 9);
+          let n = 0;
+          const colours = new Set();
+          for (let i = 0; i < buf.data.length; i++) {
+            if (buf.data[i] !== 0) { n++; colours.add(buf.data[i]); }
+          }
+          ink[k] = n;
+          // Four colours minimum: the brief was less monotone, and a shape
+          // this small is read by its colour blocks before its outline.
+          if (n < 90 || colours.size < 4) thin.push(`${k}(${n}px,${colours.size}c)`);
+        }
+        const least = Object.entries(ink).sort((a, b) => a[1] - b[1])[0];
+
+        window.__signs = `shops=${SHOPS.length} keys=${Object.keys(used).length}`
+          + ` glyphs=${Object.keys(SIGN_ICONS).length} dupes=[${dupes.join(' ')}]`
+          + ` thin=[${thin.join(' ')}] sparsest=${least[0]}@${least[1]}px`;
+        if (dupes.length) window.__errors.push('two shops share a sign: ' + window.__signs);
+        if (missing.length) window.__errors.push(`no glyph for ${missing.join(',')}: ` + window.__signs);
+        if (nobg.length) window.__errors.push(`no board colour for ${nobg.join(',')}: ` + window.__signs);
+        if (thin.length) window.__errors.push('a sign is too faint to read: ' + window.__signs);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -2595,6 +2756,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__shore ? ` shore=${window.__shore}` : '')
         + (window.__weather ? ` ${window.__weather}` : '')
         + (window.__wcafe ? ` ${window.__wcafe}` : '')
+        + (window.__hourly ? ` ${window.__hourly}` : '')
+        + (window.__signs ? ` ${window.__signs}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

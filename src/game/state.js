@@ -8,6 +8,7 @@ import { item, baseId } from './items.js';
 import { CAT_BREEDS } from '../art/chars.js';
 import { startingCafe, buildCafeMap } from '../world/interiors.js';
 import { weatherNow } from './weather.js';
+import { shiftHours } from './cafe.js';
 import { VILLAGERS } from '../world/places.js';
 import { TILE } from '../art/tiles.js';
 
@@ -115,6 +116,9 @@ export class GameState {
         // our own change — which is what we get straight after building.
         if (JSON.stringify(this.cafe) !== JSON.stringify(v)) { this.cafe = v; this.rebuildCafe(); }
       } else this[k] = v;
+      // A valley that has not been opened since wages went hourly will send
+      // the old daily figure, so convert it wherever it arrives from.
+      if (k === 'employee' || k === 'shopHours') this.migrateEmployee();
     } finally {
       this.applying = false;
     }
@@ -165,6 +169,7 @@ export class GameState {
         else this[k] = v;
       }
       if (clock) this.clock.load(clock);
+      this.migrateEmployee();
       this.rebuildCafe();     // their layout, their colours
     } finally {
       this.applying = false;
@@ -266,6 +271,21 @@ export class GameState {
     this.visited[id] = { name, x, y, town };
     this.touch('visited');
     return true;
+  }
+
+  /**
+   * Wages used to be per day and are now per hour. An old save has a daily
+   * figure in the same field, so it is divided by the hours that were posted
+   * at the time — the person keeps costing what they cost, and the marker
+   * stops it happening twice.
+   */
+  migrateEmployee() {
+    const e = this.employee;
+    if (!e || e.hourly) return;
+    const hours = shiftHours(this.shopHours) || 10;
+    e.wage = Math.max(1, Math.round(e.wage / hours));
+    e.fairWage = Math.max(1, Math.round(e.fairWage / hours));
+    e.hourly = true;
   }
 
   /** What the sky is doing. Cheap enough to ask for per frame. */
@@ -385,6 +405,7 @@ export class GameState {
     this.bestDayProfit = data.bestDayProfit || 0;
     this.totalCustomers = data.totalCustomers || 0;
     this.daysPlayed = data.daysPlayed || 0;
+    this.migrateEmployee();
     this.playerLook = data.playerLook || this.playerLook;
     this.playerName = data.playerName || this.playerName;
     this.mail = data.mail || [];

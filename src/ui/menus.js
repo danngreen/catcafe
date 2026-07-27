@@ -622,16 +622,16 @@ export class CafeScreen extends Screen {
       const row = list[this.index];
       if (row?.kind === 'wage_up') { st.employee.wage += 10; this.flash(`Wage raised to ${st.employee.wage}.`); audio.sfx('ui_ok'); }
       else if (row?.kind === 'wage_down') { st.employee.wage = Math.max(10, st.employee.wage - 10); this.flash(`Wage cut to ${st.employee.wage}.`); audio.sfx('ui_back'); }
-      else if (row?.kind === 'duty') { st.employee.onDuty = !st.employee.onDuty; this.flash(st.employee.onDuty ? 'On duty.' : 'Off duty.'); audio.sfx('ui_ok'); }
+      else if (row?.kind === 'duty') { st.employee.onDuty = !st.employee.onDuty; this.flash(st.employee.onDuty ? 'On the rota.' : 'Off the rota — no hours, no wages.'); audio.sfx('ui_ok'); }
       else if (row?.kind === 'fire') { this.flash(`${st.employee.name} packs up and goes.`); st.employee = null; audio.sfx('ui_back'); }
       st.touch('employee');
     } else {
       const cand = HIRE_POOL[this.index];
       if (!cand) return;
       if (st.reputation < 0.2) { this.flash('Nobody will work somewhere this quiet yet.'); audio.sfx('error'); return; }
-      st.employee = { name: cand.name, id: cand.id, wage: cand.fairWage, fairWage: cand.fairWage, quality: 0.6, onDuty: true };
+      st.employee = { name: cand.name, id: cand.id, wage: cand.fairWage, fairWage: cand.fairWage, quality: 0.6, onDuty: true, hourly: true };
       st.touch('employee');
-      this.flash(`${cand.name} starts tomorrow. Wage set to ${cand.fairWage} a day.`);
+      this.flash(`${cand.name} starts tomorrow, at ${cand.fairWage} an hour.`);
       audio.sfx('levelup', { gain: 0.6 });
     }
   }
@@ -849,9 +849,12 @@ export class CafeScreen extends Screen {
     if (st.employee) {
       const e = st.employee;
       drawText(ctx, `${e.name} — your one and only employee`, x + 12, y + 20, { color: P.uiGold, shadow: P.uiShadow });
+      const hrs = shiftHours(st.shopHours);
+      const day = Math.round(hrs * e.wage);
       const rows = [
-        [`On duty: ${e.onDuty ? 'yes' : 'no'}`, 'They mind the shop while you are out.'],
-        [`Raise wage (now ${e.wage}/day)`, `A fair rate here is about ${e.fairWage}.`],
+        [`On the rota: ${e.onDuty ? 'yes' : 'no'}`,
+          `They work your posted hours — ${fmtHour(st.shopHours[0])} to ${fmtHour(st.shopHours[1])}.`],
+        [`Raise wage (now ${e.wage}/hour)`, `A fair rate here is about ${e.fairWage} an hour.`],
         ['Cut wage', 'Cheaper, but service suffers and they may leave.'],
         ['Let them go', 'No hard feelings.'],
       ];
@@ -862,6 +865,10 @@ export class CafeScreen extends Screen {
         drawText(ctx, label, x + 22, ry + 3, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
         if (sel) drawText(ctx, note, x + 22, ry + 13, { color: P.uiTextDim, shadow: P.uiShadow });
       });
+      // The figure that actually leaves the till, since the wage is per hour
+      // and the hours are set on a different screen.
+      drawText(ctx, e.onDuty ? `${hrs}h a day — ${day} in wages` : 'Not on the rota — no wages',
+        x + 12, y + 30, { color: P.uiTextDim, shadow: P.uiShadow });
       drawText(ctx, 'Service quality', x + w - 180, y + 20, { color: P.uiTextDim, shadow: P.uiShadow });
       bar(ctx, x + w - 180, y + 32, 160, 8, e.quality, e.quality > 0.6 ? P.uiGreen : e.quality > 0.35 ? P.uiGold : P.uiRed);
     } else {
@@ -871,7 +878,7 @@ export class CafeScreen extends Screen {
         const sel = i === this.index;
         if (sel) { ctx.fillStyle = 'rgba(255,207,107,0.12)'; ctx.fillRect(x + 8, ry - 3, w - 20, 20); cursor(ctx, x + 8, ry + 3, this.t); }
         drawText(ctx, c.name, x + 22, ry + 3, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
-        drawText(ctx, `${c.fairWage}/day`, x + 90, ry + 3, { color: P.uiTextDim, shadow: P.uiShadow });
+        drawText(ctx, `${c.fairWage}/hour`, x + 90, ry + 3, { color: P.uiTextDim, shadow: P.uiShadow });
         if (sel) drawText(ctx, c.blurb, x + 22, ry + 13, { color: P.uiTextDim, shadow: P.uiShadow });
       });
       if (st.reputation < 0.2) {

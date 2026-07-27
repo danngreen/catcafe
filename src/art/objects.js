@@ -571,12 +571,24 @@ export function paintBuilding(buf, opts) {
     for (let x = 0; x < aw + 12; x += 6) buf.ellipse(ax - 6 + x + 3, ay + 8, 3, 2, rgb(x % 12 ? awning : shade(awning, 0.3)));
   }
   if (sign) {
-    const sw = 22, sx = Math.round(buf.w / 2 - sw / 2) + (sign.side || 0) * 26;
-    const sy = wallTop - 2;
-    buf.rect(sx + sw / 2 - 1, sy - 4, 2, 4, rgb(P.metalDk));
-    buf.rect(sx, sy, sw, 13, rgb(sign.bg || P.wood));
-    buf.frame(sx, sy, sw, 13, rgb(P.woodDeep));
-    if (sign.icon) sign.icon(buf, sx + sw / 2, sy + 6);
+    // A proper hanging board: bracket, painted panel, a darker rim with a
+    // highlight along the top so it reads as a board rather than a sticker,
+    // and two pegs. Bigger than it was, because a pictogram this small has to
+    // be legible from across a street at four hundred pixels wide.
+    const sw = 30, sh = 18;
+    const sx = Math.round(buf.w / 2 - sw / 2) + (sign.side || 0) * 30;
+    const sy = wallTop - 4;
+    const bg = sign.bg || P.plaster;
+    buf.rect(sx + 3, sy - 3, sw - 6, 2, rgb(P.metalDk));          // bracket
+    buf.set(sx + 3, sy - 2, rgb(P.metalDk));
+    buf.set(sx + sw - 4, sy - 2, rgb(P.metalDk));
+    buf.rect(sx, sy, sw, sh, rgb(bg));
+    buf.hline(sx + 1, sy + 1, sw - 2, rgb(shade(bg, 0.22)));       // lit top edge
+    buf.hline(sx + 1, sy + sh - 2, sw - 2, rgb(shade(bg, -0.16)));
+    buf.frame(sx, sy, sw, sh, rgb(P.woodDeep));
+    buf.set(sx + 2, sy + 2, rgb(P.woodDk));                        // pegs
+    buf.set(sx + sw - 3, sy + 2, rgb(P.woodDk));
+    if (sign.icon) sign.icon(buf, sx + Math.floor(sw / 2), sy + Math.floor(sh / 2) + 1);
   }
 
   outline(buf);
@@ -586,65 +598,306 @@ export function paintBuilding(buf, opts) {
 // Shop sign glyphs — tiny pictograms that tell you what a building sells.
 // ---------------------------------------------------------------------------
 
+/**
+ * The board's paint. Every trade gets its own colour as well as its own
+ * pictogram, so a street of shops reads as a street of different shops from
+ * further away than the glyphs themselves survive.
+ */
+export const SIGN_BG = {
+  cafe: '#f6e6c8', grocer: '#dfe9cf', bakery: '#f2dcb4', petshop: '#e6dcf0',
+  inn: '#dfe4ee', book: '#dce6f2', groomer: '#f4dee8', builder: '#e8dfd0',
+  hardware: '#dbe0e6', vet: '#eaf0ee', fish: '#d8e8f0', harbour: '#d6e2e8',
+  furniture: '#e4dcf2', flea: '#f0e2d2', tea: '#dcece4', exotic: '#f0e2ee',
+  herbalist: '#dfeadb', beekeeper: '#f6e8c0', town: '#e8e0cc',
+};
+
+// Every glyph is drawn about a centre, filling roughly 24x14 of the board.
+// They are deliberately three or four colours each: a shape this small is read
+// by its colour blocks long before its outline.
+
+/** A tapered post-and-plank shape used by several of the wooden glyphs. */
+function pawPad(b, x, y, rx, ry, col, hi) {
+  b.ellipse(x, y, rx, ry, rgb(col));
+  b.ellipse(x, y - ry * 0.3, rx * 0.62, ry * 0.5, rgb(hi));
+}
+
 export const SIGN_ICONS = {
-  cafe: (b, x, y) => { // steaming cup
-    b.rect(x - 4, y - 2, 7, 5, rgb(P.cream)); b.rect(x + 3, y - 1, 2, 2, rgb(P.cream));
-    b.rect(x - 3, y - 1, 5, 2, rgb(P.coffee));
-    b.set(x - 2, y - 5, rgb('#ffffff')); b.set(x, y - 6, rgb('#ffffff')); b.set(x + 1, y - 4, rgb('#ffffff'));
+  cafe: (b, x, y) => { // a cup on a saucer, with steam — the old one read as a dash
+    b.set(x - 4, y - 7, rgb('#ffffff')); b.set(x - 3, y - 8, rgb('#e8f0f4'));
+    b.set(x - 1, y - 9, rgb('#ffffff')); b.set(x, y - 7, rgb('#e8f0f4'));
+    b.set(x + 2, y - 8, rgb('#ffffff'));
+    // The china is nearly white, so it needs its own outline — on a cream
+    // board an unoutlined white cup is just a pale rectangle, which is exactly
+    // what the old sign looked like.
+    b.rect(x - 8, y - 6, 13, 10, rgb('#6b5540'));
+    b.rect(x - 7, y - 5, 11, 8, rgb('#fbf6ec'));            // cup body
+    b.rect(x - 7, y - 5, 11, 1, rgb('#ffffff'));
+    b.rect(x - 6, y - 4, 9, 3, rgb(P.coffee));              // the coffee in it
+    b.hline(x - 6, y - 4, 9, rgb(shade(P.coffee, 0.3)));
+    b.rect(x - 7, y + 2, 11, 1, rgb('#d8cdb8'));
+    b.rect(x + 5, y - 3, 4, 2, rgb('#6b5540'));             // handle
+    b.rect(x + 5, y - 2, 3, 1, rgb('#fbf6ec'));
+    b.set(x + 8, y - 1, rgb('#6b5540')); b.rect(x + 5, y, 4, 1, rgb('#6b5540'));
+    b.ellipse(x - 1, y + 5, 10, 2.4, rgb('#6b5540'));       // saucer
+    b.ellipse(x - 1, y + 4.6, 8.6, 1.8, rgb('#e8dfcc'));
+    b.ellipse(x - 1, y + 4, 7, 1.2, rgb('#ffffff'));
   },
-  grocer: (b, x, y) => { // apple + carrot
-    b.ellipse(x - 2, y, 3, 3, rgb(P.flowerR)); b.set(x - 2, y - 4, rgb(P.forest));
-    b.ellipse(x + 3, y + 1, 2, 3, rgb('#e08b3f')); b.set(x + 3, y - 3, rgb(P.forest));
+  grocer: (b, x, y) => { // a basket with things in it
+    b.ellipse(x - 4, y - 3, 3.6, 3.4, rgb(P.flowerR));      // apple
+    b.ellipse(x - 5, y - 4, 1.6, 1.4, rgb('#f0899a'));
+    b.vline(x - 4, y - 8, 3, rgb(P.forest));
+    b.ellipse(x + 4, y - 4, 2.6, 4, rgb('#e08b3f'));        // carrot
+    b.set(x + 4, y - 8, rgb(P.forest)); b.set(x + 5, y - 9, rgb(P.forest));
+    b.set(x + 3, y - 9, rgb(P.forest));
+    b.rect(x - 9, y + 1, 18, 6, rgb('#b98a52'));            // basket
+    b.hline(x - 9, y + 1, 18, rgb('#d8a869'));
+    for (let i = 0; i < 5; i++) b.vline(x - 7 + i * 4, y + 2, 4, rgb('#8f6a3d'));
   },
-  vet: (b, x, y) => { // cross
-    b.rect(x - 1, y - 5, 3, 10, rgb(P.flowerR)); b.rect(x - 5, y - 1, 11, 3, rgb(P.flowerR));
+  bakery: (b, x, y) => { // a scored loaf and a roll
+    b.ellipse(x - 3, y, 8, 5, rgb('#c9863f'));
+    b.ellipse(x - 3, y - 1, 7, 4, rgb('#e0a45c'));
+    b.ellipse(x - 3, y - 2, 5.4, 2.4, rgb('#f0c184'));
+    for (let i = 0; i < 3; i++) b.line(x - 7 + i * 4, y - 2, x - 5 + i * 4, y + 1, rgb('#a9682c'));
+    b.ellipse(x + 7, y + 2, 3.6, 2.6, rgb('#e0a45c'));      // roll
+    b.ellipse(x + 7, y + 1.4, 2.6, 1.6, rgb('#f6d6a4'));
   },
-  groomer: (b, x, y) => { // brush
-    b.rect(x - 4, y - 3, 8, 4, rgb(P.uiPink)); b.rect(x - 4, y + 1, 8, 2, rgb(P.wood));
-    for (let i = 0; i < 4; i++) b.vline(x - 3 + i * 2, y + 3, 3, rgb(P.woodDk));
+  petshop: (b, x, y) => { // a paw. Outlined, or the pads and the toes merge
+    const dk = '#5a4330', fur = '#9a7554', pad = '#e8949a';
+    const toe = (tx, ty) => {
+      b.ellipse(tx, ty, 3.2, 3.4, rgb(dk));
+      b.ellipse(tx, ty, 2.2, 2.4, rgb(fur));
+      b.ellipse(tx, ty + 0.4, 1.4, 1.4, rgb(pad));
+    };
+    b.ellipse(x, y + 4, 6.6, 5, rgb(dk));
+    b.ellipse(x, y + 4, 5.4, 3.9, rgb(fur));
+    b.ellipse(x, y + 4.4, 3.6, 2.6, rgb(pad));
+    b.ellipse(x - 1, y + 3.6, 1.6, 1, rgb('#f4b8be'));
+    toe(x - 7, y - 3); toe(x - 2.5, y - 5.5); toe(x + 2.5, y - 5.5); toe(x + 7, y - 3);
   },
-  pet: (b, x, y) => { // paw print
-    b.ellipse(x, y + 2, 3, 2.4, rgb(P.furBrown));
-    b.ellipse(x - 3, y - 2, 1.4, 1.6, rgb(P.furBrown));
-    b.ellipse(x, y - 3, 1.4, 1.6, rgb(P.furBrown));
-    b.ellipse(x + 3, y - 2, 1.4, 1.6, rgb(P.furBrown));
+  inn: (b, x, y) => { // a bed, made
+    b.rect(x - 10, y + 1, 20, 5, rgb(P.wood));              // frame
+    b.hline(x - 10, y + 1, 20, rgb(P.woodLt));
+    b.rect(x - 11, y - 4, 3, 10, rgb(P.woodDk));            // headboard
+    b.rect(x + 9, y - 1, 2, 7, rgb(P.woodDk));
+    b.rect(x - 8, y - 2, 7, 4, rgb('#fbf6ec'));             // pillow
+    b.rect(x - 1, y - 2, 10, 4, rgb('#7d94c4'));            // blanket
+    b.hline(x - 1, y - 2, 10, rgb('#9db0d8'));
   },
-  furniture: (b, x, y) => { // armchair
-    b.rect(x - 5, y - 2, 10, 6, rgb('#8a72d6')); b.rect(x - 5, y - 4, 3, 6, rgb('#6f5ab8'));
-    b.rect(x + 2, y - 4, 3, 6, rgb('#6f5ab8'));
+  book: (b, x, y) => { // an open book — the library
+    b.ellipse(x, y + 5, 11, 2, rgb('#00000022'));
+    b.rect(x - 11, y - 5, 11, 10, rgb('#4a6fa8'));
+    b.rect(x + 1, y - 5, 11, 10, rgb('#4a6fa8'));
+    b.rect(x - 10, y - 4, 9, 9, rgb(P.paper));
+    b.rect(x + 1, y - 4, 9, 9, rgb('#f2ecdc'));
+    b.vline(x, y - 5, 10, rgb('#33528a'));
+    for (let i = 0; i < 4; i++) {
+      b.hline(x - 8, y - 2 + i * 2, 6, rgb('#b8b0a0'));
+      b.hline(x + 3, y - 2 + i * 2, 6, rgb('#b8b0a0'));
+    }
   },
-  builder: (b, x, y) => { // hammer
-    b.rect(x - 1, y - 2, 2, 7, rgb(P.wood));
-    b.rect(x - 4, y - 5, 9, 4, rgb(P.metal)); b.rect(x - 4, y - 5, 9, 1, rgb('#e0e4ea'));
+  groomer: (b, x, y) => { // scissors and a comb — a brush read as a cake
+    const st = '#8f9aa8', lt = '#d0d8e2', dk = '#5a6472';
+    b.line(x - 7, y + 7, x + 4, y - 6, rgb(dk));            // blades
+    b.line(x - 6, y + 7, x + 5, y - 6, rgb(lt));
+    b.line(x + 7, y + 7, x - 4, y - 6, rgb(dk));
+    b.line(x + 6, y + 7, x - 5, y - 6, rgb(lt));
+    b.ellipse(x - 5, y - 7, 3.2, 3, rgb(P.uiPink));         // handles
+    b.ellipse(x - 5, y - 7, 1.6, 1.5, rgb(P.plaster));
+    b.ellipse(x + 5, y - 7, 3.2, 3, rgb(P.uiPink));
+    b.ellipse(x + 5, y - 7, 1.6, 1.5, rgb(P.plaster));
+    b.set(x, y + 1, rgb(st));
+    b.rect(x - 11, y + 2, 5, 6, rgb(dk));                   // comb
+    b.rect(x - 10, y + 2, 3, 3, rgb(lt));
+    for (let i = 0; i < 3; i++) b.vline(x - 10 + i * 2, y + 5, 3, rgb(lt));
   },
-  bakery: (b, x, y) => { // croissant-ish roll
-    b.ellipse(x, y, 5, 3.2, rgb('#e0a45c'));
-    b.ellipse(x, y - 1, 4, 2, rgb('#f0c184'));
-    b.set(x - 3, y + 2, rgb('#c9863f')); b.set(x + 3, y + 2, rgb('#c9863f'));
+  builder: (b, x, y) => { // a trowel over a course of brick, both solid
+    const br = '#a85440', brl = '#c9765c', mort = '#e0d8c8';
+    for (let r = 0; r < 2; r++) {
+      for (let i = 0; i < 3; i++) {
+        const bx = x - 11 + i * 8 + (r % 2 ? 4 : 0);
+        b.rect(bx, y + 2 + r * 5, 7, 4, rgb(br));
+        b.hline(bx, y + 2 + r * 5, 7, rgb(brl));
+      }
+      b.hline(x - 12, y + 1 + r * 5, 24, rgb(mort));
+    }
+    b.rect(x + 3, y - 9, 8, 3, rgb(P.woodDk));              // handle
+    b.hline(x + 3, y - 9, 8, rgb(P.wood));
+    b.rect(x + 1, y - 8, 3, 3, rgb('#5a6472'));             // shank
+    for (let i = 0; i < 7; i++) {                            // blade, tapering
+      b.hline(x - 10 + i, y - 6 + i, 13 - i * 2, rgb(i < 2 ? '#e0e4ea' : '#aeb8c4'));
+    }
+    b.line(x - 10, y - 6, x + 2, y - 6, rgb('#5a6472'));
   },
-  tea: (b, x, y) => { // teapot
-    b.ellipse(x, y + 1, 4.4, 3.4, rgb('#6b9e8f'));
-    b.rect(x + 3, y - 1, 4, 2, rgb('#6b9e8f'));
-    b.rect(x - 1, y - 5, 3, 2, rgb('#4f7d70'));
+  hardware: (b, x, y) => { // a claw hammer, big and solid, over a spanner
+    const mt = '#aeb8c4', hi = '#e6ecf2', dk = '#5a6472';
+    b.line(x - 8, y + 8, x - 8, y + 8, rgb(dk));
+    b.rect(x - 9, y + 1, 20, 4, rgb(dk));                   // spanner shaft
+    b.rect(x - 9, y + 2, 20, 2, rgb(mt));
+    b.ellipse(x - 10, y + 3, 4, 4, rgb(dk));
+    b.ellipse(x - 10, y + 3, 2.6, 2.6, rgb(mt));
+    b.ellipse(x - 10, y + 3, 1.2, 1.4, rgb(P.plaster));
+    b.ellipse(x + 11, y + 3, 4, 4, rgb(dk));
+    b.ellipse(x + 11, y + 3, 2.6, 2.6, rgb(mt));
+    b.ellipse(x + 12, y + 3, 1.6, 1.4, rgb(P.plaster));
+    b.rect(x - 2, y - 4, 5, 12, rgb('#6b5028'));            // hammer shaft
+    b.rect(x - 1, y - 4, 3, 12, rgb(P.wood));
+    b.rect(x - 8, y - 9, 15, 6, rgb(dk));                   // head
+    b.rect(x - 7, y - 8, 13, 4, rgb(mt));
+    b.hline(x - 7, y - 8, 13, rgb(hi));
+    b.rect(x - 8, y - 3, 4, 3, rgb(dk));                    // claw
+    b.set(x - 7, y - 1, rgb(dk)); b.set(x - 9, y - 2, rgb(dk));
   },
-  book: (b, x, y) => {
-    b.rect(x - 5, y - 4, 10, 9, rgb('#5b8fd6')); b.rect(x - 4, y - 3, 8, 7, rgb(P.paper));
-    b.vline(x, y - 4, 9, rgb('#3f6ba8'));
+  vet: (b, x, y) => { // a cross with a paw in it, so it is not just a chemist
+    b.rect(x - 5, y - 10, 11, 21, rgb('#c8443f'));
+    b.rect(x - 11, y - 4, 23, 9, rgb('#c8443f'));
+    b.rect(x - 4, y - 9, 9, 19, rgb('#e05a52'));
+    b.rect(x - 10, y - 3, 21, 7, rgb('#e05a52'));
+    b.hline(x - 4, y - 9, 9, rgb('#f07a70'));
+    const toe = (tx, ty) => b.ellipse(tx, ty, 1.5, 1.6, rgb('#ffffff'));
+    b.ellipse(x, y + 2.4, 3.4, 2.6, rgb('#ffffff'));
+    toe(x - 3.4, y - 1.6); toe(x - 1.2, y - 3.2); toe(x + 1.2, y - 3.2); toe(x + 3.4, y - 1.6);
   },
-  fish: (b, x, y) => {
-    b.ellipse(x - 1, y, 4.4, 2.6, rgb('#7fb8d6'));
-    b.line(x + 4, y - 3, x + 4, y + 3, rgb('#5b8fd6')); b.line(x + 6, y - 3, x + 4, y, rgb('#5b8fd6'));
-    b.line(x + 6, y + 3, x + 4, y, rgb('#5b8fd6'));
-    b.set(x - 3, y - 1, rgb('#2f2a3d'));
+  fish: (b, x, y) => { // a fish, side on
+    b.ellipse(x - 2, y, 8, 4.4, rgb('#5f9dc4'));
+    b.ellipse(x - 2, y - 1, 7, 3, rgb('#8fc4dc'));
+    b.ellipse(x - 3, y - 2, 4.4, 1.4, rgb('#c8e6f2'));
+    b.line(x + 7, y - 4, x + 7, y + 4, rgb('#4a80a8'));     // tail
+    b.line(x + 10, y - 4, x + 7, y, rgb('#4a80a8'));
+    b.line(x + 10, y + 4, x + 7, y, rgb('#4a80a8'));
+    b.rect(x + 8, y - 3, 2, 6, rgb('#5f9dc4'));
+    b.line(x - 3, y - 4, x + 1, y - 5, rgb('#4a80a8'));     // dorsal
+    b.set(x - 5, y - 1, rgb('#20304a')); b.set(x - 5, y - 2, rgb('#ffffff'));
   },
-  inn: (b, x, y) => { // bed
-    b.rect(x - 5, y, 11, 4, rgb(P.wood)); b.rect(x - 5, y - 3, 5, 4, rgb('#f0e6d2'));
-    b.rect(x - 6, y - 4, 2, 8, rgb(P.woodDk));
+  harbour: (b, x, y) => { // an anchor, with a bottom that curves
+    const mt = '#8f9aa8', hi = '#d0d8e2', dk = '#4a5462';
+    b.ellipse(x, y - 8, 3.4, 3, rgb(dk));                   // ring
+    b.ellipse(x, y - 8, 1.8, 1.6, rgb(P.plaster));
+    b.rect(x - 2, y - 6, 5, 13, rgb(dk));                   // shank
+    b.rect(x - 1, y - 6, 3, 13, rgb(mt));
+    b.vline(x - 1, y - 6, 13, rgb(hi));
+    b.rect(x - 8, y - 5, 17, 3, rgb(dk));                   // stock
+    b.rect(x - 8, y - 5, 17, 1, rgb(hi));
+    // Arms sweeping out and up, drawn row by row so they read as a curve.
+    const arm = [[6, 2], [7, 3], [8, 3], [9, 2], [10, 0]];
+    for (let i = 0; i < arm.length; i++) {
+      const [dx, h] = arm[i];
+      b.rect(x - dx - 1, y + 6 - i, 2, h, rgb(dk));
+      b.rect(x + dx, y + 6 - i, 2, h, rgb(dk));
+      b.set(x - dx, y + 6 - i, rgb(mt));
+      b.set(x + dx, y + 6 - i, rgb(mt));
+    }
+    b.rect(x - 4, y + 6, 9, 2, rgb(dk));
+    b.rect(x - 3, y + 6, 7, 1, rgb(mt));
+    b.set(x - 11, y + 1, rgb(dk)); b.set(x + 11, y + 1, rgb(dk));   // fluke tips
   },
-  town: (b, x, y) => { // little house
-    for (let i = 0; i < 5; i++) b.hline(x - i, y - 4 + i, i * 2 + 1, rgb(P.terracotta));
-    b.rect(x - 4, y + 1, 9, 4, rgb(P.plaster));
-    b.rect(x - 1, y + 2, 3, 3, rgb(P.woodDk));
+  furniture: (b, x, y) => { // a wing armchair — the good furniture shop
+    b.ellipse(x, y + 7, 11, 2, rgb('#00000022'));
+    b.rect(x - 6, y - 6, 12, 9, rgb('#7d63c8'));            // back
+    b.rect(x - 6, y - 6, 12, 2, rgb('#9a82dc'));
+    b.rect(x - 9, y - 4, 4, 9, rgb('#6a52ac'));             // arms
+    b.rect(x + 5, y - 4, 4, 9, rgb('#6a52ac'));
+    b.rect(x - 6, y + 1, 12, 4, rgb('#8a72d6'));            // seat
+    b.hline(x - 6, y + 1, 12, rgb('#a894e4'));
+    b.rect(x - 7, y + 5, 3, 3, rgb(P.woodDk));              // legs
+    b.rect(x + 5, y + 5, 3, 3, rgb(P.woodDk));
+  },
+  flea: (b, x, y) => { // a stall: scalloped striped awning over a heap of junk
+    for (let i = 0; i < 12; i++) {
+      const c = i % 2 ? '#c94a4a' : '#f2ece0';
+      b.rect(x - 12 + i * 2, y - 9, 2, 5, rgb(c));
+      b.set(x - 12 + i * 2, y - 4, rgb(c));                 // scallop
+      b.set(x - 11 + i * 2, y - 4, rgb(c));
+      if (i % 2) { b.set(x - 12 + i * 2, y - 3, rgb(c)); b.set(x - 11 + i * 2, y - 3, rgb(c)); }
+    }
+    b.hline(x - 12, y - 10, 24, rgb('#8f4a38'));
+    b.vline(x - 11, y - 2, 9, rgb(P.woodDk));               // legs
+    b.vline(x + 10, y - 2, 9, rgb(P.woodDk));
+    b.rect(x - 12, y + 4, 24, 3, rgb(P.wood));              // table
+    b.hline(x - 12, y + 4, 24, rgb(P.woodLt));
+    b.rect(x - 9, y - 1, 7, 5, rgb('#c9863f'));             // crate
+    b.hline(x - 9, y - 1, 7, rgb('#e0a45c'));
+    b.vline(x - 6, y - 1, 5, rgb('#8f6a3d'));
+    b.ellipse(x + 1, y + 1, 3.4, 3.2, rgb('#4f7d70'));      // pot
+    b.ellipse(x + 1, y + 0.2, 2, 1.4, rgb('#6b9e8f'));
+    b.rect(x + 6, y - 2, 5, 6, rgb('#4a6fa8'));             // book
+    b.rect(x + 7, y - 1, 3, 4, rgb(P.paper));
+  },
+  tea: (b, x, y) => { // a teapot, pouring
+    b.ellipse(x - 1, y + 1, 7.4, 5.4, rgb('#4f7d70'));
+    b.ellipse(x - 1, y, 6.4, 4, rgb('#6b9e8f'));
+    b.ellipse(x - 2, y - 2, 4, 1.8, rgb('#8fbcae'));
+    b.rect(x - 3, y - 6, 5, 2, rgb('#4f7d70'));             // lid
+    b.set(x - 1, y - 7, rgb('#d0a659'));
+    b.line(x + 6, y - 2, x + 10, y - 4, rgb('#4f7d70'));    // spout
+    b.line(x + 6, y - 1, x + 10, y - 2, rgb('#6b9e8f'));
+    b.rect(x - 9, y - 3, 2, 5, rgb('#4f7d70'));             // handle
+    b.set(x - 8, y - 4, rgb('#4f7d70')); b.set(x - 8, y + 2, rgb('#4f7d70'));
+    b.set(x + 10, y - 1, rgb('#c8e0d8')); b.set(x + 10, y + 1, rgb('#c8e0d8'));
+  },
+  exotic: (b, x, y) => { // a cat's face in a rosette — the fancy cattery
+    for (let i = 0; i < 8; i++) {                            // rosette petals
+      const a = (i / 8) * 6.2832;
+      b.ellipse(x + Math.cos(a) * 8, y + Math.sin(a) * 6, 2.6, 2.4, rgb('#d0a659'));
+    }
+    b.ellipse(x, y, 7, 6, rgb('#f2e4c8'));
+    b.line(x - 6, y - 5, x - 4, y - 9, rgb('#6b5540'));      // ears
+    b.line(x - 4, y - 9, x - 1, y - 5, rgb('#6b5540'));
+    b.line(x + 6, y - 5, x + 4, y - 9, rgb('#6b5540'));
+    b.line(x + 4, y - 9, x + 1, y - 5, rgb('#6b5540'));
+    b.set(x - 3, y - 1, rgb('#2f2a3d')); b.set(x + 3, y - 1, rgb('#2f2a3d'));
+    b.set(x - 3, y - 2, rgb('#6bc47a')); b.set(x + 3, y - 2, rgb('#6bc47a'));
+    b.ellipse(x, y + 2, 1.4, 1, rgb('#e0899a'));
+    b.line(x - 8, y + 1, x - 4, y + 2, rgb('#c8b89a'));      // whiskers
+    b.line(x + 8, y + 1, x + 4, y + 2, rgb('#c8b89a'));
+  },
+  herbalist: (b, x, y) => { // a mortar you can tell is a bowl, and a pestle
+    const st = '#9a8f7a', lt = '#c2b6a0', dk = '#6b6152';
+    b.line(x + 3, y - 10, x + 10, y - 3, rgb(dk));          // pestle
+    b.line(x + 2, y - 9, x + 9, y - 2, rgb(P.wood));
+    b.line(x + 1, y - 8, x + 8, y - 1, rgb(dk));
+    b.ellipse(x + 10.5, y - 2.5, 2.6, 2.4, rgb(P.woodDk));
+    b.vline(x - 7, y - 8, 7, rgb('#4a7a3d'));               // sprig in the bowl
+    for (const [dx, dy] of [[-9, -8], [-5, -8], [-9, -5], [-5, -5], [-7, -10]]) {
+      b.ellipse(x + dx, y + dy, 2.2, 1.6, rgb('#6b9e57'));
+      b.ellipse(x + dx, y + dy - 0.4, 1.2, 0.8, rgb('#8fbc6b'));
+    }
+    b.ellipse(x - 1, y, 11, 3, rgb(dk));                    // rim
+    b.ellipse(x - 1, y - 0.6, 9.4, 2.2, rgb(lt));
+    for (let i = 0; i < 7; i++) {                            // bowl, narrowing
+      b.hline(x - 10 + i, y + 1 + i, 19 - i * 2.4 | 0, rgb(st));
+    }
+    b.hline(x - 9, y + 2, 6, rgb(lt));                       // lit side
+    b.hline(x - 8, y + 3, 5, rgb(lt));
+    b.hline(x + 3, y + 3, 5, rgb(dk));                       // shaded side
+    b.hline(x + 1, y + 5, 5, rgb(dk));
+  },
+  beekeeper: (b, x, y) => { // a skep hive, coiled straw, with a bee over it
+    const dk = '#8f6a2c';
+    for (let i = 0; i < 6; i++) {
+      const w = 20 - i * 2.8;
+      b.rect(x - w / 2, y + 6 - i * 2.6, w, 1, rgb(dk));
+      b.rect(x - w / 2, y + 7 - i * 2.6, w, 2, rgb(i % 2 ? '#d0a659' : '#e6c67e'));
+    }
+    b.ellipse(x, y - 8, 4.4, 2.6, rgb(dk));
+    b.ellipse(x, y - 8.4, 3.4, 1.8, rgb('#e6c67e'));
+    b.rect(x - 3, y + 5, 6, 4, rgb('#5a4020'));              // the way in
+    b.ellipse(x, y + 5.4, 2.2, 1.4, rgb('#3a2a14'));
+    b.rect(x - 11, y + 9, 23, 2, rgb('#8f8a6a'));            // the board it sits on
+    b.hline(x - 11, y + 9, 23, rgb('#b0aa86'));
+    b.ellipse(x + 9, y - 5, 2.6, 2.2, rgb('#f2d05a'));       // bee
+    b.vline(x + 9, y - 7, 5, rgb('#2f2a3d'));
+    b.vline(x + 10, y - 6, 3, rgb('#2f2a3d'));
+    b.ellipse(x + 7.5, y - 7.6, 2, 1.2, rgb('#e6f2fa'));
+    b.ellipse(x + 11, y - 7.6, 2, 1.2, rgb('#e6f2fa'));
+  },
+  town: (b, x, y) => { // a cottage, for the signposts out in the valley
+    for (let i = 0; i < 7; i++) b.hline(x - i, y - 6 + i, i * 2 + 1, rgb(P.terracotta));
+    b.hline(x - 6, y, 13, rgb(shade(P.terracotta, -0.25)));
+    b.rect(x - 6, y + 1, 13, 7, rgb(P.plaster));
+    b.hline(x - 6, y + 1, 13, rgb('#ffffff'));
+    b.rect(x - 2, y + 3, 4, 5, rgb(P.woodDk));
+    b.rect(x - 5, y + 3, 2, 2, rgb('#8fc4dc'));
+    b.rect(x + 4, y + 3, 2, 2, rgb('#8fc4dc'));
   },
 };
 
@@ -1118,14 +1371,17 @@ export function objSprite(type, variant = 0) {
 
 /** Buildings are parameterised rather than enumerated, so they cache by config. */
 export function buildingSprite(cfg) {
-  const key = `b|${cfg.tw}|${cfg.wall}|${cfg.roof}|${cfg.roofStyle}|${cfg.timbered ? 1 : 0}|${cfg.wallH}|${cfg.roofH}|${cfg.signKey || ''}|${cfg.awning || ''}|${cfg.v || 0}|${cfg.windows ?? 2}|${cfg.storeys || 1}`;
+  // The board's colour is part of the picture, so it belongs in the key: two
+  // shops sharing a glyph but not a paint pot must not share a sprite.
+  const signBg = cfg.signBg || SIGN_BG[cfg.signKey] || P.plaster;
+  const key = `b|${cfg.tw}|${cfg.wall}|${cfg.roof}|${cfg.roofStyle}|${cfg.timbered ? 1 : 0}|${cfg.wallH}|${cfg.roofH}|${cfg.signKey || ''}|${signBg}|${cfg.awning || ''}|${cfg.v || 0}|${cfg.windows ?? 2}|${cfg.storeys || 1}`;
   return cache.get(key, () => {
     const w = cfg.tw * TILE + 16;
     const h = (cfg.wallH || 26) + (cfg.roofH || 22) + 16;
     const buf = new PixBuf(w, h);
     paintBuilding(buf, {
       ...cfg,
-      sign: cfg.signKey ? { icon: SIGN_ICONS[cfg.signKey], bg: cfg.signBg || P.plaster, side: cfg.signSide || 0 } : null,
+      sign: cfg.signKey ? { icon: SIGN_ICONS[cfg.signKey], bg: signBg, side: cfg.signSide || 0 } : null,
     });
     return buf.toCanvas();
   });

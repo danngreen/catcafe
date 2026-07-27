@@ -68,7 +68,7 @@ export const SHOPS = [
     greet: 'Everything you can smell is for sale. Including the smell.',
   },
   {
-    id: 'petshop', town: 'brambleford', name: 'Whisker & Paw', sign: 'pet',
+    id: 'petshop', town: 'brambleford', name: 'Whisker & Paw', sign: 'petshop',
     kind: 'cats', stock: 'petshop', keeper: 'marigold', tw: 5, roof: '#c86a4a',
     hours: [9, 18], days: [1, 2, 3, 4, 5, 6],
     greet: 'Come to look, or come to take somebody home?',
@@ -99,7 +99,7 @@ export const SHOPS = [
     greet: 'You want it built, or you want it built *well*? Different prices.',
   },
   {
-    id: 'hardware', town: 'hollowdown', name: 'The Chalk Pit Store', sign: 'builder',
+    id: 'hardware', town: 'hollowdown', name: 'The Chalk Pit Store', sign: 'hardware',
     kind: 'shop', stock: 'hardware', keeper: 'flint', tw: 4, roof: '#7d8794',
     hours: [8, 17], days: [1, 2, 3, 4, 5, 6],
     greet: 'Timber, tile, slate, nails. Not cats. People keep asking.',
@@ -117,7 +117,7 @@ export const SHOPS = [
     greet: 'Landed this morning. The cats can smell it from the hill.',
   },
   {
-    id: 'harbour', town: 'saltmere', name: 'Harbour Supplies', sign: 'grocer',
+    id: 'harbour', town: 'saltmere', name: 'Harbour Supplies', sign: 'harbour',
     kind: 'shop', stock: 'harbour', keeper: 'anchor', tw: 4, roof: '#b2624b',
     hours: [7, 17], days: [0, 1, 2, 3, 4, 5, 6],
     greet: 'Rope, salt, tea, biscuits. In that order of importance.',
@@ -129,7 +129,7 @@ export const SHOPS = [
     greet: 'Sit on anything you like. Except the chaise. That one bites.',
   },
   {
-    id: 'flea', town: 'thistlewick', name: 'Thistlewick Flea Market', sign: 'furniture',
+    id: 'flea', town: 'thistlewick', name: 'Thistlewick Flea Market', sign: 'flea',
     kind: 'flea', keeper: 'rummage', tw: 6, roof: '#d0a659', roofStyle: 'thatch',
     hours: [8, 15], days: [0, 6],
     greet: 'Different junk every week. Some of it is even good.',
@@ -141,19 +141,19 @@ export const SHOPS = [
     greet: 'Forty-one varieties. I will describe them all if you let me.',
   },
   {
-    id: 'exotic', town: 'thistlewick', name: 'Far Fields Cattery', sign: 'pet',
+    id: 'exotic', town: 'thistlewick', name: 'Far Fields Cattery', sign: 'exotic',
     kind: 'cats', stock: 'exotic', keeper: 'sable', tw: 5, roof: '#8a72d6',
     hours: [11, 17], days: [3, 5, 6],
     greet: 'These are not ordinary cats. The prices reflect that.',
   },
   {
-    id: 'herbalist', town: 'oakhollow', name: 'Root & Remedy', sign: 'book',
+    id: 'herbalist', town: 'oakhollow', name: 'Root & Remedy', sign: 'herbalist',
     kind: 'shop', stock: 'herbalist', keeper: 'yarrow', tw: 4, roof: '#6b7d54', roofStyle: 'thatch',
     hours: [8, 18], days: [0, 1, 2, 3, 4, 5, 6],
     greet: 'Everything here was a plant this morning.',
   },
   {
-    id: 'beekeeper', town: 'oakhollow', name: 'Hum & Comb', sign: 'grocer',
+    id: 'beekeeper', town: 'oakhollow', name: 'Hum & Comb', sign: 'beekeeper',
     kind: 'shop', stock: 'beekeeper', keeper: 'clover', tw: 3, roof: '#d0a659', roofStyle: 'thatch',
     hours: [9, 16], days: [1, 3, 5, 6],
     greet: "Don't mind the bees. They're only curious.",

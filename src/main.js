@@ -742,7 +742,16 @@ class Game {
     const st = this.state;
     const emp = st.employee;
     const spot = st.cafeMap && st.cafeMap.meta && st.cafeMap.meta.staffSpot;
-    if (!emp || !emp.onDuty || !spot) { this.employeeActor = null; return; }
+    // Clocking on and off is worth saying out loud wherever you are: it is the
+    // moment the counter starts and stops being covered, and you are usually
+    // somewhere else when it happens.
+    const on = st.cafeSim.staffOn;
+    if (emp && this._staffWas !== undefined && this._staffWas !== on) {
+      this.hud.toast(`${emp.name} is clocking ${on ? 'in' : 'out'}.`, on ? 'good' : 'info', 5);
+      audio.sfx(on ? 'ui_ok' : 'ui_back', { gain: 0.4 });
+    }
+    this._staffWas = emp ? on : undefined;
+    if (!emp || !on || !spot) { this.employeeActor = null; return; }
     if (!this.employeeActor || this.employeeActor.def.id !== emp.id) {
       const def = HIRE_BY_ID[emp.id] || { id: emp.id, name: emp.name };
       this.employeeActor = new Employee({ ...def, name: emp.name },
@@ -2208,7 +2217,7 @@ class TitleScreen extends Screen {
     const shop = buildingSprite({
       tw: 3, wall: this.style.wall, roof: this.style.roof, roofStyle: 'tile',
       timbered: false, wallH: 24, roofH: 20, windows: 1,
-      signKey: 'cafe', signBg: '#f3e3c6', awning: this.style.awning, v: 0,
+      signKey: 'cafe', signBg: null, awning: this.style.awning, v: 0,
     });
     const sw = shop.width * Z, sh = shop.height * Z;
     const bx = x + 14, by = y + 22;

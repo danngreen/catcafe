@@ -23,6 +23,12 @@ const STAPLE_IDS = MENU_IDS.filter((id) => ITEMS[id].appeal <= 1.05);
 // thing they asked for, before giving up on you.
 const ASK_PATIENCE = 16;
 
+/** How many hours the posted sign asks of the staff. */
+export function shiftHours(hours) {
+  const [o, c] = hours || [8, 18];
+  return Math.max(0, Math.round(c - o));
+}
+
 /** The nearest tile you could stand on, spiralling out. Null if boxed in. */
 function nearestFree(map, tx, ty) {
   for (let r = 1; r <= 6; r++) {
@@ -167,26 +173,40 @@ export class Cafe {
    */
   get minded() { return this.state.cafeOccupied || this.state.inCafe; }
 
+  /**
+   * Whether the employee is at the counter right now. They are paid by the
+   * hour for the hours you post, so those are the hours they work: rostered,
+   * sign turned to open, and inside the posted span.
+   */
+  get staffOn() {
+    const st = this.state;
+    if (!st.employee || !st.employee.onDuty || !st.shopOpen) return false;
+    const h = st.clock.hourFloat;
+    const [o, c] = st.shopHours;
+    return h >= o && h < c;
+  }
+
   get isOpen() {
     const st = this.state;
     if (!st.shopOpen) return false;
-    const h = st.clock.hourFloat;
-    const [o, c] = st.shopHours;
-    if (h < o || h >= c) return false;
-    // Somebody has to be minding the place.
-    return this.minded || (st.employee && st.employee.onDuty);
+    // Standing behind your own counter trumps the posted hours. They say when
+    // the staff are in, not when the door is locked — if you want to serve
+    // somebody at eleven at night, that is between you and them.
+    if (this.minded) return true;
+    return this.staffOn;
   }
 
   /** Why we're closed — shown on the cafe screen. */
   closedReason() {
     const st = this.state;
     if (!st.shopOpen) return 'Closed (you set the sign to CLOSED)';
+    if (this.minded) return '';
     const h = st.clock.hourFloat;
     const [o, c] = st.shopHours;
-    if (h < o) return `Opens at ${fmtHour(o)}`;
-    if (h >= c) return `Closed for the day at ${fmtHour(c)}`;
-    if (!this.minded && !(st.employee && st.employee.onDuty)) return 'Nobody is minding the counter';
-    return '';
+    const staffed = st.employee && st.employee.onDuty;
+    if (h < o) return staffed ? `${st.employee.name} clocks in at ${fmtHour(o)}` : `Opens at ${fmtHour(o)}`;
+    if (h >= c) return staffed ? `${st.employee.name} clocked off at ${fmtHour(c)}` : `Closed for the day at ${fmtHour(c)}`;
+    return 'Nobody is minding the counter';
   }
 
   // ------------------------------------------------------------- live sim
@@ -289,7 +309,7 @@ export class Cafe {
     let rate = this.charm() * 0.45 * hourDemand(h);
     if (st.clock.isWeekend) rate *= 1.65;
     rate *= this.weatherPull();
-    if (st.employee && !this.minded) rate *= 0.55 + st.employee.quality * 0.5;
+    if (this.staffOn && !this.minded) rate *= 0.55 + st.employee.quality * 0.5;
     // A visibly full room turns people away before they even try the door.
     const free = this.freeSeats().length;
     const total = this.seats().length || 1;
@@ -391,7 +411,7 @@ export class Cafe {
       case 'waiting': {
         c.stateT += dt;
         c.moving = false;
-        const onDuty = !!(st.employee && st.employee.onDuty);
+        const onDuty = this.staffOn;
         const staffed = this.minded || onDuty;
         // Serving them yourself is faster and they like you more for it.
         const autoDelay = onDuty ? 4.5 - st.employee.quality * 2 : 5;
@@ -647,7 +667,7 @@ export class Cafe {
     let pay = it.price;
     let sat = 0.45 + it.appeal * 0.16;
     if (byPlayer) { sat += 0.22; pay = Math.round(pay * 1.1); }        // a tip for good service
-    if (st.employee && st.employee.onDuty && !this.minded) {
+    if (this.staffOn && !this.minded) {
       sat *= 0.55 + st.employee.quality * 0.6;
     }
     c.satisfaction = clamp(c.satisfaction * 0.4 + sat, 0, 1.6);
@@ -814,12 +834,20 @@ export class Cafe {
     if (upkeep) summary.lines.push({ text: `Cat upkeep: ${upkeep}`, tone: 'cost' });
 
     if (st.employee) {
-      const wage = st.employee.wage;
+      // Paid for the hours you posted, not for the day. Shorter hours are a
+      // real saving and a real cost, which is the whole point of posting them.
+      const hours = st.employee.onDuty && st.shopOpen ? shiftHours(st.shopHours) : 0;
+      const wage = Math.round(hours * st.employee.wage);
       summary.costs += wage;
-      summary.lines.push({ text: `${st.employee.name}'s wage: ${wage}`, tone: 'cost' });
+      summary.lines.push({
+        text: hours
+          ? `${st.employee.name}: ${hours}h at ${st.employee.wage} = ${wage}`
+          : `${st.employee.name} was not called in.`,
+        tone: 'cost',
+      });
       // Underpaid staff get worse; well-paid staff get better, up to a point.
       const fair = st.employee.fairWage;
-      const ratio = wage / fair;
+      const ratio = st.employee.wage / fair;
       const target = clamp((ratio - 0.55) / 0.9, 0.05, 1);
       st.employee.quality += (target - st.employee.quality) * 0.4;
       if (ratio < 0.7 && rng() < 0.28) {
@@ -946,14 +974,16 @@ export function fmtHour(h) {
 }
 
 /** Candidates you can hire, once you can afford to. */
+// Wages are per hour. A day is however many hours you post on the sign, so
+// the same person costs what you ask of them.
 export const HIRE_POOL = [
-  { id: 'saffron', name: 'Saffron', fairWage: 90, blurb: 'Quick, chatty, remembers everyone\'s order.',
+  { id: 'saffron', name: 'Saffron', fairWage: 9, blurb: 'Quick, chatty, remembers everyone\'s order.',
     look: { species: 'fox', coat: 'fox', cloth: '#e08b3f' } },
-  { id: 'moss', name: 'Moss', fairWage: 70, blurb: 'Slow but unfailingly kind. Customers relax around him.',
+  { id: 'moss', name: 'Moss', fairWage: 7, blurb: 'Slow but unfailingly kind. Customers relax around him.',
     look: { species: 'bear', coat: 'bear', cloth: '#6b9e8f' } },
-  { id: 'thimble', name: 'Thimble', fairWage: 60, blurb: 'Small, tireless, slightly frightened of the espresso machine.',
+  { id: 'thimble', name: 'Thimble', fairWage: 6, blurb: 'Small, tireless, slightly frightened of the espresso machine.',
     look: { species: 'mouse', coat: 'grey', cloth: '#8fa8c9' } },
-  { id: 'copper', name: 'Copper', fairWage: 120, blurb: 'Worked market stalls for years. Sells like breathing.',
+  { id: 'copper', name: 'Copper', fairWage: 12, blurb: 'Worked market stalls for years. Sells like breathing.',
     look: { species: 'squirrel', coat: 'ginger', cloth: '#c05a7a' } },
 ];
 

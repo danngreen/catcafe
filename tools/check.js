@@ -77,6 +77,9 @@ const BUDGET = {
   netlivesave: 22000,
   weather: 16000,
   weathercafe: 9000,
+  hourly: 9000,
+  signs: 6000,
+  signkeys: 6000,
   skyshot: 6000,
   // Halves of a pair: they wait for the other browser to turn up.
   netwalkhost: 62000,
@@ -98,11 +101,11 @@ const GROUPS = {
   quests: ['ghostquest', 'deliverquest', 'journalstep', 'questrepair', 'ghoststuck',
     'barriers', 'nightfolk', 'nightplaces'],
   cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers', 'employee',
-    'weathercafe'],
+    'weathercafe', 'hourly'],
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',
     'barriers', 'eastpass', 'barrierreach', 'passcleared', 'debugpos', 'weather'],
   ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'exterior',
-    'summarylines', 'journalstep', 'titleme'],
+    'summarylines', 'journalstep', 'titleme', 'signkeys'],
   cutscene: ['taxi', 'sleep', 'door'],
   mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile'],
   // Single-process networked runs. The paired ones need two browsers at once
