@@ -912,6 +912,73 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (drawn.length < tabs.length * runs.length) {
           window.__errors.push('not every tab was drawn: ' + window.__book2);
         }
+      } else if (SCRIPT === 'wagekeys') {
+        // The Staff tab, driven from the keyboard the way a player drives it.
+        const st = g.state;
+        st.reputation = 0.8;
+        st.money = 9000;
+        st.shopHours = [8, 18];
+        st.employee = { name: 'Saffron', id: 'saffron', wage: 9, fairWage: 9, quality: 0.6, onDuty: true, hourly: true };
+        key('KeyC', true); await wait(120); key('KeyC', false);
+        await wait(350);
+        const scr = g.screens[g.screens.length - 1];
+        const press = async (code, n = 1) => {
+          for (let i = 0; i < n; i++) { key(code, true); await wait(110); key(code, false); await wait(150); }
+        };
+
+        // Onto the Staff tab, then down onto the wage row.
+        scr.tab = 3; scr.index = 0; scr.scroll = 0;
+        await wait(200);
+        await press('ArrowDown');
+        const onWage = scr.currentList()[scr.index]?.kind;
+
+        // Left and right move the wage, and must not page off the tab.
+        const start = st.employee.wage;
+        await press('ArrowRight', 3);
+        const up = st.employee.wage;
+        const tabAfterUp = scr.tab;
+        await press('ArrowLeft', 5);
+        const down = st.employee.wage;
+        const tabAfterDown = scr.tab;
+
+        // It has to go under where it started — the old step was ten with a
+        // floor of ten, so cutting an hourly wage of nine put it up to ten.
+        const wentUnder = down < start;
+
+        // Off the wage row, left and right page between tabs again.
+        await press('ArrowDown');
+        const tabBefore = scr.tab;
+        await press('ArrowRight');
+        const paged = scr.tab !== tabBefore;
+
+        // Arriving on the Hours tab must not also change the hours. Sit one
+        // tab to the left of it and page across.
+        st.shopHours = [8, 18];
+        scr.tab = 3; scr.index = 0; scr.scroll = 0;
+        await wait(200);
+        const hoursBefore = st.shopHours.join('-');
+        await press('ArrowRight');
+        const landedOn = scr.tab;
+        const hoursAfter = st.shopHours.join('-');
+
+        // ...but once you are there, left and right do work.
+        await press('ArrowRight');
+        const hoursMoved = st.shopHours.join('-');
+
+        key('Escape', true); await wait(120); key('Escape', false);
+        await wait(250);
+
+        window.__wage = `row=${onWage} wage ${start}->${up}->${down}`
+          + ` tabs ${tabAfterUp}/${tabAfterDown} pagedOffWageRow=${paged}`
+          + ` land=${landedOn} hours ${hoursBefore}->${hoursAfter}->${hoursMoved}`;
+        if (onWage !== 'wage') window.__errors.push('the wage row is not where it should be: ' + window.__wage);
+        if (up <= start) window.__errors.push('right does not raise the wage: ' + window.__wage);
+        if (!wentUnder) window.__errors.push('left never brings the wage down: ' + window.__wage);
+        if (tabAfterUp !== 3 || tabAfterDown !== 3) window.__errors.push('changing the wage paged off the tab: ' + window.__wage);
+        if (!paged) window.__errors.push('left and right stopped paging between tabs: ' + window.__wage);
+        if (landedOn !== 4) window.__errors.push('did not reach the Hours tab: ' + window.__wage);
+        if (hoursAfter !== hoursBefore) window.__errors.push('arriving on the Hours tab changed the hours: ' + window.__wage);
+        if (hoursMoved === hoursAfter) window.__errors.push('the hours will not move once you are there: ' + window.__wage);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -2996,6 +3063,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__patio ? ` ${window.__patio}` : '')
         + (window.__dead ? ` ${window.__dead}` : '')
         + (window.__book2 ? ` ${window.__book2}` : '')
+        + (window.__wage ? ` ${window.__wage}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

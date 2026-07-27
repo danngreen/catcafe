@@ -83,6 +83,7 @@ const BUDGET = {
   patio: 9000,
   deaditems: 9000,
   booktabs: 16000,
+  wagekeys: 16000,
   patioshot: 9000,
   skyshot: 6000,
   // Halves of a pair: they wait for the other browser to turn up.
@@ -109,7 +110,7 @@ const GROUPS = {
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',
     'barriers', 'eastpass', 'barrierreach', 'passcleared', 'debugpos', 'weather'],
   ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'exterior',
-    'summarylines', 'journalstep', 'titleme', 'signkeys', 'patio', 'deaditems', 'booktabs'],
+    'summarylines', 'journalstep', 'titleme', 'signkeys', 'patio', 'deaditems', 'booktabs', 'wagekeys'],
   cutscene: ['taxi', 'sleep', 'door'],
   mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile'],
   // Single-process networked runs. The paired ones need two browsers at once

@@ -253,7 +253,8 @@ out is what you walk around in.
 while you're out exploring. They are paid by the hour, and the hours are the
 ones you post on the sign — 8 to 4 bills eight hours — so shorter days are a
 real saving and a real cost. Pay them fairly: underpay and service degrades and
-they eventually quit; overpay and you won't clear your costs. Posted hours are
+they eventually quit; overpay and you won't clear your costs — left and right
+on the wage row move it a pound an hour. Posted hours are
 when the staff are in, not when the door is locked; behind your own counter you
 can serve somebody at any hour.
 

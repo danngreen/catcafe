@@ -542,9 +542,20 @@ export class CafeScreen extends Screen {
         break;
       }
     }
-    if (this.tab !== 4) {
-      if (input.repeat('left', dt)) { this.tab = (this.tab - 1 + TABS.length) % TABS.length; this.index = 0; this.scroll = 0; audio.sfx('ui_move'); }
-      if (input.repeat('right', dt)) { this.tab = (this.tab + 1) % TABS.length; this.index = 0; this.scroll = 0; audio.sfx('ui_move'); }
+    // Some rows use left and right for themselves — the hours, and the wage.
+    // Everywhere else they page between tabs.
+    if (!this.ownsLeftRight()) {
+      const step = input.repeat('left', dt) ? -1 : input.repeat('right', dt) ? 1 : 0;
+      if (step) {
+        this.tab = (this.tab + step + TABS.length) % TABS.length;
+        this.index = 0;
+        this.scroll = 0;
+        audio.sfx('ui_move');
+        // Arriving somewhere is not also an instruction to change what is
+        // there. Without this the same press lands twice: once to page onto
+        // the Hours tab, and again to move your opening time an hour.
+        return;
+      }
     }
 
     const list = this.currentList();
@@ -554,6 +565,19 @@ export class CafeScreen extends Screen {
       const vis = 7;
       if (this.index < this.scroll) this.scroll = this.index;
       if (this.index >= this.scroll + vis) this.scroll = this.index - vis + 1;
+    }
+
+    if (this.tab === 3 && st.employee && this.currentList()[this.index]?.kind === 'wage') {
+      // Wages go up and down by the hour, which is what they are now paid in.
+      // They used to step by ten with a floor of ten, sized for a daily rate —
+      // against an hourly one that made cutting a nine an hour into a rise.
+      const d = input.repeat('right', dt) ? 1 : input.repeat('left', dt) ? -1 : 0;
+      if (d) {
+        st.employee.wage = clamp(st.employee.wage + d, 1, 999);
+        st.touch('employee');
+        audio.sfx(d > 0 ? 'ui_ok' : 'ui_back', { gain: 0.5 });
+        this.flash(`Wage ${d > 0 ? 'raised' : 'cut'} to ${st.employee.wage} an hour.`);
+      }
     }
 
     if (this.tab === 4) {
@@ -620,8 +644,7 @@ export class CafeScreen extends Screen {
     if (st.employee) {
       const list = this.currentList();
       const row = list[this.index];
-      if (row?.kind === 'wage_up') { st.employee.wage += 10; this.flash(`Wage raised to ${st.employee.wage}.`); audio.sfx('ui_ok'); }
-      else if (row?.kind === 'wage_down') { st.employee.wage = Math.max(10, st.employee.wage - 10); this.flash(`Wage cut to ${st.employee.wage}.`); audio.sfx('ui_back'); }
+      if (row?.kind === 'wage') { this.flash('Left and right to change the wage.'); audio.sfx('ui_move', { gain: 0.4 }); }
       else if (row?.kind === 'duty') { st.employee.onDuty = !st.employee.onDuty; this.flash(st.employee.onDuty ? 'On the rota.' : 'Off the rota — no hours, no wages.'); audio.sfx('ui_ok'); }
       else if (row?.kind === 'fire') { this.flash(`${st.employee.name} packs up and goes.`); st.employee = null; audio.sfx('ui_back'); }
       st.touch('employee');
@@ -647,13 +670,20 @@ export class CafeScreen extends Screen {
     return 'none';
   }
 
+  /** Does the row under the cursor want left and right for itself? */
+  ownsLeftRight() {
+    if (this.tab === 4) return true;
+    if (this.tab !== 3 || !this.game.state.employee) return false;
+    return this.currentList()[this.index]?.kind === 'wage';
+  }
+
   currentList() {
     const st = this.game.state;
     switch (this.tab) {
       case 1: return Object.keys(st.stock).filter((id) => st.cafeSim.stockCount(id) > 0);
       case 2: return st.cats;
       case 3: return st.employee
-        ? [{ kind: 'duty' }, { kind: 'wage_up' }, { kind: 'wage_down' }, { kind: 'fire' }]
+        ? [{ kind: 'duty' }, { kind: 'wage' }, { kind: 'fire' }]
         : HIRE_POOL;
       case 4: return [0, 1];
       default: return [];
@@ -854,8 +884,8 @@ export class CafeScreen extends Screen {
       const rows = [
         [`On the rota: ${e.onDuty ? 'yes' : 'no'}`,
           `They work your posted hours — ${fmtHour(st.shopHours[0])} to ${fmtHour(st.shopHours[1])}.`],
-        [`Raise wage (now ${e.wage}/hour)`, `A fair rate here is about ${e.fairWage} an hour.`],
-        ['Cut wage', 'Cheaper, but service suffers and they may leave.'],
+        [`Wage: < ${e.wage}/hour >`,
+          `A fair rate here is about ${e.fairWage} an hour. Under it and service suffers.`],
         ['Let them go', 'No hard feelings.'],
       ];
       rows.forEach(([label, note], i) => {
