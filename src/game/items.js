@@ -60,9 +60,9 @@ export const ITEMS = {
   brush: { name: 'Grooming Brush', cat: CAT.SUPPLY, icon: 'brush', cost: 60, tool: true, desc: 'Do a rough job yourself between proper groomings.' },
   ribbon: { name: 'Ribbon Collar', cat: CAT.SUPPLY, icon: 'ribbon', cost: 40, wearable: true, appeal: 0.08, desc: 'Purely decorative. Extremely effective.' },
   bell: { name: 'Little Bell', cat: CAT.SUPPLY, icon: 'bell', cost: 55, wearable: true, appeal: 0.12, desc: 'You always know where they are. So does everyone else.' },
-  toy_ball: { name: 'Bouncy Ball', cat: CAT.SUPPLY, icon: 'toyBall', cost: 28, placeable: 'toyBall', desc: 'Ends up under the furniture within the hour.' },
-  toy_yarn: { name: 'Ball of Yarn', cat: CAT.SUPPLY, icon: 'toyYarn', cost: 24, placeable: 'toyYarn', desc: 'Classic. Undefeated.' },
-  toy_wand: { name: 'Feather Wand', cat: CAT.SUPPLY, icon: 'toyWand', cost: 46, placeable: 'toyWand', desc: 'Customers cannot resist picking this up.' },
+  toy_ball: { name: 'Bouncy Ball', cat: CAT.SUPPLY, icon: 'toyBall', cost: 28, place: 'toyBall', appeal: 0.2, catJoy: 0.8, desc: 'Ends up under the furniture within the hour. Put it down and the cats will find it.' },
+  toy_yarn: { name: 'Ball of Yarn', cat: CAT.SUPPLY, icon: 'toyYarn', cost: 24, place: 'toyYarn', appeal: 0.25, catJoy: 0.9, desc: 'Classic. Undefeated. Set it out and see.' },
+  toy_wand: { name: 'Feather Wand', cat: CAT.SUPPLY, icon: 'toyWand', cost: 46, place: 'toyWand', appeal: 0.5, catJoy: 1.4, wand: true, desc: 'Stand it in the room and customers cannot resist picking it up. Neither can the cats, which is the point.' },
 
   // ------------------------------------------------------------- furniture
   f_chair: { name: 'Wooden Chair', cat: CAT.FURNITURE, icon: 'chair', cost: 55, place: 'chair', seats: 1, appeal: 0.4, desc: 'A place to sit. The foundation of hospitality.' },
@@ -101,7 +101,7 @@ export const ITEMS = {
   pickaxe: { name: 'Chalk Pick', cat: CAT.KEY, icon: 'hammer', cost: 320, desc: 'Heavy. Splits chalk like cheese.' },
   shears: { name: 'Hedge Shears', cat: CAT.KEY, icon: 'hammer', cost: 180, desc: 'For brambles that have got ideas above their station.' },
   rope: { name: 'Coil of Rope', cat: CAT.KEY, icon: 'bag', cost: 150, desc: 'Twenty fathoms of good hemp.' },
-  valley_map: { name: 'Valley Map', cat: CAT.KEY, icon: 'map', cost: 240, desc: 'Hand-drawn, slightly wrong about the north, but it shows the taxi perches.' },
+  valley_map: { name: 'Valley Map', cat: CAT.KEY, icon: 'map', cost: 240, reveals: true, desc: 'Hand-drawn, slightly wrong about the north, but it shows every village and every taxi perch — including the ones you have not walked to yet.' },
   honey: { name: 'Jar of Honey', cat: CAT.KEY, icon: 'honey', cost: 55, desc: 'Sunlight in a jar. Unlocks honey bakes if the baker sees it.' },
   seashell: { name: 'Spiral Shell', cat: CAT.KEY, icon: 'shell', desc: 'Holds the sound of the sea, or of your own blood, depending who you ask.' },
   wildflowers: { name: 'Wildflowers', cat: CAT.KEY, icon: 'bouquet', desc: 'Picked from the meadow. Wilting slightly, still lovely.' },

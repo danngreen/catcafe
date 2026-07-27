@@ -53,10 +53,23 @@ everyone has something plain they'll settle for, so some walk out no matter what
 The morning card tells you what was asked for that you hadn't got, which is
 tomorrow's shopping list.
 
-**Your employee** stands behind the counter while they're on duty, and works
+**Your employee** stands behind the counter during your posted hours, and works
 the queue whether or not you're in the room — customers ask for their list and
-your employee answers it, the same cycle you'd press Space for. Off duty they
-go home. Seeing them there is most of what you're paying for.
+your employee answers it, the same cycle you'd press Space for. They clock in
+and out on the hour and tell you when they do. Seeing them there is most of what
+you're paying for.
+
+**Weather** decides how many people leave the house. Rain halves the crowd and
+snow more than halves it — unless you have a fireplace, which wins most of that
+back. It only helps when there is something to shelter from; on a sunny day a
+fire is just nice furniture. What people ask for follows the temperature too:
+on a hot day the orders run to lemonade, iced tea and ice cream and almost
+nobody wants cocoa, and when it snows that reverses completely. The morning card
+tells you what the day is going to do, so the shopping trip is a decision.
+
+The sky is worked out from the valley's seed and the date rather than stored, so
+everyone in a shared valley is standing in the same rain and none of it is sent
+over the network. Snow belongs to winter, and a wet week feels like a wet week.
 
 Open the map in a shared valley and everyone else is on it, named, with anyone
 indoors greyed out. The browser remembers the name and colours you last played
@@ -220,8 +233,15 @@ the first page to get a plan of your cafe. Furniture you've bought sits in your
 bag in the colourway you chose at the till — chairs, stools, sofas and dressed
 tables all come in three. Space to put a piece down, X to pick it back up,
 M/I or Shift to change which piece, Esc when you're done. The Style tab changes
-the floor, and the roof, awning and wall colour of the shopfront — it shows a
-live preview of the exterior, since you can't see it from inside.
+the roof, awning and wall colour of the shopfront — it shows a live preview of
+the exterior, since you can't see it from inside.
+
+The Floors tab lays a floor per room rather than one for the whole cafe: oak or
+walnut boards, chequer or terracotta tile, flagstones, three carpets — and three
+that mean outside. Lay paving, brick or decking and that room becomes a patio,
+with black metal railings round it instead of plaster walls. Velvet & Oak sell
+the furniture to put on it: patio chairs, stools, tables, a garden bench, an
+umbrella table, and a stone fountain that costs an absurd amount and is worth it.
 
 Adding *rooms* needs a hired crew: Trowel & Sons in Hollowdown (weekdays,
 7am–4pm) sell builders and timber, and your crew size caps how much floor you're
@@ -230,8 +250,12 @@ is drawn with the same tiles and sprites as the real interior, so what you lay
 out is what you walk around in.
 
 **Staff.** Once you have a reputation, hire someone so the cafe keeps earning
-while you're out exploring. Pay them fairly: underpay and service degrades and
-they eventually quit; overpay and you won't clear your costs.
+while you're out exploring. They are paid by the hour, and the hours are the
+ones you post on the sign — 8 to 4 bills eight hours — so shorter days are a
+real saving and a real cost. Pay them fairly: underpay and service degrades and
+they eventually quit; overpay and you won't clear your costs. Posted hours are
+when the staff are in, not when the door is locked; behind your own counter you
+can serve somebody at any hour.
 
 ## The valley
 

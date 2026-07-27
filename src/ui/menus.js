@@ -1223,6 +1223,9 @@ export class MapScreen extends Screen {
     // Side list: towns as headings, the shops inside them indented beneath.
     const lx = x + w - 128;
     drawText(ctx, this.pickMode ? 'Destinations' : 'Places found', lx, y + 22, { color: P.uiGold, shadow: P.uiShadow });
+    if (this.rows.some((r) => r.place && r.place.fromMap)) {
+      drawTextRight(ctx, '* from the map', x + w - 8, y + 22, { color: P.uiTextDim, shadow: P.uiShadow });
+    }
     const VIS = 13;
     const selRow = this.rows.findIndex((r) => r.place === this.places[this.index]);
     const start = clamp(selRow - Math.floor(VIS / 2), 0, Math.max(0, this.rows.length - VIS));
@@ -1238,8 +1241,13 @@ export class MapScreen extends Screen {
       const sel = row.place === this.places[this.index];
       const ind = row.depth * 8;
       if (sel) cursor(ctx, lx + ind - 8, ry, this.t);
-      const col = sel ? P.uiGold : row.town ? P.uiText : P.uiTextDim;
-      drawText(ctx, row.name || row.place.name, lx + ind, ry, { color: col, shadow: P.uiShadow });
+      // Somewhere the map told you about rather than somewhere you have been.
+      // You can still fly there — that is what the map is for — but it should
+      // not pretend you have walked it.
+      const onlyOnMap = row.place.fromMap;
+      const col = sel ? P.uiGold : onlyOnMap ? P.uiTextDim : row.town ? P.uiText : P.uiTextDim;
+      const label = (row.name || row.place.name) + (onlyOnMap ? ' *' : '');
+      drawText(ctx, label, lx + ind, ry, { color: col, shadow: P.uiShadow });
       if (row.town) {
         ctx.fillStyle = sel ? P.uiGoldDk : P.uiEdgeDk;
         ctx.fillRect(lx, ry + 8, textWidth(row.place.name), 1);

@@ -308,6 +308,15 @@ class Game {
     for (const d of this.doors) this.doorByShop.set(d.shop, d);
     for (const l of this.landmarks) this.doorByShop.set(l.id, { shop: l.id, x: l.x, y: l.y, name: l.name });
 
+    // What the Valley Map knows. Rebuilt with the world rather than saved,
+    // because it describes the valley and not the player.
+    if (this.state) {
+      this.state.atlas = [
+        ...Object.values(this.towns).map((t) => ({ id: t.id, name: t.name, x: t.hub.x, y: t.hub.y, town: null })),
+        ...this.landmarks.map((l) => ({ id: l.id, name: l.name, x: l.x, y: l.y, town: null })),
+      ];
+    }
+
     // The one building whose look the player controls.
     this.cafeBuilding = this.overworld.objects.find((o) => o.data && o.data.shop === 'cafe');
 

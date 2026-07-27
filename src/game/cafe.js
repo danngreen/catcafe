@@ -81,6 +81,15 @@ export class Cafe {
     return a;
   }
 
+  /**
+   * A feather wand in the room is worth more than its appeal: somebody always
+   * picks it up, the cats come over, and everyone stays longer. Which is what
+   * the thing has claimed to do since the day it went on sale.
+   */
+  wandsOut() {
+    return this.state.cafe.furniture.filter((f) => f.type === 'toyWand').length;
+  }
+
   /** How much the cats themselves draw a crowd. */
   catAppeal() {
     return this.state.cats.reduce((s, c) => s + c.appeal, 0);
@@ -466,15 +475,18 @@ export class Cafe {
         c.moving = false;
         c.stayT -= dt;
 
-        // A cat wandering past is the whole reason they came.
+        // A cat wandering past is the whole reason they came. A wand in the
+        // room turns that from something you wait for into something they
+        // make happen: they reach a cat sooner and it is worth more.
+        const wand = 1 + Math.min(2, this.wandsOut()) * 0.5;
         for (const cat of st.catActors) {
           const d = Math.hypot(cat.x - c.x, cat.y - c.y);
-          if (d < 26) {
-            c.pettingT += dt;
+          if (d < 26 * wand) {
+            c.pettingT += dt * wand;
             if (c.pettingT > 1.4) {
               c.pettingT = 0;
-              c.satisfaction = clamp(c.satisfaction + 0.05 * cat.appeal * 0.6, 0, 1.6);
-              c.stayT += 6;
+              c.satisfaction = clamp(c.satisfaction + 0.05 * cat.appeal * 0.6 * wand, 0, 1.6);
+              c.stayT += 6 * wand;
               if (rng() < 0.5) c.showEmote('heart', 1.8);
               if (rng() < 0.25) audio.sfx('purr', { gain: 0.3 });
             }

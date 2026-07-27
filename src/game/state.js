@@ -48,6 +48,10 @@ export class GameState {
     // Set once the valley is built. The weather is derived from it rather than
     // stored, so it never needs saving or sending.
     this.worldSeed = 0;
+    // Everywhere the valley has, whether or not you have been. Only readable
+    // with a map in the bag, and never saved — it is a fact about the world,
+    // not about you.
+    this.atlas = [];
     this.playerLook = { species: 'cat', coat: 'ginger', cloth: '#5b8fd6' };
     this.playerName = null;   // chosen when joining a shared valley
     this.mail = [];             // letters waiting to be read
@@ -291,8 +295,21 @@ export class GameState {
   /** What the sky is doing. Cheap enough to ask for per frame. */
   get sky() { return weatherNow(this.worldSeed, this.clock); }
 
+  /**
+   * Everywhere you could pick on the map screen. Places you have walked to,
+   * plus — if you are carrying the Valley Map — every village and taxi perch
+   * in the valley, which is what the thing has always said it shows and until
+   * now did not. Marked so the map can say which is which; you still pay the
+   * fare either way.
+   */
   knownPlaces() {
-    return Object.entries(this.visited).map(([id, v]) => ({ id, ...v }));
+    const out = Object.entries(this.visited).map(([id, v]) => ({ id, ...v }));
+    if (!this.has('valley_map')) return out;
+    const seen = new Set(out.map((p) => p.id));
+    for (const p of this.atlas) {
+      if (!seen.has(p.id)) out.push({ ...p, fromMap: true });
+    }
+    return out;
   }
 
   taxiFare(place) {
