@@ -231,7 +231,10 @@ The Cats tab of the cafe book does the same thing in one keypress.
 **Furnishing and building.** Open the cafe book with **C** and press Space on
 the first page to get a plan of your cafe. Furniture you've bought sits in your
 bag in the colourway you chose at the till — chairs, stools, sofas and dressed
-tables all come in three. Space to put a piece down, X to pick it back up,
+tables all come in three. A piece about to go down is shown over the tiles it will actually cover, and
+whatever is already under the cursor is ringed whole — so a two-wide bookshelf
+reads as two tiles rather than as a guess. Any of a piece's tiles picks it up;
+there is no anchor square to find. Space to put a piece down, X to pick it back up,
 M/I or Shift to change which piece, Esc when you're done. On a phone the same
 three things are ACT, BACK and MENU, and the help line says so — it names the
 buttons you actually have rather than keys you haven't. The Style tab changes

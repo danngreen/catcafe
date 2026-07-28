@@ -357,7 +357,12 @@ export class BuildScreen extends Screen {
   furnitureAt(x, y) {
     return this.draft.furniture.find((f) => {
       const [tw, th] = footprint(f.type);
-      return x >= f.x && x < f.x + tw && y >= f.y && y < f.y + th;
+      // A piece grows up and to the right of its anchor — the map blocks
+      // `ty - j`, not `ty + j`, and the sprite's feet sit on the anchor row.
+      // Searching downwards instead put a two-high piece's footprint a row
+      // below where it was drawn, so an umbrella could only be picked up by
+      // standing under the tile it wasn't on.
+      return x >= f.x && x < f.x + tw && y <= f.y && y > f.y - th;
     }) || null;
   }
 
@@ -371,11 +376,19 @@ export class BuildScreen extends Screen {
     const [tw, th] = footprint(type);
     for (let j = 0; j < th; j++) {
       for (let i = 0; i < tw; i++) {
-        if (!this.roomAt(x + i, y + j)) return { ok: false, why: 'That would stick out of the building.' };
-        if (this.furnitureAt(x + i, y + j)) return { ok: false, why: 'Something is already there.' };
+        if (!this.roomAt(x + i, y - j)) return { ok: false, why: 'That would stick out of the building.' };
+        if (this.furnitureAt(x + i, y - j)) return { ok: false, why: 'Something is already there.' };
       }
     }
     return { ok: true };
+  }
+
+  /** The tiles a piece of this type would cover, anchored here. */
+  footprintTiles(type, x, y) {
+    const [tw, th] = footprint(type);
+    const out = [];
+    for (let j = 0; j < th; j++) for (let i = 0; i < tw; i++) out.push({ x: x + i, y: y - j });
+    return out;
   }
 
   countType(type) { return this.draft.furniture.filter((f) => f.type === type).length; }
@@ -463,17 +476,46 @@ export class BuildScreen extends Screen {
       drawTextCentered(ctx, label, sx(r.x) + (r.w * TILE) / 2, sy(r.y) - 12, { color: ok ? P.uiGreen : P.uiRed, shadow: '#000000' });
     }
 
-    // Ghost of the furniture about to be placed.
+    // Ghost of the furniture about to be placed, over the tiles it will
+    // actually cover. The sprite used to be centred on the single tile under
+    // the cursor rather than on its own footprint, so a two-wide bookshelf
+    // hovered half a tile to the left of where it would land.
     if (this.modeName === 'Furnish') {
       const stock = this.furnitureStock;
       const key = stock[this.palette];
-      if (key) {
-        const spr = objSprite(ITEMS[baseId(key)].place, variantOf(key));
+      const type = key ? ITEMS[baseId(key)].place : null;
+      if (type) {
+        const tiles = this.footprintTiles(type, this.cur.x, this.cur.y);
+        const ok = this.fits(type, this.cur.x, this.cur.y).ok;
+        // Shade every tile it lands on, so where it goes is a fact on screen
+        // rather than something to work out from the anchor.
+        ctx.globalAlpha = 0.22;
+        ctx.fillStyle = ok ? '#7fd46a' : '#e8615c';
+        for (const t of tiles) ctx.fillRect(sx(t.x), sy(t.y), TILE, TILE);
+        ctx.globalAlpha = 1;
+        const spr = objSprite(type, variantOf(key));
         if (spr) {
-          ctx.globalAlpha = 0.6;
-          ctx.drawImage(spr, Math.round(sx(this.cur.x) + (TILE - spr.width) / 2), Math.round(sy(this.cur.y) + TILE - spr.height));
+          const [tw] = footprint(type);
+          ctx.globalAlpha = ok ? 0.65 : 0.35;
+          ctx.drawImage(spr,
+            Math.round(sx(this.cur.x) + (tw * TILE - spr.width) / 2),
+            Math.round(sy(this.cur.y) + TILE - spr.height));
           ctx.globalAlpha = 1;
         }
+        ctx.strokeStyle = ok ? '#bdf5a8' : '#ff9a94';
+        ctx.lineWidth = 1;
+        for (const t of tiles) ctx.strokeRect(sx(t.x) + 0.5, sy(t.y) + 0.5, TILE - 1, TILE - 1);
+      }
+
+      // Whatever is already under the cursor, ringed whole — so it is obvious
+      // that pressing pick-up takes the entire bookshelf and which tiles it
+      // was standing on, from any of them.
+      const here = this.furnitureAt(this.cur.x, this.cur.y);
+      if (here) {
+        const own = this.footprintTiles(here.type, here.x, here.y);
+        ctx.strokeStyle = P.uiGold;
+        ctx.lineWidth = 1;
+        for (const t of own) ctx.strokeRect(sx(t.x) + 0.5, sy(t.y) + 0.5, TILE - 1, TILE - 1);
       }
     }
 

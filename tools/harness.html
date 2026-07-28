@@ -1131,6 +1131,138 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         } else if (!/\bX\b/.test(hint)) {
           window.__errors.push('the desktop hint stopped naming X: ' + window.__pickmob);
         }
+      } else if (SCRIPT === 'bigpieces') {
+        // Multi-tile pieces: any of their tiles picks them up, and the ghost
+        // sits over the tiles they will actually land on.
+        const { OBJECTS, objSprite } = await import('../src/art/objects.js');
+        const { ITEMS } = await import('../src/game/items.js');
+        const st = g.state;
+        st.money = 9000;
+        st.workers = 2;
+        // One of each shape: two wide, three wide, and two of each.
+        st.inventory.f_bookshelf = 1;
+        st.inventory.f_piano = 1;
+        st.inventory.f_umbrella = 1;
+        g.openBuildMode();
+        await wait(700);
+        const bs = g.screens[g.screens.length - 1];
+        bs.mode = bs.modes.indexOf('Furnish');
+        // An empty room, so the only thing that can stop a piece going down is
+        // the thing under test. The starting cafe comes furnished.
+        bs.draft.furniture = [];
+        bs.rebuild();
+        await wait(300);
+
+        // The build screen's idea of a footprint has to be the map's idea of
+        // it, or a piece is pickable somewhere it was never drawn.
+        const room = bs.draft.rooms[0];
+        const mismatched = [];
+        for (const id of ['f_bookshelf', 'f_piano', 'f_umbrella', 'f_fountain', 'f_sofa', 'f_case']) {
+          const type = ITEMS[id].place;
+          const def = OBJECTS[type];
+          const ax = room.x + 3, ay = room.y + 3;
+          const tiles = bs.footprintTiles(type, ax, ay).map((t) => `${t.x},${t.y}`).sort();
+          // What the map itself would block for the same piece at the same spot.
+          const real = [];
+          for (let j = 0; j < (def.th || 1); j++) {
+            for (let i = 0; i < (def.tw || 1); i++) real.push(`${ax + i},${ay - j}`);
+          }
+          if (tiles.join('|') !== real.sort().join('|')) mismatched.push(`${id}[${tiles}vs${real}]`);
+        }
+
+        // Place each one, then pick it up from its far corner rather than its
+        // anchor — the tile a player is most likely to be standing on.
+        const results = [];
+        for (const id of ['f_bookshelf', 'f_piano', 'f_umbrella']) {
+          const type = ITEMS[id].place;
+          const def = OBJECTS[type];
+          const ax = room.x + 2, ay = room.y + 4;
+          bs.cur = { x: ax, y: ay };
+          bs.palette = bs.furnitureStock.findIndex((k) => k === id || k.startsWith(`${id}#`));
+          if (bs.palette < 0) { results.push(`${id}:notInBag`); continue; }
+          const before = bs.draft.furniture.length;
+          key('Space', true); await wait(120); key('Space', false);
+          await wait(300);
+          const placed = bs.draft.furniture.length > before;
+          // Far corner: the opposite end horizontally, top row vertically.
+          const fx = ax + (def.tw || 1) - 1, fy = ay - ((def.th || 1) - 1);
+          bs.cur = { x: fx, y: fy };
+          await wait(150);
+          const found = !!bs.furnitureAt(fx, fy);
+          key('KeyX', true); await wait(120); key('KeyX', false);
+          await wait(300);
+          const gone = bs.draft.furniture.length === before;
+          results.push(`${id}(${def.tw}x${def.th}) placed=${placed} findsAt${fx},${fy}=${found} pickedUp=${gone}`);
+        }
+
+        // Where the ghost actually lands on screen, measured rather than
+        // recomputed: shot with a piece selected, shot with the bag empty, and
+        // the pixels that differ are the ghost. Deriving it from the same
+        // formula the code uses would pass however wrong the formula was.
+        const type = ITEMS.f_bookshelf.place;
+        const tw = OBJECTS[type].tw;
+        st.inventory.f_bookshelf = 1;
+        bs.draft.furniture = [];
+        bs.rebuild();
+        const gx = room.x + 3, gy = room.y + 4;
+        bs.cur = { x: gx, y: gy };
+        bs.palette = bs.furnitureStock.findIndex((k) => k === 'f_bookshelf' || k.startsWith('f_bookshelf#'));
+        await wait(500);
+        const canvas = document.getElementById('screen');
+        const cg = canvas.getContext('2d');
+        // Only the band the piece occupies. Emptying the bag also empties the
+        // palette strip along the bottom, which would otherwise read as ghost.
+        const wantT = (gy + bs.offY) * 16 - bs.cam.oy;
+        const bandY = Math.max(0, Math.round(wantT) - 40), bandH = 60;
+        const grab = () => cg.getImageData(0, bandY, canvas.width, bandH).data;
+        const withGhost = grab();
+        delete st.inventory.f_bookshelf;        // nothing to place, no ghost
+        bs.palette = 0;
+        await wait(500);
+        const without = grab();
+        let x0 = 1e9, x1 = -1;
+        for (let i = 0; i < withGhost.length; i += 4) {
+          if (Math.abs(withGhost[i] - without[i]) > 10 || Math.abs(withGhost[i + 1] - without[i + 1]) > 10) {
+            const px = (i / 4) % canvas.width;
+            if (px < x0) x0 = px;
+            if (px > x1) x1 = px;
+          }
+        }
+        // Where those tiles are on screen right now.
+        const wantL = (gx + bs.offX) * 16 - bs.cam.ox;
+        const wantR = wantL + tw * 16;
+        const drawnMid = (x0 + x1) / 2, wantMid = (wantL + wantR) / 2;
+        const drift = Math.round(Math.abs(drawnMid - wantMid));
+
+        window.__big = `mismatched=[${mismatched.join(' ')}] ${results.join(' | ')}`
+          + ` ghost x${x0}-${x1} want ${wantL}-${wantR} driftPx=${drift} band=${bandY}+${bandH}`;
+        if (mismatched.length) window.__errors.push('build disagrees with the map about a footprint: ' + window.__big);
+        for (const r of results) {
+          if (!/placed=true/.test(r)) window.__errors.push('a big piece would not go down: ' + window.__big);
+          if (!/=true pickedUp/.test(r)) window.__errors.push('the far corner does not find the piece: ' + window.__big);
+          if (!/pickedUp=true/.test(r)) window.__errors.push('picking up from the far corner failed: ' + window.__big);
+        }
+        if (x1 < 0) window.__errors.push('no ghost was drawn at all: ' + window.__big);
+        // Half a tile is exactly the old bug: a two-wide piece centred on one
+        // tile sits eight pixels left of where it lands.
+        if (drift > 2) window.__errors.push('the ghost is not over the tiles it will land on: ' + window.__big);
+      } else if (SCRIPT === 'bigshot') {
+        // A look at the placement preview for a wide piece.
+        const { ITEMS } = await import('../src/game/items.js');
+        const st = g.state;
+        st.money = 9000; st.workers = 2;
+        st.inventory.f_bookshelf = 1;
+        g.openBuildMode();
+        await wait(700);
+        const bs = g.screens[g.screens.length - 1];
+        bs.mode = bs.modes.indexOf('Furnish');
+        bs.draft.furniture = bs.draft.furniture.filter((f) => f.type === 'counter' || f.type === 'register');
+        bs.rebuild();
+        await wait(300);
+        bs.cur = { x: bs.draft.rooms[0].x + 4, y: bs.draft.rooms[0].y + 4 };
+        bs.palette = bs.furnitureStock.findIndex((k) => k.startsWith('f_bookshelf'));
+        await wait(900);
+        window.__pass = `piece=${bs.furnitureStock[bs.palette]} at=${bs.cur.x},${bs.cur.y}`;
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -3218,6 +3350,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__wage ? ` ${window.__wage}` : '')
         + (window.__prain ? ` ${window.__prain}` : '')
         + (window.__pickmob ? ` ${window.__pickmob}` : '')
+        + (window.__big ? ` ${window.__big}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')
