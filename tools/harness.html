@@ -773,7 +773,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (seated < 2) window.__errors.push('no patio seat is at a patio table: ' + window.__patio);
         if (undrawable.length) window.__errors.push('outdoor furniture with no sprite: ' + window.__patio);
         if (noIcon.length) window.__errors.push('outdoor furniture with no icon: ' + window.__patio);
-      } else if (SCRIPT === 'patioshot') {
+      } else if (SCRIPT.startsWith('patioshot')) {
         // Stand in a finished patio and look at it.
         const { T } = await import('../src/art/tiles.js');
         const st = g.state;
@@ -781,6 +781,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           { x: 0, y: 0, w: 11, h: 8, name: 'Cafe' },
           { x: 11, y: 0, w: 9, h: 8, name: 'Terrace', floor: T.PATIO_SLAB },
         ];
+        for (let k = 1; k < 4000; k++) {
+          const { weatherOn } = await import('../src/game/weather.js');
+          if (weatherOn(k, st.clock.day).id === (SCRIPT.split(':')[1] || 'rain')) { g.worldSeed = k; break; }
+        }
         st.cafe.furniture = st.cafe.furniture.concat([
           { type: 'umbrella', x: 13, y: 3, variant: 0 },
           { type: 'patioChair', x: 12, y: 3, variant: 0 },
@@ -979,6 +983,98 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (landedOn !== 4) window.__errors.push('did not reach the Hours tab: ' + window.__wage);
         if (hoursAfter !== hoursBefore) window.__errors.push('arriving on the Hours tab changed the hours: ' + window.__wage);
         if (hoursMoved === hoursAfter) window.__errors.push('the hours will not move once you are there: ' + window.__wage);
+      } else if (SCRIPT === 'patiorain') {
+        // Rain falls on the terrace and stops at the cafe wall. Two claims,
+        // and the second is the one that matters: an overlay that simply
+        // ignores the roof would pass the first on its own.
+        const { T, WEATHER } = { ...await import('../src/art/tiles.js'), ...await import('../src/game/weather.js') };
+        const st = g.state;
+        st.cafe.rooms = [
+          { x: 0, y: 0, w: 11, h: 8, name: 'Cafe' },
+          { x: 11, y: 0, w: 9, h: 8, name: 'Terrace', floor: T.PATIO_SLAB },
+        ];
+        st.rebuildCafe();
+        await wait(300);
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        await wait(1000);
+        const off = st.cafeMap.meta;
+        // Stand on the join, so both rooms are on screen at once.
+        g.player.x = (11 + off.offX) * 16;
+        g.player.y = (4 + off.offY) * 16;
+        g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
+        await wait(600);
+
+        const hasSky = st.cafeMap.hasOpenSky;
+        const skyOnPatio = st.cafeMap.openSky(14 + off.offX, 4 + off.offY);
+        const skyIndoors = st.cafeMap.openSky(5 + off.offX, 4 + off.offY);
+
+        // An umbrella keeps the rain off what is under it, which is what its
+        // description has promised since the day it went on sale.
+        st.cafe.furniture.push({ type: 'umbrella', x: 17, y: 6, variant: 0 });
+        st.rebuildCafe();
+        await wait(400);
+        const um = st.cafeMap.meta;
+        const underBrolly = st.cafeMap.openSky(17 + um.offX, 6 + um.offY);
+        const besideBrolly = st.cafeMap.openSky(15 + um.offX, 6 + um.offY);
+        st.cafe.furniture.pop();
+        st.rebuildCafe();
+        await wait(400);
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        await wait(900);
+        g.player.x = (11 + off.offX) * 16;
+        g.player.y = (4 + off.offY) * 16;
+        g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
+        await wait(500);
+
+        // Screen rectangles for a patch of each room, well inside its walls.
+        const box = (tx, ty, tw2, th2) => ({
+          x: Math.round((tx + off.offX) * 16 - g.cam.ox),
+          y: Math.round((ty + off.offY) * 16 - g.cam.oy),
+          w: tw2 * 16, h: th2 * 16,
+        });
+        const inside = box(2, 2, 6, 4);
+        const terrace = box(13, 2, 6, 4);
+        const grab = (b) => document.getElementById('screen').getContext('2d')
+          .getImageData(b.x, b.y, b.w, b.h).data;
+        const diff = (a, b) => {
+          let n = 0;
+          for (let i = 0; i < a.length; i += 4) {
+            if (Math.abs(a[i] - b[i]) > 10 || Math.abs(a[i + 2] - b[i + 2]) > 10) n++;
+          }
+          return n;
+        };
+        // On and off, the way the outdoor weather test does it: what the
+        // overlay puts on the screen is the difference it makes to the frame.
+        const seeIn = async (kind) => {
+          for (let k = 1; k < 4000; k++) {
+            const w = (await import('../src/game/weather.js')).weatherOn(k, st.clock.day);
+            if (w.id === kind) { g.worldSeed = k; break; }
+          }
+          await wait(1100);
+          const real = g.weatherFx;
+          const onA = grab(inside), onB = grab(terrace);
+          g.weatherFx = { update() {}, draw() {}, drops: [], flakes: [] };
+          await wait(140);
+          const offA = grab(inside), offB = grab(terrace);
+          g.weatherFx = real;
+          return { id: g.sky.now.id, room: diff(onA, offA), patio: diff(onB, offB), drops: real.drops.length };
+        };
+
+        const dry = await seeIn('sunny');
+        const wet = await seeIn('rain');
+
+        window.__prain = `hasSky=${hasSky} onPatio=${skyOnPatio} indoors=${skyIndoors}`
+          + ` underUmbrella=${underBrolly} beside=${besideBrolly}`
+          + ` sunny room=${dry.room} patio=${dry.patio}`
+          + ` rain room=${wet.room} patio=${wet.patio} drops=${wet.drops}`;
+        if (!hasSky) window.__errors.push('the cafe map has no open sky: ' + window.__prain);
+        if (!skyOnPatio) window.__errors.push('the terrace has no sky over it: ' + window.__prain);
+        if (skyIndoors) window.__errors.push('there is sky over the parlour: ' + window.__prain);
+        if (underBrolly) window.__errors.push('the umbrella shelters nobody: ' + window.__prain);
+        if (!besideBrolly) window.__errors.push('the umbrella covers the whole terrace: ' + window.__prain);
+        if (!wet.drops) window.__errors.push('no raindrops indoors at all: ' + window.__prain);
+        if (wet.patio < 60) window.__errors.push('no rain on the patio: ' + window.__prain);
+        if (wet.room > 12) window.__errors.push('it is raining indoors: ' + window.__prain);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -3064,6 +3160,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__dead ? ` ${window.__dead}` : '')
         + (window.__book2 ? ` ${window.__book2}` : '')
         + (window.__wage ? ` ${window.__wage}` : '')
+        + (window.__prain ? ` ${window.__prain}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

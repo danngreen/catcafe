@@ -2,7 +2,7 @@
 // a ground layer, a solidity mask, a list of y-sorted objects, warps, and a few
 // tables for interaction points.
 
-import { TILE, T, TERRAIN, isSolidTerrain } from '../art/tiles.js';
+import { TILE, T, TERRAIN, isSolidTerrain, OPEN_SKY } from '../art/tiles.js';
 import { OBJECTS } from '../art/objects.js';
 
 export const CHUNK = 16; // tiles per chunk edge
@@ -25,6 +25,13 @@ export class GameMap {
     this.music = opts.music || 'field';
     this.ambience = opts.ambience || {};
     this.outdoor = this.kind === 'outdoor';
+    // Whether any tile in here has sky over it. Answered lazily and cached,
+    // because the weather asks every frame and the answer is no for almost
+    // every interior in the valley.
+    this._sky = null;
+    // Tiles with something over them that is not the building — an umbrella,
+    // so far. Allocated only if something actually covers a tile.
+    this.covered = null;
     this.spawn = opts.spawn || { x: 2, y: 2 };
     this.chunksX = Math.ceil(w / CHUNK);
     this.chunksY = Math.ceil(h / CHUNK);
@@ -37,7 +44,41 @@ export class GameMap {
   inBounds(x, y) { return x >= 0 && y >= 0 && x < this.w && y < this.h; }
 
   get(x, y) { return this.inBounds(x, y) ? this.ground[y * this.w + x] : T.VOID; }
-  set(x, y, id) { if (this.inBounds(x, y)) this.ground[y * this.w + x] = id; }
+  /**
+   * True if this tile has nothing overhead — a patio floor or the railing
+   * round it. Indoors this is what the weather is allowed to reach.
+   */
+  openSky(x, y) {
+    if (!this.inBounds(x, y)) return false;
+    if (this.covered && this.covered[y * this.w + x]) return false;
+    return this.outdoor || OPEN_SKY.has(this.get(x, y));
+  }
+
+  /** Put something over a tile. What is under an umbrella stays dry. */
+  cover(x, y) {
+    if (!this.inBounds(x, y)) return;
+    if (!this.covered) this.covered = new Uint8Array(this.w * this.h);
+    this.covered[y * this.w + x] = 1;
+  }
+
+  /** Is there any open sky in this map at all? */
+  get hasOpenSky() {
+    if (this._sky === null) {
+      this._sky = this.outdoor;
+      if (!this._sky) {
+        for (let i = 0; i < this.ground.length; i++) {
+          if (OPEN_SKY.has(this.ground[i])) { this._sky = true; break; }
+        }
+      }
+    }
+    return this._sky;
+  }
+
+  set(x, y, id) {
+    if (!this.inBounds(x, y)) return;
+    this.ground[y * this.w + x] = id;
+    this._sky = null;                    // a laid floor can change the answer
+  }
 
   fillRect(x, y, w, h, id) {
     for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) this.set(i, j, id);

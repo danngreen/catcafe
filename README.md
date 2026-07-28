@@ -243,6 +243,12 @@ with black metal railings round it instead of plaster walls. Velvet & Oak sell
 the furniture to put on it: patio chairs, stools, tables, a garden bench, an
 umbrella table, and a stone fountain that costs an absurd amount and is worth it.
 
+The weather falls on a patio, because a patio has sky over it. Rain lands on the
+paving and stops dead at the cafe wall, the terrace goes grey under a grey sky
+while the room it opens off stays warmly lit, and standing out there you hear the
+rain unmuffled instead of through a roof. An umbrella table keeps the tiles under
+its canopy dry, which is the other half of what you paid for.
+
 Adding *rooms* needs a hired crew: Trowel & Sons in Hollowdown (weekdays,
 7am–4pm) sell builders and timber, and your crew size caps how much floor you're
 allowed. Until you've hired someone the Rooms tab simply isn't offered. The plan
@@ -317,10 +323,18 @@ with a footprint into one list, so trees and roofs correctly overlap you.
 ## Testing
 
 There's a headless smoke test that drives the game through scenarios in a real
-browser and reports console errors:
+browser and reports console errors.
+
+Run the long sweeps under `caffeinate`. Left alone for a few minutes, macOS
+suspends the headless browser, and a scenario that would take seven seconds
+sits there for seventeen minutes and then reports no summary. It looks exactly
+like a hang in whatever scenario it landed on, it lands on a different one
+every run, and every one of them passes when run by itself. That is the tell:
+scattered timeouts with no failures and no exceptions are the machine napping,
+not the game.
 
 ```bash
-node tools/check.js all --clean       # everything unattended, about four minutes
+caffeinate -dimsu node tools/check.js all --clean   # everything, about five minutes
 node tools/check.js quests --clean    # just the quest scenarios, about a minute
 node tools/pairs.js                   # the ones needing two browsers at once
 node tools/wsframes.js                # WebSocket framing, no browser needed

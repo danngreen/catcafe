@@ -241,6 +241,46 @@ export class Renderer {
     if (light && light.night > 0.02) this.drawLight(ctx, map, cam, light);
   }
 
+  /**
+   * Trace the part of the screen that has sky over it, as a clip path.
+   *
+   * Outdoors that is everything. Inside a building it is the patio floors and
+   * their railings, so rain falls on the terrace and stops dead at the cafe
+   * wall. Runs are merged along each row: a terrace is a handful of long
+   * rectangles rather than three hundred little ones.
+   *
+   * Returns false if none of it is on screen, in which case no clip was set
+   * and the caller should draw nothing.
+   */
+  skyPath(ctx, map, cam) {
+    if (map.outdoor) {
+      ctx.beginPath();
+      ctx.rect(0, 0, VIEW_W, VIEW_H);
+      return true;
+    }
+    if (!map.hasOpenSky) return false;
+    const ox = cam.ox, oy = cam.oy;
+    const x0 = Math.max(0, Math.floor(ox / TILE));
+    const y0 = Math.max(0, Math.floor(oy / TILE));
+    const x1 = Math.min(map.w - 1, Math.floor((ox + VIEW_W) / TILE));
+    const y1 = Math.min(map.h - 1, Math.floor((oy + VIEW_H) / TILE));
+    let any = false;
+    ctx.beginPath();
+    for (let y = y0; y <= y1; y++) {
+      let runStart = -1;
+      for (let x = x0; x <= x1 + 1; x++) {
+        const open = x <= x1 && map.openSky(x, y);
+        if (open && runStart < 0) runStart = x;
+        else if (!open && runStart >= 0) {
+          ctx.rect(runStart * TILE - ox, y * TILE - oy, (x - runStart) * TILE, TILE);
+          any = true;
+          runStart = -1;
+        }
+      }
+    }
+    return any;
+  }
+
   drawLight(ctx, map, cam, light) {
     const lg = this.lightLayer.g;
     const a = light.night;

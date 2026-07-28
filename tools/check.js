@@ -84,7 +84,8 @@ const BUDGET = {
   deaditems: 9000,
   booktabs: 16000,
   wagekeys: 16000,
-  patioshot: 9000,
+  patiorain: 16000,
+  patioshot: 12000,
   skyshot: 6000,
   // Halves of a pair: they wait for the other browser to turn up.
   netwalkhost: 62000,
@@ -110,7 +111,7 @@ const GROUPS = {
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',
     'barriers', 'eastpass', 'barrierreach', 'passcleared', 'debugpos', 'weather'],
   ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'exterior',
-    'summarylines', 'journalstep', 'titleme', 'signkeys', 'patio', 'deaditems', 'booktabs', 'wagekeys'],
+    'summarylines', 'journalstep', 'titleme', 'signkeys', 'patio', 'deaditems', 'booktabs', 'wagekeys', 'patiorain'],
   cutscene: ['taxi', 'sleep', 'door'],
   mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile'],
   // Single-process networked runs. The paired ones need two browsers at once
@@ -134,6 +135,15 @@ async function main() {
     '--headless=new',
     `--remote-debugging-port=${PORT}`,
     '--disable-gpu',
+    // Without these, Chrome throttles a page it believes nobody is looking at:
+    // timers stop firing, rAF stops, and a scenario that takes seven seconds
+    // sits there for seventeen minutes before finishing. It lands on a
+    // different scenario every run and each one passes alone, which makes it
+    // look like a flaky test rather than a sleeping browser.
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-renderer-backgrounding',
+    '--disable-features=CalculateNativeWinOcclusion',
     '--no-sandbox',
     '--no-first-run',
     '--hide-scrollbars',

@@ -825,7 +825,10 @@ class Game {
     if (was && was !== this.weatherName && this.sky.blend > 0.5) {
       this.hud.toast(weatherLine(this.sky.now), 'info', 5);
     }
-    this.weatherFx.update(dt, this.sky, !this.currentMap.outdoor);
+    // Particles live wherever there is sky to fall through, which includes a
+    // patio inside a building.
+    const map = this.currentMap;
+    this.weatherFx.update(dt, this.sky, !(map.outdoor || map.hasOpenSky));
   }
 
   updateAudio(dt) {
@@ -859,8 +862,14 @@ class Game {
     } else {
       const chatter = st.inCafe ? clamp(st.cafeSim.customers.length / 6, 0, 1) : 0;
       // Rain on the roof is worth hearing from inside — it is the reason the
-      // room is empty.
-      audio.setAmbience({ indoor: 0.45, chatter, ...weatherAmbience(this.sky, true) });
+      // room is empty. Standing out on the patio you are in it, not under it,
+      // so it comes through unmuffled.
+      const underSky = map.openSky(this.player.tx, this.player.ty);
+      audio.setAmbience({
+        indoor: underSky ? 0.15 : 0.45,
+        chatter,
+        ...weatherAmbience(this.sky, !underSky),
+      });
     }
     audio.update(dt, { night: light.night });
   }
@@ -1674,8 +1683,7 @@ class Game {
     const tint = map.outdoor && wl.dim > light.night ? wl.tint : light.tint;
     this.renderer.draw(ctx, map, this.cam, actors, { night: dimmed, tint, lights });
     if (this.cutscene) this.cutscene.draw(ctx, this.cam.ox, this.cam.oy);
-    // Over the top of the tint, so rain in the dark is lit by the lamps below.
-    this.weatherFx.draw(ctx, this.sky, !map.outdoor);
+    this.drawWeatherOver(ctx, map, wl, light);
 
     this.hud.drawFloats(ctx, this.cam.ox, this.cam.oy);
     this.drawInteractPrompt(ctx);
@@ -1684,6 +1692,31 @@ class Game {
 
     for (const s of this.screens) s.draw(ctx, this, this.t);
     this.fader.draw(ctx);
+  }
+
+  /**
+   * The weather, over the top of the finished frame so rain in the dark is
+   * lit by the lamps below it — and clipped to the part of the world that has
+   * sky over it. Outdoors that is the whole screen. Inside, it is the patio
+   * and nothing else, so the rain falls on your terrace and stops at the wall.
+   */
+  drawWeatherOver(ctx, map, wl, light) {
+    if (!map.outdoor && !map.hasOpenSky) return;
+    ctx.save();
+    const any = this.renderer.skyPath(ctx, map, this.cam);
+    if (!any) { ctx.restore(); return; }
+    ctx.clip();
+    // A terrace under a grey sky is grey, even when the room it opens off is
+    // warmly lit. Only worth doing indoors — outside, the renderer has
+    // already taken the light out for us.
+    if (!map.outdoor && wl.dim > 0.02) {
+      ctx.globalAlpha = clamp(wl.dim, 0, 1);
+      ctx.fillStyle = wl.tint;
+      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+      ctx.globalAlpha = 1;
+    }
+    this.weatherFx.draw(ctx, this.sky, false);
+    ctx.restore();
   }
 
   /** A small floating prompt when something is within reach. */

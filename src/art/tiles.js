@@ -58,6 +58,13 @@ export const T = {
 /** Floors that mean "outside": these rooms get railings, not walls. */
 export const OUTDOOR_FLOORS = new Set([32, 33, 34]);
 
+/**
+ * Tiles with nothing overhead. Inside a building this is what the weather
+ * falls on: the patio floors and the railings round them, and nothing else —
+ * so rain stops at the cafe wall rather than coming through the roof.
+ */
+export const OPEN_SKY = new Set([32, 33, 34, 35, 36, 37]);
+
 const rgb = (hex, a = 255) => PixBuf.rgba(hex, a);
 
 /** Deterministic 0..1 noise for a pixel within a tile variant. */

@@ -308,6 +308,14 @@ export function buildCafeMap(cafe) {
     }
     if (f.type.startsWith('table') || f.type.startsWith('patioTable')
       || f.type === 'bar' || f.type === 'umbrella') tables.push({ x, y, w: o.tw });
+    // The canopy keeps the rain off what is under it, which is the whole
+    // reason anybody buys one. Objects sit on their bottom row and grow
+    // upwards, so the footprint runs back from y.
+    if (f.type === 'umbrella') {
+      for (let j = 0; j < (o.th || 1); j++) {
+        for (let i = 0; i < (o.tw || 1); i++) map.cover(x + i, y - j);
+      }
+    }
   }
 
   // Seats need a table nearby to be worth sitting at; the rest are perches.
