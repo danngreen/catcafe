@@ -232,7 +232,9 @@ The Cats tab of the cafe book does the same thing in one keypress.
 the first page to get a plan of your cafe. Furniture you've bought sits in your
 bag in the colourway you chose at the till — chairs, stools, sofas and dressed
 tables all come in three. Space to put a piece down, X to pick it back up,
-M/I or Shift to change which piece, Esc when you're done. The Style tab changes
+M/I or Shift to change which piece, Esc when you're done. On a phone the same
+three things are ACT, BACK and MENU, and the help line says so — it names the
+buttons you actually have rather than keys you haven't. The Style tab changes
 the roof, awning and wall colour of the shopfront — it shows a live preview of
 the exterior, since you can't see it from inside.
 

@@ -4,7 +4,7 @@
 
 import { Screen } from './menus.js';
 import { panel, panelTitle, drawText, drawTextCentered, drawTextRight, textWidth } from './core.js';
-import { VIEW_W, VIEW_H } from '../engine/display.js';
+import { VIEW_W, VIEW_H, isTouchDevice } from '../engine/display.js';
 import { P } from '../art/palette.js';
 import { TILE, T } from '../art/tiles.js';
 import { ITEMS, baseId, variantOf, invKey } from '../game/items.js';
@@ -42,6 +42,24 @@ const ROOFS = ['#c86a4a', '#5a6472', '#d0a659', '#b2624b', '#7d8794', '#6b7d54']
 const AWNINGS = ['#c05a7a', '#5b8fd6', '#7fbe57', '#eec453', '#8a72d6', '#e0894a', '#6b9e8f', '#d95f5f'];
 
 let draftSerial = 0;
+
+// What the buttons are called where you are sitting. Every hint in here used
+// to name keys — "Space place  X pick up" — which on a phone describes a
+// keyboard that isn't there, so picking a piece back up looked impossible even
+// though BACK has always done it.
+const TOUCH_NAMES = { use: 'ACT', cancel: 'BACK', menu: 'MENU', cycle: 'RUN' };
+const KEY_NAMES = { use: 'Space', cancel: 'X', menu: 'Esc', cycle: '[Shift]/[M]/[I]' };
+function btn(action) {
+  return (isTouchDevice() ? TOUCH_NAMES : KEY_NAMES)[action] || action;
+}
+
+// The last line of help drawn, so a test can check what a player is actually
+// being told rather than what the source says.
+export let lastHint = '';
+function hint(ctx, text, x, y, opts) {
+  lastHint = text;
+  drawText(ctx, text, x, y, opts);
+}
 
 /** How many tiles a placed piece covers. */
 function footprint(type) {
@@ -528,13 +546,15 @@ export class BuildScreen extends Screen {
           drawText(ctx, String(st.inventory[key] || 0), px + 12, VIEW_H - 37, { color: P.uiText, shadow: '#000000' });
         }
         const cur = stock[this.palette];
-        drawText(ctx, `${ITEMS[baseId(cur)].name}  [Shift]/[M]/[I] or RUN to cycle`, 8 + SAFE.left + Math.min(stock.length, 12) * 22 + 8, VIEW_H - 34,
+        drawText(ctx, `${ITEMS[baseId(cur)].name}  ${btn('cycle')} to change`, 8 + SAFE.left + Math.min(stock.length, 12) * 22 + 8, VIEW_H - 34,
           { color: P.uiGold, shadow: P.uiShadow });
       }
-      drawText(ctx, 'Space place   X pick up   Esc done', 10 + SAFE.left, VIEW_H - 14, { color: P.uiTextDim, shadow: P.uiShadow });
+      hint(ctx, `${btn('use')} place   ${btn('cancel')} pick up   ${btn('menu')} done`,
+        10 + SAFE.left, VIEW_H - 14, { color: P.uiTextDim, shadow: P.uiShadow });
     } else if (this.modeName === 'Rooms') {
-      drawText(ctx, this.dragStart ? 'Space again to set the far corner   X cancel'
-        : 'Space start room   X demolish   Esc done',
+      drawText(ctx, this.dragStart
+        ? `${btn('use')} again to set the far corner   ${btn('cancel')} cancel`
+        : `${btn('use')} start room   ${btn('cancel')} demolish   ${btn('menu')} done`,
         10 + SAFE.left, VIEW_H - 17, { color: P.uiTextDim, shadow: P.uiShadow });
       drawTextRight(ctx, `Timber ${st.materials - this.spentMaterials}   Crew ${st.workers}`,
         VIEW_W - 10 - SAFE.right, VIEW_H - 17, { color: P.uiTextDim, shadow: P.uiShadow });
@@ -579,7 +599,7 @@ export class BuildScreen extends Screen {
     const cur = FLOORS.find((o) => o.id === (sel?.floor ?? this.draft.floor)) || FLOORS[0];
     drawText(ctx, cur.outdoor ? 'Outside — railings, not walls' : 'Inside — plaster walls',
       x + 10, y + h - 18, { color: cur.outdoor ? P.uiGreen : P.uiTextDim, shadow: P.uiShadow });
-    drawText(ctx, 'Up/Down room   Left/Right floor   Esc done',
+    drawText(ctx, `Up/Down room   Left/Right floor   ${btn('menu')} done`,
       10 + SAFE.left, VIEW_H - 17, { color: P.uiTextDim, shadow: P.uiShadow });
   }
 
@@ -629,6 +649,6 @@ export class BuildScreen extends Screen {
         drawTextRight(ctx, `< ${val} >`, x + w - 16, ry + 1, { color: sel ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
       }
     });
-    drawTextCentered(ctx, 'Left/Right to change    Esc done', x + w / 2, y + h - 13, { color: P.uiTextDim, shadow: P.uiShadow });
+    drawTextCentered(ctx, `Left/Right to change    ${btn('menu')} done`, x + w / 2, y + h - 13, { color: P.uiTextDim, shadow: P.uiShadow });
   }
 }

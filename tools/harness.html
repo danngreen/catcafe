@@ -1075,6 +1075,62 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!wet.drops) window.__errors.push('no raindrops indoors at all: ' + window.__prain);
         if (wet.patio < 60) window.__errors.push('no rain on the patio: ' + window.__prain);
         if (wet.room > 12) window.__errors.push('it is raining indoors: ' + window.__prain);
+      } else if (SCRIPT === 'pickupmobile') {
+        // Picking a piece back up with no keyboard. X does it on a desktop;
+        // on a phone the only thing bound to that action is the BACK button
+        // under the canvas, and nothing on screen says so.
+        const st = g.state;
+        st.money = 5000;
+        st.inventory.f_chair = 1;
+        g.openBuildMode();
+        await wait(700);
+        const bs = g.screens[g.screens.length - 1];
+        bs.mode = bs.modes.indexOf('Furnish');
+        await wait(200);
+
+        // Put a chair down where the cursor is.
+        const before = bs.draft.furniture.length;
+        key('Space', true); await wait(150); key('Space', false);
+        await wait(400);
+        const placed = bs.draft.furniture.length;
+
+        // Now the only route a phone has: the BACK button in the DOM.
+        const back = document.querySelector('#touch [data-key="x"]');
+        const tapBack = () => {
+          for (const type of ['pointerdown', 'pointerup']) {
+            back.dispatchEvent(new PointerEvent(type, { bubbles: true }));
+          }
+        };
+        const hasBack = !!back;
+        if (hasBack) { tapBack(); await wait(400); }
+        const after = bs.draft.furniture.length;
+
+        // And it must not have thrown us out of build mode.
+        const stillBuilding = g.screens[g.screens.length - 1] === bs;
+
+        // What the screen actually tells a player with no keyboard. Read off
+        // the drawn line, not the source: the whole bug was that the words on
+        // screen named a keyboard the player did not have.
+        const buildMod = await import('../src/ui/build.js');
+        const hint = buildMod.lastHint || '(nothing drawn)';
+        const touch = (await import('../src/engine/display.js')).isTouchDevice();
+        const namesAKey = /Space|\bX\b|Esc|Shift/.test(hint);
+
+        window.__pickmob = `backButton=${hasBack} furniture ${before}->${placed}->${after}`
+          + ` stillBuilding=${stillBuilding} touch=${touch} hint="${hint}"`;
+        if (!hasBack) window.__errors.push('no BACK button to press: ' + window.__pickmob);
+        if (placed <= before) window.__errors.push('the chair was never placed: ' + window.__pickmob);
+        if (after >= placed) window.__errors.push('BACK does not pick furniture up: ' + window.__pickmob);
+        if (!stillBuilding) window.__errors.push('BACK dropped us out of build mode: ' + window.__pickmob);
+        // The viewport decides which wording is right, since --mobile is a
+        // flag on the whole run rather than per scenario. Either way the hint
+        // has to name something the player can actually press.
+        if (touch) {
+          if (!/BACK/.test(hint)) window.__errors.push('the screen never mentions BACK: ' + window.__pickmob);
+          if (namesAKey) window.__errors.push('the hint names a key a phone has not got: ' + window.__pickmob);
+        } else if (!/\bX\b/.test(hint)) {
+          window.__errors.push('the desktop hint stopped naming X: ' + window.__pickmob);
+        }
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -3161,6 +3217,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__book2 ? ` ${window.__book2}` : '')
         + (window.__wage ? ` ${window.__wage}` : '')
         + (window.__prain ? ` ${window.__prain}` : '')
+        + (window.__pickmob ? ` ${window.__pickmob}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

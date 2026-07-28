@@ -85,6 +85,7 @@ const BUDGET = {
   booktabs: 16000,
   wagekeys: 16000,
   patiorain: 16000,
+  pickupmobile: 12000,
   patioshot: 12000,
   skyshot: 6000,
   // Halves of a pair: they wait for the other browser to turn up.
@@ -113,7 +114,7 @@ const GROUPS = {
   ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'exterior',
     'summarylines', 'journalstep', 'titleme', 'signkeys', 'patio', 'deaditems', 'booktabs', 'wagekeys', 'patiorain'],
   cutscene: ['taxi', 'sleep', 'door'],
-  mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile'],
+  mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile', 'pickupmobile'],
   // Single-process networked runs. The paired ones need two browsers at once
   // and are listed in the README rather than here.
   net: ['net', 'netmobile', 'netbooks', 'netclock', 'netdrop', 'netforget',
