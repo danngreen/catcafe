@@ -1263,6 +1263,107 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         bs.palette = bs.furnitureStock.findIndex((k) => k.startsWith('f_bookshelf'));
         await wait(900);
         window.__pass = `piece=${bs.furnitureStock[bs.palette]} at=${bs.cur.x},${bs.cur.y}`;
+      } else if (SCRIPT === 'clearnight') {
+        // A cloudless sky is sunny by day and clear by night. Everything else
+        // reads the same at either hour and must not change.
+        const { drawWeatherGlyph } = await import('../src/ui/core.js');
+        const { WEATHER, weatherLine, weatherName } = await import('../src/game/weather.js');
+        const st = g.state;
+
+        // The wording first — cheap, and the toast has the same bug as the icon.
+        const dayWord = weatherName(WEATHER.sunny, false);
+        const nightWord = weatherName(WEATHER.sunny, true);
+        const rainDay = weatherName(WEATHER.rain, false);
+        const rainNight = weatherName(WEATHER.rain, true);
+        const nightLine = weatherLine(WEATHER.sunny, true);
+
+        // Then the glyph, drawn to its own canvas and counted. A sun is a disc
+        // with four spikes around it; a crescent is not, so the two differ in
+        // how many pixels they use and where.
+        const shot = (id) => {
+          const c = document.createElement('canvas');
+          c.width = 12; c.height = 12;
+          const cx = c.getContext('2d');
+          drawWeatherGlyph(cx, id, 0, 0);
+          const d = cx.getImageData(0, 0, 12, 12).data;
+          let n = 0, left = 0, right = 0;
+          for (let i = 0; i < d.length; i += 4) {
+            if (d[i + 3] < 40) continue;
+            n++;
+            (((i / 4) % 12) < 6 ? left++ : right++);
+          }
+          return { n, left, right, data: d };
+        };
+        const sunny = shot('sunny');
+        const clear = shot('clear');
+        let same = 0;
+        for (let i = 0; i < sunny.data.length; i += 4) {
+          if (Math.abs(sunny.data[i] - clear.data[i]) < 8
+            && Math.abs(sunny.data[i + 3] - clear.data[i + 3]) < 8) same++;
+        }
+        const identical = same === 144;
+
+        // And the HUD has to pick the night one after dark, not just own it.
+        const canvas = document.getElementById('screen');
+        const cg = canvas.getContext('2d');
+        const hudBox = () => cg.getImageData(102, 5, 12, 12).data;
+        const seedFor = (kind) => {
+          for (let k = 1; k < 4000; k++) {
+            if (window.__weatherOn(k, st.clock.day).id === kind) return k;
+          }
+          return -1;
+        };
+        window.__weatherOn = (await import('../src/game/weather.js')).weatherOn;
+        g.worldSeed = seedFor('sunny');
+        st.clock.t = 13 * (1200 / 24);           // early afternoon
+        await wait(700);
+        const byDay = hudBox();
+        st.clock.t = 22 * (1200 / 24);           // well after dark
+        await wait(700);
+        const byNight = hudBox();
+        let moved = 0;
+        for (let i = 0; i < byDay.length; i += 4) {
+          if (Math.abs(byDay[i] - byNight[i]) > 12 || Math.abs(byDay[i + 2] - byNight[i + 2]) > 12) moved++;
+        }
+        const dark = st.clock.isDark;
+
+        window.__night = `words day=${dayWord} night=${nightWord}`
+          + ` rain=${rainDay}/${rainNight} line="${nightLine}"`
+          + ` glyph sunny=${sunny.n}px clear=${clear.n}px identical=${identical}`
+          + ` hudChanged=${moved}px dark=${dark}`;
+        if (dayWord !== 'Sunny') window.__errors.push('a clear day stopped being sunny: ' + window.__night);
+        if (nightWord !== 'Clear') window.__errors.push('it is still sunny at night: ' + window.__night);
+        if (rainDay !== rainNight) window.__errors.push('rain was renamed after dark: ' + window.__night);
+        if (/sunny/i.test(nightLine)) window.__errors.push('the toast still says sunny at night: ' + window.__night);
+        if (!clear.n) window.__errors.push('the clear glyph draws nothing: ' + window.__night);
+        if (identical) window.__errors.push('the night glyph is just the sun again: ' + window.__night);
+        if (!dark) window.__errors.push('the clock never went dark: ' + window.__night);
+        if (moved < 12) window.__errors.push('the HUD kept the sun up after dark: ' + window.__night);
+      } else if (SCRIPT === 'glyphsheet') {
+        // Every weather glyph at eight times size, for the eye.
+        const { drawWeatherGlyph } = await import('../src/ui/core.js');
+        const ids = ['sunny', 'clear', 'cloudy', 'windy', 'fog', 'rain', 'snow'];
+        const c = document.createElement('canvas');
+        c.width = 480; c.height = 160;
+        c.style.cssText = 'position:fixed;left:0;top:0;width:960px;height:320px;'
+          + 'image-rendering:pixelated;z-index:9999;background:#1e192d';
+        document.body.appendChild(c);
+        const cx = c.getContext('2d');
+        cx.imageSmoothingEnabled = false;
+        ids.forEach((id, i) => {
+          const tile = document.createElement('canvas');
+          tile.width = 12; tile.height = 12;
+          drawWeatherGlyph(tile.getContext('2d'), id, 0, 0);
+          const px = 14 + i * 66, py = 30;
+          cx.fillStyle = 'rgba(30,25,45,0.86)';
+          cx.fillRect(px - 8, py - 8, 64, 64);
+          cx.drawImage(tile, px, py, 48, 48);
+          cx.fillStyle = '#ffcf6b';
+          cx.font = '11px monospace';
+          cx.fillText(id, px, py + 68);
+        });
+        window.__pass = `glyphs=${ids.length}`;
+        await wait(300);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -3351,6 +3452,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__prain ? ` ${window.__prain}` : '')
         + (window.__pickmob ? ` ${window.__pickmob}` : '')
         + (window.__big ? ` ${window.__big}` : '')
+        + (window.__night ? ` ${window.__night}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

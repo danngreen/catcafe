@@ -346,5 +346,18 @@ export class WeatherFx {
   }
 }
 
+/**
+ * What to call this weather right now. A cloudless sky is sunny by day and
+ * clear by night; everything else reads the same at either hour.
+ */
+export function weatherName(w, dark) {
+  return w.id === 'sunny' && dark ? 'Clear' : w.name;
+}
+
 /** "Rainy — steady, soaking, and in for the day." */
-export function weatherLine(w) { return `${w.name} — ${w.blurb.toLowerCase()}`; }
+export function weatherLine(w, dark) {
+  const blurb = w.id === 'sunny' && dark
+    ? 'not a cloud. every star is out.'
+    : w.blurb.toLowerCase();
+  return `${weatherName(w, dark)} — ${blurb}`;
+}

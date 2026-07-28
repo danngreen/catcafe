@@ -88,6 +88,8 @@ const BUDGET = {
   pickupmobile: 12000,
   bigpieces: 16000,
   bigshot: 9000,
+  clearnight: 12000,
+  glyphsheet: 6000,
   patioshot: 12000,
   skyshot: 6000,
   // Halves of a pair: they wait for the other browser to turn up.
@@ -114,7 +116,7 @@ const GROUPS = {
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',
     'barriers', 'eastpass', 'barrierreach', 'passcleared', 'debugpos', 'weather'],
   ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'exterior',
-    'summarylines', 'journalstep', 'titleme', 'signkeys', 'patio', 'deaditems', 'booktabs', 'bigpieces', 'wagekeys', 'patiorain'],
+    'summarylines', 'journalstep', 'titleme', 'signkeys', 'patio', 'deaditems', 'booktabs', 'bigpieces', 'clearnight', 'wagekeys', 'patiorain'],
   cutscene: ['taxi', 'sleep', 'door'],
   mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile', 'pickupmobile'],
   // Single-process networked runs. The paired ones need two browsers at once

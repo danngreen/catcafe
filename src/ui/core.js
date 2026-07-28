@@ -252,6 +252,25 @@ export function drawWeatherGlyph(ctx, id, x, y) {
       sun(6, 6, 3, '#fff0a8');
       for (const [dx, dy] of [[6, 0], [6, 11], [0, 6], [11, 6]]) px(dx, dy, 1, 1, '#ffcf4a');
       break;
+    case 'clear': {
+      // The same weather after dark. A cloudless night is a moon and stars,
+      // not a sun — every other kind of weather looks the same at either hour.
+      // The crescent is the difference of two discs, worked out per pixel:
+      // subtracting one with a composite operation would punch a hole through
+      // the panel it is sitting on.
+      const inDisc = (dx, dy, cx, cy, r) => (dx - cx) ** 2 + (dy - cy) ** 2 <= r * r;
+      for (let dy = 0; dy < 12; dy++) {
+        for (let dx = 0; dx < 12; dx++) {
+          if (!inDisc(dx, dy, 5, 6, 4.6)) continue;
+          if (inDisc(dx, dy, 8.4, 4.2, 4.4)) continue;
+          px(dx, dy, 1, 1, inDisc(dx, dy, 4, 7, 3.2) ? '#fbf8e8' : '#e0dcc0');
+        }
+      }
+      px(10, 1, 1, 1, '#fff0a8');
+      px(8, 10, 1, 1, '#e8e4c8');
+      px(11, 6, 1, 1, '#fff0a8');
+      break;
+    }
     case 'cloudy':
       sun(9, 3, 3, '#ffcf4a');
       cloud(4, '#c9d2e0'); cloud(3, '#eef2f8');
@@ -367,7 +386,11 @@ export class Hud {
     drawText(ctx, clock.format(), 10, 8, { color: P.uiText, shadow: P.uiShadow });
     const dayCol = clock.isWeekend ? P.uiGold : P.uiTextDim;
     drawTextRight(ctx, clock.dayName, 96, 8, { color: dayCol, shadow: P.uiShadow });
-    if (sky) drawWeatherGlyph(ctx, sky.now.id, 102, 5);
+    // A cloudless sky after dark is clear, not sunny.
+    if (sky) {
+      const id = sky.now.id === 'sunny' && clock.isDark ? 'clear' : sky.now.id;
+      drawWeatherGlyph(ctx, id, 102, 5);
+    }
     // A little day/night dial.
     const frac = clock.hourFloat / 24;
     bar(ctx, 10, 20, 84, 5, frac, clock.isDark ? '#5f74c4' : '#ffcf6b');

@@ -823,7 +823,7 @@ class Game {
     const was = this.weatherName;
     this.weatherName = this.sky.now.id;
     if (was && was !== this.weatherName && this.sky.blend > 0.5) {
-      this.hud.toast(weatherLine(this.sky.now), 'info', 5);
+      this.hud.toast(weatherLine(this.sky.now, st.clock.isDark), 'info', 5);
     }
     // Particles live wherever there is sky to fall through, which includes a
     // patio inside a building.
