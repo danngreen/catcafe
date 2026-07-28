@@ -1364,6 +1364,154 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         });
         window.__pass = `glyphs=${ids.length}`;
         await wait(300);
+      } else if (SCRIPT === 'questchain') {
+        // Every quest has to be finishable from what the valley actually
+        // contains. The shell errand used to send you to a beach that has not
+        // had a shell on it in years.
+        const { QUESTS, questSteps, stepMet } = await import('../src/game/quests.js');
+        const { ITEMS, STOCK, FLEA_POOL } = await import('../src/game/items.js');
+        const { VILLAGERS } = await import('../src/world/places.js');
+        const st = g.state;
+        const ids = new Set(VILLAGERS.map((v) => v.id));
+
+        // Everything you can end up holding: bought anywhere, or handed over
+        // as a reward, or given by a step.
+        const gettable = new Set();
+        for (const list of Object.values(STOCK)) for (const id of list) gettable.add(id);
+        for (const id of FLEA_POOL) gettable.add(id);
+        for (const q of QUESTS) {
+          for (const [id] of q.reward?.items || []) gettable.add(id);
+          for (const step of questSteps(q)) {
+            for (const [id] of step.gives || []) gettable.add(id);
+            const o = step.objective;
+            if (o.type === 'deliver' && o.give !== false) gettable.add(o.item);
+          }
+        }
+        // Plus whatever the world itself hands over when you search it. Run
+        // each spot under every combination of light and flags that matters,
+        // so a spot that only gives its thing once you know to look still
+        // counts — and one that gives nothing at all does not.
+        const { SEARCH_SPOTS } = await import('../src/main.js');
+        const { buildSpecialInterior, buildShopInterior } = await import('../src/world/interiors.js');
+        const { SHOPS, LANDMARKS } = await import('../src/world/places.js');
+        // Only spots that are actually wired into a map count. A spot that
+        // exists in code but is not placed anywhere is exactly the dead end
+        // this whole check is for — the logbook was one.
+        const placed = new Set();
+        const sweep = (map) => {
+          if (!map || !map.interacts) return;
+          for (const [, v] of map.interacts) if (v.kind === 'search' && v.spot) placed.add(v.spot);
+        };
+        sweep(g.overworld);
+        for (const l of LANDMARKS) { try { sweep(buildSpecialInterior(l.id)); } catch { /* not all have one */ } }
+        for (const sh of SHOPS) { try { sweep(buildShopInterior(sh.id)); } catch { /* ditto */ } }
+        const orphaned = Object.keys(SEARCH_SPOTS).filter((k) => !placed.has(k));
+        const spots = [...placed];
+        const givesFrom = {};
+        for (const name of spots) {
+          const probe = {
+            clock: { isDark: true },
+            flags: { read_town_history: true, saw_the_hedge: true },
+            has: () => false,
+            inventory: {},
+          };
+          const dayProbe = { ...probe, clock: { isDark: false } };
+          for (const p of [probe, dayProbe]) {
+            const res = SEARCH_SPOTS[name](p, g) || {};
+            if (res.give) { gettable.add(res.give[0]); (givesFrom[res.give[0]] ||= []).push(name); }
+          }
+        }
+
+        const unreachable = [];
+        const unknownPerson = [];
+        for (const q of QUESTS) {
+          if (!ids.has(q.giver)) unknownPerson.push(`${q.id}:giver=${q.giver}`);
+          for (const step of questSteps(q)) {
+            const o = step.objective;
+            if ((o.type === 'talk' || o.type === 'deliver') && o.to && !ids.has(o.to)) {
+              unknownPerson.push(`${q.id}->${o.to}`);
+            }
+            if (o.type === 'item' && !gettable.has(o.item)) unreachable.push(`${q.id}:${o.item}`);
+            if (o.type === 'deliver' && o.give === false && !gettable.has(o.item)) {
+              unreachable.push(`${q.id}:carry ${o.item}`);
+            }
+          }
+        }
+
+        // The shell specifically: Juniper wants one, and the only one in the
+        // valley is Moth's reward, which Moth will not offer until Shrimp has
+        // told you he has it.
+        const shellFrom = QUESTS.filter((q) => (q.reward?.items || []).some(([i]) => i === 'seashell'))
+          .map((q) => q.id);
+        const shrimp = VILLAGERS.find((v) => v.id === 'shrimp');
+        const pointsAtMoth = /moth/i.test(`${shrimp.hint || ''} ${shrimp.lines.join(' ')}`);
+        st.flags = {};
+        const mothQuest = QUESTS.find((q) => q.id === 'moth_count');
+        st.clock.t = 22 * (1200 / 24);
+        const beforeHearing = g.questAvailable(mothQuest);
+        st.flags.heard_hint_shrimp = true;
+        const afterHearing = g.questAvailable(mothQuest);
+
+        // And the new night jobs are real multi-step jobs with real people.
+        const night = QUESTS.filter((q) => q.night);
+        const multi = night.filter((q) => questSteps(q).length > 1);
+        const nightGiversAreNocturnal = night.every((q) => {
+          const v = VILLAGERS.find((x) => x.id === q.giver);
+          return v && v.when === 'night';
+        });
+
+        window.__chain = `quests=${QUESTS.length} night=${night.length} multiStepNight=${multi.length}`
+          + ` unreachable=[${unreachable.join(' ')}] unknownPerson=[${unknownPerson.join(' ')}]`
+          + ` spotsPlaced=${spots.length} orphaned=[${orphaned}] finds=${JSON.stringify(givesFrom)}`
+          + ` shellFrom=[${shellFrom}] shrimpPointsAtMoth=${pointsAtMoth}`
+          + ` mothOffers before=${beforeHearing} after=${afterHearing}`
+          + ` nightGiversNocturnal=${nightGiversAreNocturnal}`;
+        if (unreachable.length) window.__errors.push('a quest asks for something you cannot get: ' + window.__chain);
+        if (orphaned.length) window.__errors.push('a search spot exists but is not placed anywhere: ' + window.__chain);
+        if (unknownPerson.length) window.__errors.push('a quest names somebody who does not exist: ' + window.__chain);
+        if (!shellFrom.length) window.__errors.push('nothing in the valley gives you a shell: ' + window.__chain);
+        if (!pointsAtMoth) window.__errors.push('Shrimp never mentions where the shell went: ' + window.__chain);
+        if (beforeHearing) window.__errors.push('Moth offers his job before you have heard about the shell: ' + window.__chain);
+        if (!afterHearing) window.__errors.push('Moth still will not offer his job: ' + window.__chain);
+        if (multi.length < 5) window.__errors.push('not enough multi-step night jobs: ' + window.__chain);
+        if (!nightGiversAreNocturnal) window.__errors.push('a night job is given by somebody who is not out at night: ' + window.__chain);
+      } else if (SCRIPT === 'logbook') {
+        // Walk into the lighthouse and come out with the book Slate wants.
+        const { buildSpecialInterior } = await import('../src/world/interiors.js');
+        const st = g.state;
+        const map = buildSpecialInterior('lighthouse');
+        g.enterInterior('shop:lighthouse', map, 0, 0);
+        await wait(900);
+
+        // Somewhere in there has to be a table you can search.
+        const spots = [];
+        for (const [k, v] of map.interacts) {
+          if (v.kind === 'search') spots.push(`${k}:${v.spot}`);
+        }
+        const before = st.inventory.logbook || 0;
+        // Stand below the table and search it, the way a player would.
+        const [sx2, sy2] = spots.length ? spots[0].split(':')[0].split(',').map(Number) : [0, 0];
+        g.player.x = sx2 * 16 + 8;
+        g.player.y = (sy2 + 1) * 16 + 8;
+        g.player.dir = 'up';
+        g.cam.follow(map, g.player.x, g.player.y, true);
+        await wait(400);
+        g.interact();
+        await wait(700);
+        // Dismiss whatever it said.
+        for (let i = 0; i < 4; i++) { key('Space', true); await wait(120); key('Space', false); await wait(200); }
+        const after = st.inventory.logbook || 0;
+        // Searching again must not hand out a second one.
+        g.interact();
+        await wait(600);
+        for (let i = 0; i < 4; i++) { key('Space', true); await wait(120); key('Space', false); await wait(200); }
+        const twice = st.inventory.logbook || 0;
+
+        window.__log = `spots=[${spots.join(' ')}] logbook ${before}->${after}->${twice}`
+          + ` flag=${!!st.flags.took_logbook}`;
+        if (!spots.length) window.__errors.push('nothing to search in the lighthouse: ' + window.__log);
+        if (after <= before) window.__errors.push('the lighthouse would not give up its logbook: ' + window.__log);
+        if (twice !== after) window.__errors.push('the logbook can be taken twice: ' + window.__log);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -3453,6 +3601,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__pickmob ? ` ${window.__pickmob}` : '')
         + (window.__big ? ` ${window.__big}` : '')
         + (window.__night ? ` ${window.__night}` : '')
+        + (window.__chain ? ` ${window.__chain}` : '')
+        + (window.__log ? ` ${window.__log}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

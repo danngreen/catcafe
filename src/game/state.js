@@ -197,15 +197,26 @@ export class GameState {
   }
 
   take(id, qty = 1) {
-    if (this.inventory[id] === undefined) return false;
-    if (this.inventory[id] < qty) return false;
-    this.inventory[id] -= qty;
-    if (this.inventory[id] <= 0) delete this.inventory[id];
-    this.pub({ op: 'inv', key: id, d: -qty });
-    return true;
+    if ((this.inventory[id] || 0) >= qty) {
+      this.inventory[id] -= qty;
+      if (this.inventory[id] <= 0) delete this.inventory[id];
+      this.pub({ op: 'inv', key: id, d: -qty });
+      return true;
+    }
+    // Menu goods go into the pantry, not the bag — buying a bottle of milk
+    // stocks it. An errand that asks you to fetch one should be satisfied by
+    // the milk you own, wherever you are keeping it.
+    if (this.cafeSim && this.cafeSim.stockCount(id) >= qty) {
+      this.cafeSim.takeStock(id, qty);
+      return true;
+    }
+    return false;
   }
 
-  has(id, qty = 1) { return (this.inventory[id] || 0) >= qty; }
+  has(id, qty = 1) {
+    if ((this.inventory[id] || 0) >= qty) return true;
+    return !!this.cafeSim && this.cafeSim.stockCount(id) >= qty;
+  }
 
   itemName(key) { return item(key) ? item(key).name : key; }
   breedInfo(b) { return CAT_BREEDS[b]; }

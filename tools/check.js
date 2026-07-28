@@ -90,6 +90,8 @@ const BUDGET = {
   bigshot: 9000,
   clearnight: 12000,
   glyphsheet: 6000,
+  questchain: 9000,
+  logbook: 12000,
   patioshot: 12000,
   skyshot: 6000,
   // Halves of a pair: they wait for the other browser to turn up.
@@ -110,7 +112,7 @@ const BUDGET = {
 // have broken without running everything. `all` is what to run before a commit.
 const GROUPS = {
   quests: ['ghostquest', 'deliverquest', 'journalstep', 'questrepair', 'ghoststuck',
-    'barriers', 'nightfolk', 'nightplaces'],
+    'barriers', 'nightfolk', 'nightplaces', 'questchain', 'logbook'],
   cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers', 'employee',
     'weathercafe', 'hourly'],
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',

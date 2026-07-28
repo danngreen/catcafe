@@ -215,7 +215,13 @@ export function buildSpecialInterior(id) {
     map.spawn = { x: doorX, y: doorY - 1 };
     map.addObject('bookshelf', 4, 5);
     map.addObject('lampIn', 8, 5, { lightR: 70 });
-    map.setInteract(6, 5, { kind: 'sign', text: 'The lamp room is up a spiral stair too narrow for you.\n\nOn the table: a logbook, a cold cup of tea, and a note that reads "back in five minutes". It is dated eleven years ago.' });
+    map.setInteract(6, 5, { kind: 'sign', text: 'The lamp room is up a spiral stair too narrow for you.\n\nThere is a table under the window.' });
+    // The keeper's table. Searchable, because something in the valley has to
+    // actually hand over the logbook that Slate is asking for — the errand
+    // used to name a book that nothing anywhere would give you.
+    map.addObject('tableSq', 6, 7);
+    map.setInteract(6, 7, { kind: 'search', spot: 'keepers_table' });
+    map.setInteract(7, 7, { kind: 'search', spot: 'keepers_table' });
     map.meta = { special: 'lighthouse' };
     map.lights.push({ x: 6 * 16, y: 6 * 16, r: 110, color: '#ffe6a8' });
     map.indexObjects();

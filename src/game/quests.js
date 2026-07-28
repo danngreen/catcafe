@@ -54,8 +54,10 @@ export const QUESTS = [
     desc: 'Juniper thinks your cafe needs a spiral shell on the windowsill.',
     objective: { type: 'item', item: 'seashell', count: 1 },
     reward: { money: 110, items: [['f_plant', 1]], rep: 0.04 },
-    offer: "Your place needs a *thing*. An object. Something with a story.\n\nFind a spiral shell on the Saltmere beach. Big one. Put it on the windowsill and watch people ask about it.",
-    progress: 'The beach at Saltmere. Look along the tideline after you get there.',
+    offer: "Your place needs a *thing*. An object. Something with a story.\n\n"
+      + "A big spiral shell, that's what. There was one down at Saltmere — I'd ask about "
+      + "rather than go looking, mind. That beach has been picked over since before I was born.",
+    progress: 'Ask around Saltmere about a big spiral shell. Somebody down there had one.',
     complete: "Perfect. Absolutely perfect.\n\nHere, have this fern too. Trust me on the fern.",
   },
   {
@@ -242,6 +244,137 @@ export const QUESTS = [
     reward: { money: 150, items: [['seashell', 1]], friendship: ['moth'] },
   },
   {
+    id: 'pun_off',
+    giver: 'bruin',
+    night: true,
+    title: 'Longest Face Wins',
+    desc: 'Bruin defends his losing streak at the valley pun contest and has run out of material.',
+    offer: "Right. You look like someone who can keep a straight face. I need the opposite of that.\n\n"
+      + "There's a contest. Longest Face Wins — whoever hears the most puns without laughing. "
+      + "I have entered every year and lost every year, and I intend to lose *well*.\n\n"
+      + "Only I have used everything I have. Go and get me three from the folk who are up at "
+      + "this hour. They will not want to give them to you. Everybody has one.",
+    complete: "*Bruin listens to all three, nodding slowly, like a man being handed tools*\n\n"
+      + "The raven's is cruel, the otter's is wet, and the one from the bird is barely a pun at all — "
+      + "which makes it the best of the three.\n\n"
+      + "I shall lose magnificently. Here. You have earned something warm.",
+    steps: [
+      {
+        objective: { type: 'talk', to: 'vesper' },
+        note: 'Get a pun out of Vesper, up on the downs at night',
+        progress: 'Vesper. Hollowdown, after dark, somewhere with a view. Ravens are full of them.',
+        done: "Why do I sit up here all night?\n\nBecause the view is *un-perch-edented*.\n\n"
+          + "...I want it on the record that I said that under duress.",
+      },
+      {
+        objective: { type: 'talk', to: 'brine' },
+        note: 'Get a pun out of Brine, night fishing at Saltmere',
+        progress: 'Brine fishes off the Saltmere shore at night. Ask while the fish are not biting.',
+        done: "You want a pun. From me. At this hour.\n\nFine. What did the tide say to the shore?\n\n"
+          + "Nothing. It just *waved*.\n\nNow go away, I've a line out.",
+      },
+      {
+        objective: { type: 'talk', to: 'nightjar' },
+        note: 'Find Nightjar, wherever Nightjar is, and get one',
+        progress: 'Nightjar does not stay anywhere. Out in the dark between the towns, most likely.',
+        done: '*a long churring whirr, then*\n\nI do not do puns.\n\n'
+          + 'I do, however, go where it is dark. You could call that a *nocturnal habit*.\n\n'
+          + '*the churring resumes, sounding very slightly pleased with itself*',
+      },
+      {
+        objective: { type: 'talk', to: 'bruin' },
+        note: 'Take all three back to Bruin',
+        progress: 'Back up to Bruin, at his stall in Hollowdown. He will be awake. He is always awake.',
+      },
+    ],
+    reward: { money: 240, rep: 0.08, items: [['cocoa', 3]], friendship: ['bruin'] },
+  },
+  {
+    id: 'wrong_bird',
+    giver: 'pim',
+    night: true,
+    title: 'The Wrong Bird, Repeatedly',
+    desc: 'Pim has been rehearsing an opening line for eleven months and keeps saying it to the wrong bird.',
+    offer: "May I be honest with you? I have a difficulty.\n\n"
+      + "There is a bird I mean to speak to. I have meant it for eleven months. The difficulty is "
+      + "that I have, on four separate occasions, said my opening line to entirely the wrong bird. "
+      + "One of them was a post box.\n\n"
+      + "They all sound the same in the dark, you see. If one of them were to make a *different* "
+      + "sound — a bell, say — I would know. Would you? I cannot ask them myself. Obviously.",
+    complete: "*Pim is quiet for a long moment*\n\n"
+      + "I heard it. Out past the hedges. One small bell, going the wrong way, at speed.\n\n"
+      + "I did not manage to say anything. But I knew which one it was, and that is eleven months "
+      + "of progress in an evening. Take this. I have no use for it and you have been very kind.",
+    steps: [
+      {
+        objective: { type: 'talk', to: 'nightjar' },
+        note: 'Find Nightjar and work out where they go',
+        progress: 'Out in the dark between the towns. Nightjar does not keep still and does not explain.',
+        done: '*a churr, close and then suddenly not*\n\n'
+          + 'You are looking for me on purpose. That is unusual.\n\n'
+          + 'If you have something for me, I will be somewhere dark. That is not a riddle.',
+      },
+      {
+        objective: { type: 'item', item: 'bell' },
+        note: 'Buy a little bell — Whisker & Paw, Brambleford',
+        progress: 'A little bell. The pet shop in Brambleford sells them for cats, but a bell is a bell.',
+        done: 'Good. Now find them again — and they will not be where they were.',
+      },
+      {
+        objective: { type: 'deliver', item: 'bell', to: 'nightjar', give: false },
+        note: 'Give the bell to Nightjar, after dark',
+        progress: 'Back out into the dark with it. They will be somewhere else this time.',
+        done: '*the churring stops*\n\nA bell. So that someone can tell it is me.\n\n'
+          + '*a pause, and then the sound of a very small bell moving away at speed*',
+      },
+      {
+        objective: { type: 'talk', to: 'pim' },
+        note: 'Tell Pim it is done',
+        progress: 'Back to Pim, down at Saltmere, after dark.',
+      },
+    ],
+    reward: { money: 280, rep: 0.1, items: [['f_lamp', 1]], friendship: ['pim'] },
+  },
+  {
+    id: 'mill_watch',
+    giver: 'nutmeg',
+    night: true,
+    title: "Nutmeg's Position",
+    desc: 'Nutmeg holds a night position at the old mill, and would like to hold it somewhere warmer.',
+    offer: "I hold a position. At the mill. Nights.\n\n"
+      + "The position is that I am at the mill, at night. That is the whole of it. I have held it "
+      + "for two years and I have never once been asked to do anything, which I had taken as a "
+      + "compliment.\n\n"
+      + "It is, however, extremely cold. Would you find out from Grist whether I am, strictly "
+      + "speaking, required? Do not lead him. I want an honest answer and I want it to be no.",
+    complete: "*Nutmeg receives this news with enormous dignity*\n\n"
+      + "Two years. Nobody asked me. I simply started, and everyone assumed somebody else had.\n\n"
+      + "Then I resign, effective immediately, and I shall take up a new position: the corner "
+      + "table in your cafe, nights, warm milk. Same duties. Better building.",
+    steps: [
+      {
+        objective: { type: 'talk', to: 'grist' },
+        note: 'Ask Grist whether the mill is actually being watched',
+        progress: 'Grist keeps the old mill. Ask him, in daylight, whether he employs a night watch.',
+        done: "A night watch? At the mill?\n\nThere is no night watch at the mill. There has never "
+          + "been a night watch at the mill. There is nothing in the mill but flour and one very "
+          + "smug something asleep in the hopper.\n\n...Oh. Oh, that's who that is.",
+      },
+      {
+        objective: { type: 'item', item: 'milk' },
+        note: 'Get a bottle of warm milk to break it to him gently',
+        progress: 'Warm milk. The grocer has it. He is not going to take this standing up.',
+        done: 'You are going to tell him, and you are going to have the milk ready. Good instinct.',
+      },
+      {
+        objective: { type: 'deliver', item: 'milk', to: 'nutmeg', give: false },
+        note: 'Take the milk, and the news, to Nutmeg after dark',
+        progress: 'Nutmeg is in Thistlewick after dark, or at the mill, or asleep. Probably asleep.',
+      },
+    ],
+    reward: { money: 200, rep: 0.06, items: [['f_catbed', 1]], friendship: ['nutmeg'] },
+  },
+  {
     id: 'stone_circle',
     giver: 'vesper',
     night: true,
@@ -365,8 +498,13 @@ export function stepMet(o, st) {
       const n = o.any.reduce((s, id) => s + st.cafeSim.stockCount(id), 0);
       return n >= o.count;
     }
-    case 'item':
-      return (st.inventory[o.item] || 0) >= (o.count || 1);
+    case 'item': {
+      const need = o.count || 1;
+      if ((st.inventory[o.item] || 0) >= need) return true;
+      // A bought bottle of milk lands in the pantry rather than the bag, so
+      // "get a bottle of milk" was a step you could never finish by buying one.
+      return !!st.cafeSim && st.cafeSim.stockCount(o.item) >= need;
+    }
     case 'deliver':
     case 'talk':
       return false; // both are finished by talking to somebody

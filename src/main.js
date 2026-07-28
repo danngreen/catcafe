@@ -48,7 +48,7 @@ const WORLD_SEED = 20260724;
  * one-shot switches: a spot you searched too early should still be there when
  * you come back knowing what you're looking for.
  */
-const SEARCH_SPOTS = {
+export const SEARCH_SPOTS = {
   bushes: (st) => {
     if (st.clock.isDark) {
       return {
@@ -116,6 +116,27 @@ const SEARCH_SPOTS = {
       sfx: 'splash',
       give: ['golden_collar', 1],
       flag: 'got_collar',
+    };
+  },
+  // The lighthouse table. There was a sign here describing a logbook and
+  // nothing that let you pick it up, so the errand that asks for one could
+  // never be finished — the same dead end the shell used to be.
+  keepers_table: (st) => {
+    if (st.has('logbook') || st.flags.took_logbook) {
+      return {
+        text: 'The cold cup of tea is still there. Somebody should throw it away. '
+          + 'Nobody is going to be the one who does.',
+        sfx: 'bush',
+      };
+    }
+    return {
+      text: 'A logbook, a cold cup of tea, and a note reading "back in five minutes", '
+        + 'dated eleven years ago.\n\nThe book falls open on its own. Eleven years of wind '
+        + 'and tide in the same careful hand, and then, near the end, one line that is not '
+        + 'about the weather at all.\n\nYou put it under your arm. Somebody should read it.',
+      sfx: 'quest',
+      give: ['logbook', 1],
+      flag: 'took_logbook',
     };
   },
 };
@@ -1518,6 +1539,11 @@ class Game {
     if (q.id === 'first_extension' && st.workers < 1 && st.money < 400) return false;
     if (q.id === 'rare_cat' && st.cats.length < 2) return false;
     if (q.id === 'music_night' && st.reputation < 0.25) return false;
+    // Moth has the shell somebody is after, but he is not going to bring it up
+    // unaided — you have to have heard from Shrimp that it went to him. Without
+    // this the shell errand sends you to a beach that has not had a shell on it
+    // in years, which is where it used to end.
+    if (q.id === 'moth_count' && !st.flags.heard_hint_shrimp) return false;
     return true;
   }
 

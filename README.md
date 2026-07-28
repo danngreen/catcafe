@@ -284,6 +284,12 @@ one genuinely opens something — the bridge alone saves 272 steps of a 491-step
 walk to Thistlewick, and the cliff notch leads somewhere with no way round at
 all.
 
+After dark a different set of folk are out, with jobs of their own — a bear who
+needs three fresh puns for a contest he intends to lose well, an owl who has been
+rehearsing an opening line for eleven months and keeps saying it to the wrong
+bird, and a dormouse holding a night position at the mill that nobody ever gave
+him. Several run to three or four steps and cross between day and night.
+
 Mail birds carry letters between friends. Taxi birds will fly you to anywhere
 you've already visited, for a fare, between 7am and 7pm — one comes down,
 collects you in a wicker basket, and sets you down at the far end. The map
