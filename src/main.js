@@ -26,6 +26,7 @@ import { HIRE_BY_ID } from './game/cafe.js';
 import { ITEMS, STOCK, FLEA_POOL, baseId } from './game/items.js';
 import { shopOpen, hoursText, HOUR_SECONDS, DAY_FULL } from './game/time.js';
 import { weatherNow, weatherAmbience, weatherLight, weatherLine, WeatherFx } from './game/weather.js';
+import { REGULARS, REGULAR_BY_ID, dueNow } from './game/regulars.js';
 import { BOOK_BY_ID } from './world/places.js';
 import { QUESTS, QUESTS_BY_GIVER, objectiveMet, questSteps, currentStep,
   stepIndex, isLastStep, progressText, objectiveText, repairAllSteps } from './game/quests.js';
@@ -426,6 +427,8 @@ class Game {
     for (const def of VILLAGERS) {
       const isKeeper = SHOPS.some((s) => s.keeper === def.id);
       if (isKeeper) continue;                        // placed inside their shop
+      // Regulars are not out in the valley at all. They come to you.
+      if (def.regular) continue;
       let x, y;
       // Some of the cast belong somewhere in particular — a ghost is only
       // interesting if it is haunting the hedge somebody complained about.
@@ -733,6 +736,7 @@ class Game {
     net.update(dt, this.player, st.mapId);
     this.updateCafeSim(dt);
     this.updateEmployee(dt);
+    this.updateRegulars(dt);
     this.updateWeather(dt);
     this.updateAudio(dt);
     this.hud.update(dt, st);
@@ -821,7 +825,10 @@ class Game {
         v.update(dt, map);
       }
     } else if (map.villagers) {
-      for (const v of map.villagers) v.update(dt, map);
+      // Regulars are driven by updateRegulars, which knows where you are.
+      // Letting the ordinary wander run as well had them drifting back to the
+      // door as fast as they crossed the room.
+      for (const v of map.villagers) if (!v.regular) v.update(dt, map);
     }
 
     if (st.inCafe) {
@@ -831,6 +838,51 @@ class Game {
         cat.update(dt, map, { joy, pan });
       }
     }
+  }
+
+  /**
+   * Who has let themselves into the cafe. Regulars are not out in the valley
+   * to be found — they turn up, cross the room, and wait to be spoken to. Due
+   * or not is derived from the seed and the date, so a shared valley gets the
+   * same visitor on the same evening without a word over the wire.
+   */
+  updateRegulars(dt) {
+    const st = this.state;
+    const map = st.cafeMap;
+    if (!map) return;
+    map.villagers ||= [];
+    for (const def of REGULARS) {
+      const waiting = this.waitingOn(def.id);
+      const want = st.inCafe && dueNow(def, this.worldSeed, st.clock, waiting);
+      const here = map.villagers.find((v) => v.def.id === def.id);
+      if (want && !here) {
+        // In through the front door, like anybody else.
+        const door = map.meta.door || map.spawn || { x: 2, y: 2 };
+        const v = new Villager(def, door.x * TILE + TILE / 2, (door.y + 1) * TILE - 2);
+        map.villagers.push(v);
+        this.hud.toast(`${def.name} lets himself in.`, 'good', 5);
+        audio.sfx('door', { gain: 0.4 });
+      } else if (!want && here && !here.talking) {
+        map.villagers.splice(map.villagers.indexOf(here), 1);
+      }
+    }
+    for (const v of map.villagers) {
+      if (!v.regular) continue;
+      v.sparkleT += dt;
+      if (st.inCafe) v.updateRegular(dt, map, this.player);
+    }
+  }
+
+  /** Is one of their errands sat on a step only they can move along? */
+  waitingOn(id) {
+    const st = this.state;
+    for (const q of QUESTS) {
+      if (st.quests[q.id] !== 'active') continue;
+      const o = currentStep(q, st).objective;
+      if ((o.type === 'talk' || o.type === 'deliver') && o.to === id) return true;
+      if (q.giver === id && objectiveMet(q, st)) return true;
+    }
+    return false;
   }
 
   /**

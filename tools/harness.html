@@ -1512,6 +1512,124 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!spots.length) window.__errors.push('nothing to search in the lighthouse: ' + window.__log);
         if (after <= before) window.__errors.push('the lighthouse would not give up its logbook: ' + window.__log);
         if (twice !== after) window.__errors.push('the logbook can be taken twice: ' + window.__log);
+      } else if (SCRIPT === 'regular') {
+        // Bruin is a regular, not a resident: he is nowhere in the valley, he
+        // lets himself into the cafe now and then, and he comes to you rather
+        // than joining the queue.
+        const { REGULARS, visitOn, dueNow } = await import('../src/game/regulars.js');
+        const { VILLAGERS } = await import('../src/world/places.js');
+        const st = g.state;
+        const seed = g.worldSeed;
+        const def = REGULARS.find((r) => r.id === 'bruin');
+
+        // Not standing about outside.
+        const outside = g.villagers.filter((v) => v.def.id === 'bruin').length;
+
+        // Rare, but not never: across a season he should come some days.
+        let days = 0;
+        for (let d = 0; d < 120; d++) if (visitOn(def, seed, d)) days++;
+        const rate = days / 120;
+        // And after dark, since that is when he is up.
+        const hours = [];
+        for (let d = 0; d < 120; d++) {
+          const w = visitOn(def, seed, d);
+          if (w) hours.push(Math.floor(w.from));
+        }
+        const tooEarly = hours.filter((h) => h < 18).length;
+
+        // Same seed, same day, same answer — that is the whole sync story.
+        const stable = [0, 1, 2, 3, 4].every((d) => {
+          const a = visitOn(def, seed, d), b = visitOn(def, seed, d);
+          return JSON.stringify(a) === JSON.stringify(b);
+        });
+        // Different valleys get different evenings.
+        const other = [];
+        for (let d = 0; d < 40; d++) other.push(!!visitOn(def, seed + 1, d));
+        const mine = [];
+        for (let d = 0; d < 40; d++) mine.push(!!visitOn(def, seed, d));
+        const differs = other.some((v, i) => v !== mine[i]);
+
+        // Waiting on him overrides the dice, so an errand cannot strand you.
+        const quietDay = (() => { for (let d = 0; d < 200; d++) if (!visitOn(def, seed, d)) return d; return 0; })();
+        const clockAt = (day, hour) => ({ day, hourFloat: hour, t: hour * 3600 });
+        const notDue = dueNow(def, seed, clockAt(quietDay, 21), false);
+        const dueBecauseWaiting = dueNow(def, seed, clockAt(quietDay, 21), true);
+
+        // Now put him in the room and check he behaves like a regular.
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        await wait(900);
+        st.clock.day = (() => { for (let d = 0; d < 200; d++) if (visitOn(def, seed, d)) return d; return 0; })();
+        const win = visitOn(def, seed, st.clock.day);
+        st.clock.t = (win.from + 0.5) * (1200 / 24);
+        // Stand well away from the door so he has to cross the room.
+        const meta = st.cafeMap.meta;
+        g.player.x = (meta.offX + 8) * 16;
+        g.player.y = (meta.offY + 6) * 16;
+        g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
+        await wait(1200);
+        const inRoom = (st.cafeMap.villagers || []).filter((v) => v.def.id === 'bruin');
+        const v0 = inRoom[0];
+        const startD = v0 ? Math.hypot(v0.x - g.player.x, v0.y - g.player.y) : -1;
+        await wait(2500);
+        const endD = v0 ? Math.hypot(v0.x - g.player.x, v0.y - g.player.y) : -1;
+
+        // He does not queue: a regular must never be one of the customers.
+        const asCustomer = st.cafeSim.customers.filter((c) => c.def && c.def.id === 'bruin').length;
+
+        // Bigger than an ordinary villager, and drawn with a shine.
+        const looksDifferent = !!(v0 && v0.big && v0.sparkle);
+        const drawsShine = !!(v0 && typeof v0.drawShine === 'function');
+
+        // And talking to him actually reaches the quest machinery.
+        let spoke = false;
+        if (v0) {
+          g.player.x = v0.x + 8; g.player.y = v0.y;
+          await wait(200);
+          g.interact();
+          await wait(500);
+          spoke = g.dialogue.active;
+        }
+
+        window.__reg = `outside=${outside} visits=${days}/120 (${(rate * 100).toFixed(0)}%)`
+          + ` beforeDark=${tooEarly} stable=${stable} differsBySeed=${differs}`
+          + ` quietDay due=${notDue} whenWaiting=${dueBecauseWaiting}`
+          + ` inRoom=${inRoom.length} approach ${startD.toFixed(0)}->${endD.toFixed(0)}`
+          + ` asCustomer=${asCustomer} big+sparkle=${looksDifferent} shine=${drawsShine} spoke=${spoke}`;
+        if (outside) window.__errors.push('a regular is standing about in the valley: ' + window.__reg);
+        if (!days) window.__errors.push('the regular never comes at all: ' + window.__reg);
+        if (rate > 0.6) window.__errors.push('the regular is not rare enough: ' + window.__reg);
+        if (tooEarly) window.__errors.push('a night regular turned up in daylight: ' + window.__reg);
+        if (!stable) window.__errors.push('two players would see different visits: ' + window.__reg);
+        if (!differs) window.__errors.push('every valley gets the same visits: ' + window.__reg);
+        if (notDue) window.__errors.push('the quiet day was not quiet: ' + window.__reg);
+        if (!dueBecauseWaiting) window.__errors.push('waiting on him does not bring him in: ' + window.__reg);
+        if (!inRoom.length) window.__errors.push('he never came in: ' + window.__reg);
+        if (asCustomer) window.__errors.push('the regular joined the queue: ' + window.__reg);
+        if (endD > startD - 10) window.__errors.push('he did not come over: ' + window.__reg);
+        if (!looksDifferent) window.__errors.push('he looks like everyone else: ' + window.__reg);
+        if (!spoke) window.__errors.push('you cannot talk to him: ' + window.__reg);
+      } else if (SCRIPT === 'regularshot') {
+        // Bruin in the room, next to ordinary customers, for scale.
+        const { REGULARS, visitOn } = await import('../src/game/regulars.js');
+        const st = g.state;
+        const def = REGULARS.find((r) => r.id === 'bruin');
+        st.money = 3000;
+        for (const id of ['house_coffee', 'cake', 'cocoa']) st.cafeSim.addStock(id, 20, st.clock.day);
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        await wait(900);
+        st.shopOpen = true;
+        for (let d = 0; d < 200; d++) if (visitOn(def, g.worldSeed, d)) { st.clock.day = d; break; }
+        const win = visitOn(def, g.worldSeed, st.clock.day);
+        st.clock.t = (win.from + 0.5) * (1200 / 24);
+        const meta = st.cafeMap.meta;
+        g.player.x = (meta.offX + 6) * 16;
+        g.player.y = (meta.offY + 5) * 16;
+        // A couple of ordinary customers alongside, so the size reads.
+        for (let i = 0; i < 3; i++) { st.cafeSim.trySpawn(st.cafeMap); await wait(250); }
+        g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
+        await wait(2600);
+        const v = (st.cafeMap.villagers || []).find((x) => x.def.id === 'bruin');
+        window.__pass = `bruin=${!!v} customers=${st.cafeSim.customers.length}`;
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -3603,6 +3721,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__night ? ` ${window.__night}` : '')
         + (window.__chain ? ` ${window.__chain}` : '')
         + (window.__log ? ` ${window.__log}` : '')
+        + (window.__reg ? ` ${window.__reg}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

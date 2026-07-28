@@ -284,11 +284,20 @@ one genuinely opens something — the bridge alone saves 272 steps of a 491-step
 walk to Thistlewick, and the cliff notch leads somewhere with no way round at
 all.
 
-After dark a different set of folk are out, with jobs of their own — a bear who
-needs three fresh puns for a contest he intends to lose well, an owl who has been
-rehearsing an opening line for eleven months and keeps saying it to the wrong
-bird, and a dormouse holding a night position at the mill that nobody ever gave
-him. Several run to three or four steps and cross between day and night.
+After dark a different set of folk are out, with jobs of their own — an owl who
+has been rehearsing an opening line for eleven months and keeps saying it to the
+wrong bird, and a dormouse holding a night position at the mill that nobody ever
+gave him. Several run to three or four steps and cross between day and night.
+
+**Regulars** are the other way round: you don't go and find them, they come to
+you. Bruin is a bear who wants three fresh puns for a contest he has lost four
+years running, and the only place you will ever meet him is your own cafe — he
+lets himself in some evenings, walks past the queue, and comes over. He is half
+again the size of anyone else in the room and lit from within, so you will know.
+Whether he is due is worked out from the seed and the date, so everybody in a
+shared valley gets the same visitor on the same evening; and if one of his
+errands is waiting on him, he turns up that night rather than whenever the dice
+say.
 
 Mail birds carry letters between friends. Taxi birds will fly you to anywhere
 you've already visited, for a fare, between 7am and 7pm — one comes down,

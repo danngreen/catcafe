@@ -458,11 +458,14 @@ export const VILLAGERS = [
       'That old pier is rotten through. Mind your feet if you go out on it.',
       'The tide takes things out and brings other things back. Never the same things.'],
     hint: 'Anything lost off the end of that pier is still under it. The mud keeps what it is given.' },
-  { id: 'bruin', name: 'Bruin', town: 'hollowdown', species: 'bear', coat: 'bear', role: 'villager',
-    when: 'night',
-    lines: ['I keep a stall up here after dark. Nobody comes. Suits me — I am my own best audience.',
+  // A regular rather than a resident: Bruin is not stood in a town waiting to
+  // be found, he lets himself into your cafe every so often and comes over.
+  { id: 'bruin', name: 'Bruin', species: 'bear', coat: 'white', role: 'villager',
+    regular: true, when: 'night', big: true, sparkle: true,
+    lines: ['I do not queue. Queueing is for people with somewhere to be.',
       'What do you call a raven who works nights? A crow-nological anomaly. ...You laughed. Slightly.',
-      'A pun is a small unkindness you do to a word. The word forgives you. Usually.'],
+      'A pun is a small unkindness you do to a word. The word forgives you. Usually.',
+      'Warm room. Cats. Somebody who will listen. I have made worse decisions than this one.'],
     hint: 'There is a contest. Longest Face Wins, they call it. Whoever hears the most puns without '
       + 'laughing. I have not won it in four years and I intend to lose again with style.' },
   { id: 'pim', name: 'Pim', town: 'saltmere', species: 'owl', coat: 'owl', role: 'villager',

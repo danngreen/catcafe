@@ -256,6 +256,38 @@ export class Villager extends Actor {
     this.burrow = { x, y };
     this.alpha = 1;
     this.ghost = !!def.ghost;
+    // A regular doesn't queue at the counter — they come and find you. Bigger
+    // and paler than anyone else in the room, with a slow shine, so it is
+    // obvious at a glance that this is not another customer.
+    this.regular = !!def.regular;
+    this.big = !!def.big;
+    this.sparkle = !!def.sparkle;
+    this.sparkleT = 0;
+    if (this.regular) { this.speed = 20; this.range = 0; }
+  }
+
+  /**
+   * Cross the room to whoever is in it and then stand there. No wandering: a
+   * regular who drifts off mid-conversation is a regular you chase.
+   */
+  updateRegular(dt, map, player) {
+    this.moving = false;
+    if (this.talking) { this.animate(dt); return; }
+    if (player) {
+      const dx = player.x - this.x, dy = player.y - this.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 22) {
+        const step = this.speed * dt;
+        const before = { x: this.x, y: this.y };
+        moveActor(map, this, (dx / dist) * step, (dy / dist) * step);
+        this.moving = Math.hypot(this.x - before.x, this.y - before.y) > 0.05;
+        if (Math.abs(dx) > Math.abs(dy)) this.dir = dx > 0 ? 'right' : 'left';
+        else this.dir = dy > 0 ? 'down' : 'up';
+      } else {
+        this.faceTowards(player.x, player.y);
+      }
+    }
+    this.animate(dt);
   }
 
   /** Send them home (or bring them back) through their own door. */
@@ -355,8 +387,51 @@ export class Villager extends Actor {
     const a = this.alpha * (this.ghost ? 0.62 : 1);
     const lift = this.ghost ? Math.sin(this.bobT * 1.7) * 1.5 - 2 : 0;
     if (a < 1) ctx.globalAlpha = a;
-    ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - CHAR_H - oy + lift));
+    if (this.big) {
+      // Drawn half again as large, from the feet, so he stands head and
+      // shoulders over a room full of ordinary customers.
+      const k = 1.5;
+      const w = Math.round(spr.width * k), h = Math.round(spr.height * k);
+      const bx = Math.round(this.x - w / 2 - ox), by = Math.round(this.y - h - oy + lift);
+      if (this.sparkle) this.drawShine(ctx, bx, by, w, h);
+      ctx.drawImage(spr, bx, by, w, h);
+    } else {
+      ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - CHAR_H - oy + lift));
+    }
     if (a < 1) ctx.globalAlpha = 1;
+  }
+
+  /** A slow warm glow and a few drifting motes, behind the sprite. */
+  drawShine(ctx, bx, by, w, h) {
+    const t = this.sparkleT;
+    const cx = bx + w / 2, cy = by + h * 0.55;
+    const pulse = 0.62 + Math.sin(t * 1.6) * 0.22;
+    // Additive, so it lifts whatever it is over rather than fogging it. A
+    // plain alpha wash just made him look like he needed dusting.
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, w * 1.05);
+    g.addColorStop(0, `rgba(255,244,198,${0.44 * pulse})`);
+    g.addColorStop(0.45, `rgba(255,232,170,${0.20 * pulse})`);
+    g.addColorStop(1, 'rgba(255,232,170,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(cx, cy, w * 1.05, 0, Math.PI * 2);
+    ctx.fill();
+    // Motes drifting up around him, brightest at mid-rise.
+    for (let i = 0; i < 7; i++) {
+      const p = t * 0.75 + i * 0.898;
+      const rise = (p * 0.3 + i * 0.14) % 1;
+      const a2 = Math.sin(rise * Math.PI);
+      if (a2 < 0.12) continue;
+      ctx.globalAlpha = a2;
+      ctx.fillStyle = i % 3 ? '#fffbe8' : '#ffe9a8';
+      const sx = Math.round(cx + Math.cos(p * 1.7 + i * 2) * (w * 0.62));
+      const sy = Math.round(by + h * (0.95 - rise * 0.95));
+      ctx.fillRect(sx, sy, 1, 1);
+      if (a2 > 0.6) { ctx.fillRect(sx, sy - 1, 1, 1); ctx.fillRect(sx + 1, sy, 1, 1); }
+    }
+    ctx.restore();
   }
 
   drawEmote(ctx, ox, oy, topY) {
