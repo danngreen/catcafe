@@ -290,14 +290,19 @@ wrong bird, and a dormouse holding a night position at the mill that nobody ever
 gave him. Several run to three or four steps and cross between day and night.
 
 **Regulars** are the other way round: you don't go and find them, they come to
-you. Bruin is a bear who wants three fresh puns for a contest he has lost four
-years running, and the only place you will ever meet him is your own cafe — he
-lets himself in some evenings, walks past the queue, and comes over. He is half
-again the size of anyone else in the room and lit from within, so you will know.
-Whether he is due is worked out from the seed and the date, so everybody in a
-shared valley gets the same visitor on the same evening; and if one of his
-errands is waiting on him, he turns up that night rather than whenever the dice
-say.
+you. Three of them let themselves into your cafe every so often, walk past the
+queue and come over — each half again the size of anyone else in the room and
+lit from within, so you will know. Bruin the bear wants three fresh puns for a
+contest he has lost four years running. Fennel the rabbit would like his usual,
+which you do not stock and which he is in no hurry about. Linnet comes in every
+night for a cat who has stopped sitting with her, and would like to know what
+she has got wrong.
+
+Whether one is due is worked out from the seed and the date, so everybody in a
+shared valley gets the same visitor on the same evening; and if one of their
+errands is waiting on them, they turn up that night rather than whenever the
+dice say. Their errands are cafe-shaped: stock a thing, put a thing in a room,
+hand a thing over — the sort of job you finish by being at home.
 
 Mail birds carry letters between friends. Taxi birds will fly you to anywhere
 you've already visited, for a fare, between 7am and 7pm — one comes down,

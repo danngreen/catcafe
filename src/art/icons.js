@@ -53,6 +53,16 @@ export const ICONS = {
   lemonade: (b) => { glass(b, '#f5d84a'); b.ellipse(11, 4, 2, 1.6, rgb('#ffe97a')); },
   // The cold half of the menu. Ice cubes read at this size where condensation
   // does not, so all three say cold the same way.
+  dandelion: (b) => {
+    glass(b, '#e8c84a');
+    b.rect(5, 6, 6, 1, rgb('#f4dc7a'));
+    // A dandelion clock balanced on the rim, because somebody would.
+    b.vline(12, 3, 4, rgb('#6b9e57'));
+    for (const [dx, dy] of [[10, 2], [12, 1], [14, 2], [11, 3], [13, 3], [12, 3]]) {
+      b.set(dx, dy, rgb('#f6f2e0'));
+    }
+    b.set(12, 2, rgb('#e8e0c0'));
+  },
   icedCoffee: (b) => {
     glass(b, '#6b4630');
     b.rect(5, 6, 3, 3, rgb('#cfe4f0', 210)); b.rect(8, 9, 3, 3, rgb('#e6f2fa', 190));

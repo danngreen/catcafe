@@ -1,3 +1,5 @@
+import { ITEMS } from './items.js';
+
 // Small errands the villagers ask of you. Most are fetch-and-carry; the reward
 // is usually money, sometimes an item, and quite often just knowing where to
 // buy something you couldn't find before.
@@ -242,6 +244,70 @@ export const QUESTS = [
       },
     ],
     reward: { money: 150, items: [['seashell', 1]], friendship: ['moth'] },
+  },
+  {
+    id: 'the_usual',
+    giver: 'fennel',
+    title: 'The Usual',
+    desc: 'Fennel would like his usual. You do not stock his usual and he is in no hurry about it.',
+    offer: "Afternoon. I'll have the usual.\n\n"
+      + "...Ah. You don't do the usual. That's all right. Nobody does the usual any more.\n\n"
+      + "Dandelion cordial. Root & Remedy in Oakhollow make it, in small batches, badly "
+      + "advertised. Get some in and I shall become the most reliable income you have ever had.\n\n"
+      + "No, I won't fetch it myself. I have thought about it. At length.",
+    complete: "*Fennel takes one sip and closes his eyes for slightly too long*\n\n"
+      + "That's it. That is precisely it.\n\nRight. Same time most days, then. You'll get used to me.\n\n"
+      + "Here — my aunt left me this and I have nowhere to put it. You have a whole cafe.",
+    steps: [
+      {
+        objective: { type: 'stock', any: ['dandelion'], count: 2 },
+        note: 'Get dandelion cordial into the pantry — Root & Remedy, Oakhollow',
+        progress: 'Root & Remedy, in Oakhollow. Two, so there is one left when I come back.',
+        done: "You went. You actually went.\n\nRight. Pour me one, then. I'll be here.",
+      },
+      {
+        objective: { type: 'deliver', item: 'dandelion', to: 'fennel', give: false },
+        note: 'Serve Fennel his cordial, next time he is in',
+        progress: 'He will be in. He is always in. Have it ready and hand it to him.',
+      },
+    ],
+    reward: { money: 220, rep: 0.1, items: [['f_painting', 1]], friendship: ['fennel'] },
+  },
+  {
+    id: 'the_grey_one',
+    giver: 'linnet',
+    night: true,
+    title: 'The Grey One',
+    desc: 'Linnet comes in every night for a cat who has stopped sitting with him.',
+    offer: "May I ask you something, as the one who owns the cats?\n\n"
+      + "The grey one used to sit with me. Every night, same chair, the whole evening. Six weeks "
+      + "now she has not come near me and I have been over it and over it.\n\n"
+      + "I am not asking you to make her. You cannot make a cat do anything, and I would not "
+      + "want her if you could. I am asking whether there is something I have got wrong.",
+    complete: "*the grey cat considers the bed, considers Linnet, and gets into the bed*\n\n"
+      + "...She is not sitting with me. She is sitting *near* me.\n\n"
+      + "That will do. That will do very nicely. Do not tell anyone I got emotional about "
+      + "a deer-shaped absence in a chair.\n\nTake this. She has never once used it.",
+    steps: [
+      {
+        objective: { type: 'furniture', place: 'catBed' },
+        note: 'Put a cat bed in the cafe, somewhere he sits',
+        progress: 'A cat bed. The pet shop in Brambleford has them. Somewhere near the chairs.',
+        done: 'A bed. Of course. She is old, and a chair with a deer folded into it is a hard sit.',
+      },
+      {
+        objective: { type: 'item', item: 'treats' },
+        note: 'Get some cat treats',
+        progress: 'Treats. The pet shop again. I am not above bribery and neither is she.',
+        done: 'Good. Now give them to me. I would like it to have been me who did it.',
+      },
+      {
+        objective: { type: 'deliver', item: 'treats', to: 'linnet', give: false },
+        note: 'Hand the treats to Linnet, after dark',
+        progress: 'Give them to him rather than doing it yourself. That is the whole point.',
+      },
+    ],
+    reward: { money: 240, rep: 0.08, items: [['f_cattower', 1]], friendship: ['linnet'] },
   },
   {
     id: 'pun_off',
@@ -536,14 +602,29 @@ export function objectiveText(q, st) {
   return stepText(o, st, step) + of;
 }
 
+/** "a piano", "a stone fireplace" — what a `furniture` step is asking for. */
+function placeName(place) {
+  const entry = Object.values(ITEMS).find((v) => v.place === place);
+  if (!entry) return 'that';
+  const name = entry.name.toLowerCase();
+  return `${/^[aeiou]/.test(name) ? 'an' : 'a'} ${name}`;
+}
+
 function stepText(o, st, step) {
   if (step && step.note) return step.note;
   switch (o.type) {
     case 'stock': {
       const n = o.any.reduce((s, id) => s + st.cafeSim.stockCount(id), 0);
-      return `Stock coffee or tea (${Math.min(n, o.count)}/${o.count})`;
+      const what = o.any.map((id) => st.itemName(id)).join(' or ');
+      return `Stock ${what} (${Math.min(n, o.count)}/${o.count})`;
     }
-    case 'item': return `Find: ${st.itemName(o.item)} (${Math.min(st.inventory[o.item] || 0, o.count || 1)}/${o.count || 1})`;
+    case 'item': {
+      const want = o.count || 1;
+      // The pantry counts as well as the bag, the same way the step does —
+      // otherwise a bought bottle of milk reads 0/1 while the step is done.
+      const held = (st.inventory[o.item] || 0) + (st.cafeSim ? st.cafeSim.stockCount(o.item) : 0);
+      return `Find: ${st.itemName(o.item)} (${Math.min(held, want)}/${want})`;
+    }
     case 'deliver': return `Take ${st.itemName(o.item)} to ${st.villagerName(o.to)}`;
     case 'talk': return `Find ${st.villagerName(o.to)}`;
     case 'flag': return 'Clear the way';
@@ -552,7 +633,7 @@ function stepText(o, st, step) {
     case 'rooms': return `Build another room (${st.cafe.rooms.length}/${o.count})`;
     case 'profit': return `Clear ${o.amount} profit in a day (best: ${Math.round(st.bestDayProfit)})`;
     case 'rarecat': return 'Own a rare breed';
-    case 'furniture': return 'Put a piano in the cafe';
+    case 'furniture': return `Put ${placeName(o.place)} in the cafe`;
     default: return '';
   }
 }

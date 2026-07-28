@@ -995,6 +995,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         ];
         st.rebuildCafe();
         await wait(300);
+        // Early morning: no regular can be due at this hour whatever the seed,
+        // and one crossing the room would read as weather in the sample.
+        st.clock.t = 8 * (1200 / 24);
         g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
         await wait(1000);
         const off = st.cafeMap.meta;
@@ -1373,6 +1376,12 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const { VILLAGERS } = await import('../src/world/places.js');
         const st = g.state;
         const ids = new Set(VILLAGERS.map((v) => v.id));
+        // Two villagers sharing an id is silent and nasty: every lookup finds
+        // whichever was written first, so the other one can be given a quest
+        // they will never be asked about. There were two such pairs.
+        const seenIds = {};
+        const dupeIds = [];
+        for (const v of VILLAGERS) { if (seenIds[v.id]) dupeIds.push(v.id); seenIds[v.id] = 1; }
 
         // Everything you can end up holding: bought anywhere, or handed over
         // as a reward, or given by a step.
@@ -1463,12 +1472,13 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         window.__chain = `quests=${QUESTS.length} night=${night.length} multiStepNight=${multi.length}`
           + ` unreachable=[${unreachable.join(' ')}] unknownPerson=[${unknownPerson.join(' ')}]`
           + ` spotsPlaced=${spots.length} orphaned=[${orphaned}] finds=${JSON.stringify(givesFrom)}`
-          + ` shellFrom=[${shellFrom}] shrimpPointsAtMoth=${pointsAtMoth}`
+          + ` duplicateIds=[${dupeIds}] shellFrom=[${shellFrom}] shrimpPointsAtMoth=${pointsAtMoth}`
           + ` mothOffers before=${beforeHearing} after=${afterHearing}`
           + ` nightGiversNocturnal=${nightGiversAreNocturnal}`;
         if (unreachable.length) window.__errors.push('a quest asks for something you cannot get: ' + window.__chain);
         if (orphaned.length) window.__errors.push('a search spot exists but is not placed anywhere: ' + window.__chain);
         if (unknownPerson.length) window.__errors.push('a quest names somebody who does not exist: ' + window.__chain);
+        if (dupeIds.length) window.__errors.push('two villagers share an id: ' + window.__chain);
         if (!shellFrom.length) window.__errors.push('nothing in the valley gives you a shell: ' + window.__chain);
         if (!pointsAtMoth) window.__errors.push('Shrimp never mentions where the shell went: ' + window.__chain);
         if (beforeHearing) window.__errors.push('Moth offers his job before you have heard about the shell: ' + window.__chain);
@@ -1522,8 +1532,33 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const seed = g.worldSeed;
         const def = REGULARS.find((r) => r.id === 'bruin');
 
-        // Not standing about outside.
-        const outside = g.villagers.filter((v) => v.def.id === 'bruin').length;
+        // None of them are standing about outside.
+        const outside = g.villagers.filter((v) => v.def.regular).length;
+
+        // Every regular has to be somebody's quest giver or target, or they
+        // are just scenery you cannot go and look at.
+        const { QUESTS, questSteps } = await import('../src/game/quests.js');
+        const involved = new Set();
+        for (const q of QUESTS) {
+          involved.add(q.giver);
+          for (const step of questSteps(q)) {
+            const o = step.objective;
+            if (o.to) involved.add(o.to);
+          }
+        }
+        const idle = REGULARS.filter((r) => !involved.has(r.id)).map((r) => r.id);
+
+        // Daytime regulars come in daylight and night ones after dark.
+        const wrongHour = [];
+        for (const r of REGULARS) {
+          for (let d = 0; d < 120; d++) {
+            const w = visitOn(r, seed, d);
+            if (!w) continue;
+            const night = r.when === 'night';
+            if (night && w.from < 18) wrongHour.push(`${r.id}@${w.from.toFixed(0)}`);
+            if (!night && (w.from < 9 || w.from > 18)) wrongHour.push(`${r.id}@${w.from.toFixed(0)}`);
+          }
+        }
 
         // Rare, but not never: across a season he should come some days.
         let days = 0;
@@ -1558,6 +1593,20 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // Now put him in the room and check he behaves like a regular.
         g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
         await wait(900);
+        // The daytime regular has to work the same way, in daylight.
+        const fen = REGULARS.find((r) => r.id === 'fennel');
+        const fenDay = (() => { for (let d = 0; d < 200; d++) if (visitOn(fen, seed, d)) return d; return 0; })();
+        const fenWin = visitOn(fen, seed, fenDay);
+        st.clock.day = fenDay;
+        st.clock.t = (fenWin.from + 0.5) * (1200 / 24);
+        await wait(1000);
+        const fenIn = (st.cafeMap.villagers || []).some((v) => v.def.id === 'fennel');
+        const fenDark = st.clock.isDark;
+        // ...and clear off again once his window closes.
+        st.clock.t = (fenWin.to + 1) * (1200 / 24);
+        await wait(900);
+        const fenGone = !(st.cafeMap.villagers || []).some((v) => v.def.id === 'fennel');
+
         st.clock.day = (() => { for (let d = 0; d < 200; d++) if (visitOn(def, seed, d)) return d; return 0; })();
         const win = visitOn(def, seed, st.clock.day);
         st.clock.t = (win.from + 0.5) * (1200 / 24);
@@ -1594,7 +1643,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           + ` beforeDark=${tooEarly} stable=${stable} differsBySeed=${differs}`
           + ` quietDay due=${notDue} whenWaiting=${dueBecauseWaiting}`
           + ` inRoom=${inRoom.length} approach ${startD.toFixed(0)}->${endD.toFixed(0)}`
-          + ` asCustomer=${asCustomer} big+sparkle=${looksDifferent} shine=${drawsShine} spoke=${spoke}`;
+          + ` asCustomer=${asCustomer} big+sparkle=${looksDifferent} shine=${drawsShine} spoke=${spoke}`
+          + ` regulars=${REGULARS.length} idle=[${idle}] wrongHour=${wrongHour.length}`
+          + ` fennel in=${fenIn} inDaylight=${!fenDark} leaves=${fenGone}`;
         if (outside) window.__errors.push('a regular is standing about in the valley: ' + window.__reg);
         if (!days) window.__errors.push('the regular never comes at all: ' + window.__reg);
         if (rate > 0.6) window.__errors.push('the regular is not rare enough: ' + window.__reg);
@@ -1608,6 +1659,12 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (endD > startD - 10) window.__errors.push('he did not come over: ' + window.__reg);
         if (!looksDifferent) window.__errors.push('he looks like everyone else: ' + window.__reg);
         if (!spoke) window.__errors.push('you cannot talk to him: ' + window.__reg);
+        if (REGULARS.length < 3) window.__errors.push('there is only one regular: ' + window.__reg);
+        if (idle.length) window.__errors.push('a regular has nothing to say to you: ' + window.__reg);
+        if (wrongHour.length) window.__errors.push('a regular turns up at the wrong sort of hour: ' + window.__reg);
+        if (!fenIn) window.__errors.push('the daytime regular never came in: ' + window.__reg);
+        if (fenDark) window.__errors.push('the daytime regular came in the dark: ' + window.__reg);
+        if (!fenGone) window.__errors.push('a regular never leaves: ' + window.__reg);
       } else if (SCRIPT === 'regularshot') {
         // Bruin in the room, next to ordinary customers, for scale.
         const { REGULARS, visitOn } = await import('../src/game/regulars.js');

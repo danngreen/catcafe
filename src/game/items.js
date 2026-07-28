@@ -26,6 +26,7 @@ export const ITEMS = {
   cocoa: { name: 'Hot Cocoa', cat: CAT.DRINK, icon: 'cocoa', cost: 6, price: 19, appeal: 1.3, temp: 'hot', shelf: 12, desc: 'Two marshmallows. Three if you like them.' },
   lemonade: { name: 'Lemonade', cat: CAT.DRINK, icon: 'lemonade', cost: 4, price: 14, appeal: 1.1, temp: 'cold', shelf: 4, desc: 'Made fresh, which is why it never lasts.' },
   milk: { name: 'Warm Milk', cat: CAT.DRINK, icon: 'milk', cost: 3, price: 9, appeal: 0.95, temp: 'hot', shelf: 3, desc: 'The cats become extremely interested whenever you pour it.' },
+  dandelion: { name: 'Dandelion Cordial', cat: CAT.DRINK, icon: 'dandelion', cost: 6, price: 19, appeal: 1.35, temp: 'cold', shelf: 14, desc: 'Made from a weed by somebody who knows exactly which weed. Tastes like a field in June.' },
   iced_coffee: { name: 'Iced Coffee', cat: CAT.DRINK, icon: 'icedCoffee', cost: 5, price: 17, appeal: 1.2, temp: 'cold', shelf: 3, desc: 'Over a lot of ice, in a tall glass, on the one week a year it is warranted.' },
   iced_tea: { name: 'Iced Tea', cat: CAT.DRINK, icon: 'icedTea', cost: 4, price: 15, appeal: 1.15, temp: 'cold', shelf: 3, desc: 'With a slice of lemon balanced on the rim, which nobody eats.' },
   cider: { name: 'Cloudy Cider', cat: CAT.DRINK, icon: 'cider', cost: 8, price: 24, appeal: 1.4, temp: 'cold', shelf: 20, desc: 'Pressed from the orchard up the valley. Very cloudy. Very good.' },
@@ -125,7 +126,7 @@ export const STOCK = {
   furniture: ['f_chair', 'f_stool', 'f_barstool', 'f_table', 'f_table_cloth', 'f_table_long', 'f_bar', 'f_sofa', 'f_plant', 'f_lamp', 'f_painting', 'f_bookshelf', 'f_rug', 'f_case', 'f_machine', 'f_fireplace',
     'f_patio_chair', 'f_patio_stool', 'f_patio_table', 'f_patio_bench', 'f_umbrella', 'f_fountain'],
   tea: ['black_tea', 'herbal_tea', 'matcha', 'cocoa', 'smoked_tea', 'cider', 'iced_coffee', 'iced_tea'],
-  herbalist: ['herbal_tea', 'catnip', 'medicine', 'vitamins', 'kibble'],
+  herbalist: ['herbal_tea', 'catnip', 'medicine', 'vitamins', 'kibble', 'dandelion'],
   beekeeper: ['honey', 'toast', 'cider'],
 };
 
