@@ -1990,6 +1990,174 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
         await wait(900);
         window.__pass = `showing=${which}`;
+      } else if (SCRIPT === 'confirm') {
+        // Two things you cannot take back get asked about first, and both
+        // default to No — the reflexive press has to do nothing.
+        const { ConfirmScreen, BIG_SPEND, ShopScreen } = await import('../src/ui/menus.js');
+        const { ITEMS, STOCK } = await import('../src/game/items.js');
+        const { SHOPS } = await import('../src/world/places.js');
+        const st = g.state;
+        st.money = 9000;
+        st.workers = 2;
+        st.materials = 6;
+
+        // --- a big purchase ---
+        const shopDef = SHOPS.find((sh) => sh.id === 'furniture');
+        g.push(new ShopScreen(g, shopDef, STOCK[shopDef.stock] || []));
+        await wait(500);
+        const shop = g.screens[g.screens.length - 1];
+        const dear = shop.items.findIndex((id) => shop.price(id) > BIG_SPEND);
+        const cheap = shop.items.findIndex((id) => shop.price(id) <= BIG_SPEND);
+        // Something cheap goes straight through.
+        shop.index = cheap;
+        const beforeCheap = st.money;
+        shop.buy(shop.items[cheap], 1);
+        await wait(250);
+        const boughtCheap = st.money < beforeCheap;
+        const askedForCheap = g.screens[g.screens.length - 1] !== shop;
+        // Something dear asks.
+        shop.index = dear;
+        const beforeDear = st.money;
+        shop.buy(shop.items[dear], 1);
+        await wait(300);
+        const ask = g.screens[g.screens.length - 1];
+        const asked = ask instanceof ConfirmScreen;
+        const spentWhileAsking = st.money !== beforeDear;
+        const defaultsToNo = asked ? ask.choice === 0 : false;
+        // Pressing Space straight away must not buy it.
+        key('Space', true); await wait(140); key('Space', false);
+        await wait(400);
+        const boughtByReflex = st.money !== beforeDear;
+        // Ask again and say yes this time.
+        shop.buy(shop.items[dear], 1);
+        await wait(300);
+        key('ArrowRight', true); await wait(120); key('ArrowRight', false);
+        await wait(150);
+        key('Space', true); await wait(140); key('Space', false);
+        await wait(400);
+        const boughtOnYes = st.money < beforeDear;
+        const dearName = ITEMS[shop.items[dear]].name;
+        while (g.screens.length) g.screens.pop();
+        await wait(300);
+
+        // --- demolishing a room ---
+        g.openBuildMode();
+        await wait(700);
+        const bs = g.screens[g.screens.length - 1];
+        bs.mode = bs.modes.indexOf('Rooms');
+        bs.draft.rooms.push({ x: 12, y: 0, w: 5, h: 5, name: 'Spare Room', floor: bs.draft.floor });
+        bs.rebuild();
+        await wait(300);
+        const roomsBefore = bs.draft.rooms.length;
+        bs.cur = { x: 14, y: 2 };
+        await wait(200);
+        key('KeyX', true); await wait(140); key('KeyX', false);
+        await wait(400);
+        const ask2 = g.screens[g.screens.length - 1];
+        const askedRoom = ask2 instanceof ConfirmScreen;
+        const stillThere = bs.draft.rooms.length === roomsBefore;
+        const roomDefaultsToNo = askedRoom ? ask2.choice === 0 : false;
+        // Back out: the room survives.
+        key('KeyX', true); await wait(140); key('KeyX', false);
+        await wait(400);
+        const survivedNo = bs.draft.rooms.length === roomsBefore;
+        // Now do it properly.
+        key('KeyX', true); await wait(140); key('KeyX', false);
+        await wait(400);
+        key('ArrowRight', true); await wait(120); key('ArrowRight', false);
+        await wait(150);
+        key('Space', true); await wait(140); key('Space', false);
+        await wait(500);
+        const gone = bs.draft.rooms.length === roomsBefore - 1;
+
+        window.__confirm = `threshold=${BIG_SPEND} cheap=${boughtCheap}/asked=${askedForCheap}`
+          + ` dear="${dearName}" asked=${asked} spentWhileAsking=${spentWhileAsking}`
+          + ` defaultNo=${defaultsToNo} boughtByReflex=${boughtByReflex} boughtOnYes=${boughtOnYes}`
+          + ` room asked=${askedRoom} defaultNo=${roomDefaultsToNo} survivedNo=${survivedNo} gone=${gone}`;
+        if (!boughtCheap || askedForCheap) window.__errors.push('a small purchase was interrupted: ' + window.__confirm);
+        if (!asked) window.__errors.push('a big purchase went through unasked: ' + window.__confirm);
+        if (spentWhileAsking) window.__errors.push('the money went before the question: ' + window.__confirm);
+        if (!defaultsToNo) window.__errors.push('the purchase question defaults to yes: ' + window.__confirm);
+        if (boughtByReflex) window.__errors.push('pressing space again bought it anyway: ' + window.__confirm);
+        if (!boughtOnYes) window.__errors.push('saying yes did not buy it: ' + window.__confirm);
+        if (!askedRoom) window.__errors.push('a room came down unasked: ' + window.__confirm);
+        if (!roomDefaultsToNo) window.__errors.push('the demolish question defaults to yes: ' + window.__confirm);
+        if (!survivedNo) window.__errors.push('backing out demolished it anyway: ' + window.__confirm);
+        if (!gone) window.__errors.push('saying yes did not take the room down: ' + window.__confirm);
+      } else if (SCRIPT === 'catvoices') {
+        // Fifteen cats all saying the one "mrow" is the sound of a machine.
+        // Every breed gets its own calls, and a poorly cat says so out loud.
+        const { CAT_BREEDS } = await import('../src/art/chars.js');
+        const { Cat } = await import('../src/game/entities.js');
+        const { audio } = await import('../src/engine/audio.js');
+        const st = g.state;
+
+        const breeds = Object.keys(CAT_BREEDS);
+        const noVoice = breeds.filter((b) => !CAT_BREEDS[b].voice);
+        const oneCall = breeds.filter((b) => (CAT_BREEDS[b].voice?.calls || []).length < 2);
+        const allCalls = new Set();
+        for (const b of breeds) for (const c of CAT_BREEDS[b].voice.calls) allCalls.add(c);
+
+        // Every call a breed can make has to be a sound the mixer knows. A
+        // typo here is silence, which is indistinguishable from a quiet cat.
+        const played = [];
+        const realSfx = audio.sfx.bind(audio);
+        audio.sfx = (name, opts) => { played.push({ name, ...opts }); return realSfx(name, opts); };
+
+        // Each breed, asked to speak many times, must use its own list only.
+        const wrong = [];
+        const spread = {};
+        for (const b of breeds) {
+          const cat = new Cat(b, 0, 0);
+          const heard = new Set();
+          played.length = 0;
+          for (let i = 0; i < 60; i++) heard.add(cat.speak(0));
+          for (const call of heard) {
+            if (!CAT_BREEDS[b].voice.calls.includes(call)) wrong.push(`${b}:${call}`);
+          }
+          spread[b] = heard.size;
+        }
+        const monotone = breeds.filter((b) => spread[b] < 2);
+
+        // Two breeds must not sound the same: pitch or calls have to differ.
+        const fingerprints = new Set(breeds.map((b) => {
+          const v = CAT_BREEDS[b].voice;
+          return `${v.pitch}|${v.gain}|${[...v.calls].sort().join(',')}`;
+        }));
+
+        // The mixer has to have a recipe for each one. Checked against the
+        // source rather than by playing it: headless has no audio context, so
+        // every call "succeeds" at runtime whether or not it exists.
+        const mixer = await fetch('../src/engine/audio.js').then((r) => r.text());
+        const silent = [...allCalls].filter((call) => !mixer.includes(`case '${call}':`));
+
+        // A sick cat sneezes promptly rather than at the next lull.
+        const well = new Cat('tabby', 0, 0, {});
+        const ill = new Cat('tabby', 0, 0, { sick: true });
+        const promptly = ill.sneezeT < 3 && well.sneezeT > 3;
+        played.length = 0;
+        const map = st.cafeMap;
+        ill.sneezeT = 0;
+        ill.update(0.016, map, { pan: 0 });
+        await wait(600);
+        const sneezed = played.some((p) => p.name === 'sneeze');
+        const followUp = played.some((p) => p.name === 'squeak');
+
+        audio.sfx = realSfx;
+        window.__voices = `breeds=${breeds.length} noVoice=[${noVoice}] oneCall=[${oneCall}]`
+          + ` calls=[${[...allCalls].sort().join(' ')}] usedWrong=[${wrong.slice(0, 4)}]`
+          + ` monotone=[${monotone}] distinctVoices=${fingerprints.size}/${breeds.length}`
+          + ` silent=[${silent}] sickPrompt=${promptly} sneezed=${sneezed} followUp=${followUp}`;
+        if (noVoice.length) window.__errors.push('a breed has no voice: ' + window.__voices);
+        if (oneCall.length) window.__errors.push('a breed only knows one noise: ' + window.__voices);
+        if (allCalls.size < 4) window.__errors.push('the cats barely vary: ' + window.__voices);
+        if (wrong.length) window.__errors.push('a cat made a noise its breed does not: ' + window.__voices);
+        if (monotone.length) window.__errors.push('a breed never varies what it says: ' + window.__voices);
+        if (fingerprints.size < 8) window.__errors.push('too many breeds sound alike: ' + window.__voices);
+        if (silent.length) window.__errors.push('a call has no recipe in the mixer: ' + window.__voices);
+        if (!promptly) window.__errors.push('a sick cat waits to say so: ' + window.__voices);
+        if (!sneezed) window.__errors.push('a sick cat made no sound: ' + window.__voices);
+        if (!followUp) window.__errors.push('the sneeze has no poorly noise after it: ' + window.__voices);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -4085,6 +4253,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__stool ? ` ${window.__stool}` : '')
         + (window.__paint ? ` ${window.__paint}` : '')
         + (window.__friends ? ` ${window.__friends}` : '')
+        + (window.__confirm ? ` ${window.__confirm}` : '')
+        + (window.__voices ? ` ${window.__voices}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

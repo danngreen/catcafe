@@ -20,11 +20,77 @@ import { shopOpen, hoursText } from '../game/time.js';
 import { lookOf } from '../game/entities.js';
 import { charSprite } from '../art/chars.js';
 
+/** Above this, buying asks first. */
+export const BIG_SPEND = 500;
+
 export class Screen {
   constructor() { this.t = 0; this.done = false; }
   update() {}
   draw() {}
   close() { this.done = true; audio.sfx('ui_back'); }
+}
+
+/**
+ * A yes/no in front of something you cannot take back. Defaults to No, because
+ * the whole point is that the reflexive press does nothing.
+ */
+export class ConfirmScreen extends Screen {
+  constructor(opts) {
+    super();
+    this.title = opts.title || 'Are you sure?';
+    this.lines = opts.lines || [];
+    this.yes = opts.yes || 'Yes';
+    this.no = opts.no || 'No';
+    this.onYes = opts.onYes || (() => {});
+    this.onNo = opts.onNo || null;
+    this.choice = 0;                  // 0 = No
+  }
+
+  update(dt, input) {
+    this.t += dt;
+    if (input.repeat('left', dt) || input.repeat('right', dt)
+      || input.repeat('up', dt) || input.repeat('down', dt)) {
+      this.choice = this.choice ? 0 : 1;
+      audio.sfx('ui_move', { gain: 0.6 });
+    }
+    if (input.hit('use')) {
+      this.done = true;
+      if (this.choice) { audio.sfx('ui_ok'); this.onYes(); }
+      else { audio.sfx('ui_back'); this.onNo?.(); }
+      return;
+    }
+    if (input.hit('cancel') || input.hit('menu')) {
+      this.done = true;
+      audio.sfx('ui_back');
+      this.onNo?.();
+    }
+  }
+
+  draw(ctx) {
+    dim(ctx, 0.7);
+    const w = 250;
+    const h = 54 + this.lines.length * 12;
+    const x = Math.round((VIEW_W - w) / 2), y = Math.round((VIEW_H - h) / 2);
+    panel(ctx, x, y, w, h);
+    panelTitle(ctx, x, y, w, this.title);
+    this.lines.forEach((line, i) => {
+      drawTextCentered(ctx, line, x + w / 2, y + 24 + i * 12,
+        { color: i === 0 ? P.uiText : P.uiTextDim, shadow: P.uiShadow });
+    });
+    const by = y + h - 20;
+    const labels = [this.no, this.yes];
+    labels.forEach((label, i) => {
+      const bx = x + w / 2 + (i ? 18 : -18 - textWidth(label));
+      const on = i === this.choice;
+      if (on) {
+        ctx.fillStyle = 'rgba(255,207,107,0.16)';
+        ctx.fillRect(bx - 8, by - 4, textWidth(label) + 16, 15);
+      }
+      drawText(ctx, label, bx, by, { color: on ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
+    });
+    drawTextCentered(ctx, 'Left/Right to choose    Space to confirm', x + w / 2, y + h - 6,
+      { color: P.uiTextDim, shadow: P.uiShadow });
+  }
 }
 
 /** Shared list navigation: index, scrolling window, wrap-around. */
@@ -130,6 +196,24 @@ export class ShopScreen extends ListScreen {
   buy(id, qty) {
     const st = this.game.state;
     const cost = this.price(id) * qty;
+    if (st.money < cost) { this.flash("You can't afford that."); audio.sfx('error'); return; }
+    // Anything this size is a decision, not a keypress. A fountain is fourteen
+    // hundred and the buy button is the same button as everything else.
+    if (cost > BIG_SPEND) {
+      this.game.push(new ConfirmScreen({
+        title: 'That is a lot of money',
+        lines: [`${qty} x ${ITEMS[id].name}`, `${money(cost)} — you have ${money(st.money)}`],
+        yes: 'Buy it',
+        no: 'Not yet',
+        onYes: () => this.completeBuy(id, qty, cost),
+      }));
+      return;
+    }
+    this.completeBuy(id, qty, cost);
+  }
+
+  completeBuy(id, qty, cost) {
+    const st = this.game.state;
     if (st.money < cost) { this.flash("You can't afford that."); audio.sfx('error'); return; }
     st.spend(cost);
     const cols = this.colours(id);
@@ -271,7 +355,7 @@ export class CatShopScreen extends ListScreen {
       }
       st.spend(b.price);
       const cat = st.adoptCat(key);
-      audio.sfx('meow_happy', { gain: 0.8 });
+      cat.speak(0, { gain: 1.4 });
       this.msg = `${cat.name} the ${b.name} is coming home with you!`;
       this.msgT = 3.4;
     }
@@ -632,7 +716,7 @@ export class CafeScreen extends Screen {
           audio.sfx('eat', { gain: 0.8 });
           this.flash(`${cat.name} accepts the treat as their due.`);
         } else {
-          audio.sfx('meow', { gain: 0.7 });
+          cat.speak(0, { gain: 1.25 });
           this.flash(`${cat.name} looks at you expectantly. Buy treats at the pet shop.`);
         }
         st.touchCats();

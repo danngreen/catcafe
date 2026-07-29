@@ -2,7 +2,7 @@
 // furnish, rendered with the same tiles and sprites as the real interior so what
 // you see is exactly what you'll walk around in afterwards.
 
-import { Screen } from './menus.js';
+import { Screen, ConfirmScreen } from './menus.js';
 import { panel, panelTitle, drawText, drawTextCentered, drawTextRight, textWidth } from './core.js';
 import { VIEW_W, VIEW_H, isTouchDevice } from '../engine/display.js';
 import { P } from '../art/palette.js';
@@ -230,23 +230,47 @@ export class BuildScreen extends Screen {
       const r = this.roomAt(this.cur.x, this.cur.y);
       const i = this.draft.rooms.indexOf(r);
       if (i > 0) {
-        // Anything standing in it goes back in the bag.
-        this.draft.furniture = this.draft.furniture.filter((f) => {
-          const inside = f.x >= r.x && f.x < r.x + r.w && f.y >= r.y && f.y < r.y + r.h;
-          if (inside) this.returnFurniture(f);
-          return !inside;
-        });
-        this.draft.rooms.splice(i, 1);
-        this.spentMoney -= Math.floor(this.costOf(r) * 0.4);
-        this.spentMaterials -= 1;
-        this.rebuild();
-        this.flash('Room taken down. You get some of it back.');
+        // Ask first. Taking a room down is one keypress, gives back less than
+        // half of what it cost, and empties everything standing in it.
+        const standing = this.draft.furniture.filter((f) => (
+          f.x >= r.x && f.x < r.x + r.w && f.y >= r.y && f.y < r.y + r.h
+        )).length;
+        const back = Math.floor(this.costOf(r) * 0.4);
+        this.game.push(new ConfirmScreen({
+          title: 'Take this room down?',
+          lines: [
+            `${r.name || 'This room'} — ${r.w} by ${r.h}`,
+            standing ? `${standing} thing${standing === 1 ? '' : 's'} in it go back in your bag`
+              : 'There is nothing in it',
+            `You get ${money(back)} of ${money(this.costOf(r))} back`,
+          ],
+          yes: 'Take it down',
+          no: 'Leave it',
+          onYes: () => this.demolish(r),
+        }));
       } else if (i === 0) {
         this.flash('You cannot demolish the original room.', true);
       } else {
         this.finish();
       }
     }
+  }
+
+  /** Actually take a room down, once it has been asked about. */
+  demolish(r) {
+    const i = this.draft.rooms.indexOf(r);
+    if (i <= 0) return;
+    this.draft.furniture = this.draft.furniture.filter((f) => {
+      const inside = f.x >= r.x && f.x < r.x + r.w && f.y >= r.y && f.y < r.y + r.h;
+      if (inside) this.returnFurniture(f);
+      return !inside;
+    });
+    this.draft.rooms.splice(i, 1);
+    this.spentMoney -= Math.floor(this.costOf(r) * 0.4);
+    this.spentMaterials -= 1;
+    this.rebuild();
+    audio.sfx('hammer', { gain: 0.8 });
+    this.flash('Room taken down. You get some of it back.');
   }
 
   /**

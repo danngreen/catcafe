@@ -570,8 +570,12 @@ export class AudioEngine {
    * Everything is defined here rather than in a data file so the recipes live
    * next to the synth helpers they use.
    */
+  /**
+   * Play a one-shot. Returns false if there is no recipe by that name — the
+   * only outward difference between a typo and a deliberate silence.
+   */
   sfx(name, opts = {}) {
-    if (!this.ready || !this.enabled) return;
+    if (!this.ready || !this.enabled) return true;
     const c = this.ctx;
     const t = c.currentTime + 0.005;
     const vol = opts.gain ?? 1;
@@ -608,6 +612,113 @@ export class AudioEngine {
           osc.connect(bp); bp.connect(gn); gn.connect(dest);
           osc.start(t); osc.stop(t + dur + 0.2);
         }
+        break;
+      }
+      // --- the rest of a cat's vocabulary ---
+      // Same throat, different intent. A cafe of fifteen cats all saying the
+      // one "mrow" is the sound of a machine, not of a room full of animals.
+      case 'mrrp': {
+        // The closed-mouth question. Short, rising, no open vowel.
+        const f0 = R.range(380, 520) * pitch;
+        const dur = R.range(0.14, 0.22);
+        const osc = c.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(f0, t);
+        osc.frequency.exponentialRampToValueAtTime(f0 * R.range(1.35, 1.6), t + dur);
+        const bp = c.createBiquadFilter();
+        bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 2.2;
+        const gn = c.createGain();
+        gn.gain.setValueAtTime(0.0001, t);
+        gn.gain.linearRampToValueAtTime(0.16 * vol, t + 0.03);
+        gn.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.06);
+        // A flutter through it, which is what makes a trill a trill.
+        const lfo = c.createOscillator();
+        lfo.frequency.value = R.range(28, 38);
+        const lg = c.createGain(); lg.gain.value = 0.06 * vol;
+        lfo.connect(lg); lg.connect(gn.gain);
+        osc.connect(bp); bp.connect(gn); gn.connect(dest);
+        osc.start(t); osc.stop(t + dur + 0.1);
+        lfo.start(t); lfo.stop(t + dur + 0.1);
+        break;
+      }
+      case 'chirrup': {
+        // Two quick rising notes — the noise a big cat makes at a bird.
+        const f0 = R.range(620, 820) * pitch;
+        for (let i = 0; i < 2; i++) {
+          const t0 = t + i * 0.11;
+          const osc = c.createOscillator();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(f0 * (1 + i * 0.12), t0);
+          osc.frequency.exponentialRampToValueAtTime(f0 * (1.5 + i * 0.2), t0 + 0.07);
+          const gn = c.createGain();
+          gn.gain.setValueAtTime(0.0001, t0);
+          gn.gain.linearRampToValueAtTime(0.12 * vol, t0 + 0.015);
+          gn.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
+          osc.connect(gn); gn.connect(dest);
+          osc.start(t0); osc.stop(t0 + 0.14);
+        }
+        break;
+      }
+      case 'yowl': {
+        // Long, loud, and with somewhere to be. Siamese, mostly.
+        const f0 = R.range(400, 520) * pitch;
+        const dur = R.range(0.6, 0.95);
+        for (const [ratio, g] of [[1, 0.15], [2, 0.09], [3, 0.05], [4, 0.02]]) {
+          const osc = c.createOscillator();
+          osc.type = ratio === 1 ? 'sawtooth' : 'triangle';
+          const f = osc.frequency;
+          f.setValueAtTime(f0 * ratio, t);
+          f.exponentialRampToValueAtTime(f0 * 1.7 * ratio, t + dur * 0.2);
+          f.setValueAtTime(f0 * 1.7 * ratio, t + dur * 0.62);
+          f.exponentialRampToValueAtTime(f0 * 0.9 * ratio, t + dur);
+          const bp = c.createBiquadFilter();
+          bp.type = 'bandpass'; bp.frequency.value = 1300 * ratio; bp.Q.value = 1.4;
+          const gn = c.createGain();
+          gn.gain.setValueAtTime(0.0001, t);
+          gn.gain.linearRampToValueAtTime(g * vol, t + 0.07);
+          gn.gain.setValueAtTime(g * vol, t + dur * 0.7);
+          gn.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.18);
+          osc.connect(bp); bp.connect(gn); gn.connect(dest);
+          osc.start(t); osc.stop(t + dur + 0.25);
+        }
+        break;
+      }
+      case 'squeak': {
+        // Barely there. Big soft cats often have tiny voices.
+        const f0 = R.range(780, 1000) * pitch;
+        const dur = R.range(0.1, 0.16);
+        const osc = c.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(f0, t);
+        osc.frequency.exponentialRampToValueAtTime(f0 * 1.25, t + dur * 0.4);
+        osc.frequency.exponentialRampToValueAtTime(f0 * 0.95, t + dur);
+        const gn = c.createGain();
+        gn.gain.setValueAtTime(0.0001, t);
+        gn.gain.linearRampToValueAtTime(0.1 * vol, t + 0.02);
+        gn.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.05);
+        osc.connect(gn); gn.connect(dest);
+        osc.start(t); osc.stop(t + dur + 0.1);
+        break;
+      }
+      case 'rasp': {
+        // A meow with gravel in it, for the loud bald ones.
+        const f0 = R.range(330, 430) * pitch;
+        const dur = R.range(0.3, 0.44);
+        const osc = c.createOscillator();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(f0, t);
+        osc.frequency.exponentialRampToValueAtTime(f0 * 1.45, t + dur * 0.3);
+        osc.frequency.exponentialRampToValueAtTime(f0 * 0.85, t + dur);
+        const bp = c.createBiquadFilter();
+        bp.type = 'bandpass'; bp.frequency.value = 1500; bp.Q.value = 0.9;
+        const gn = c.createGain();
+        gn.gain.setValueAtTime(0.0001, t);
+        gn.gain.linearRampToValueAtTime(0.09 * vol, t + 0.05);
+        gn.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.1);
+        osc.connect(bp); bp.connect(gn); gn.connect(dest);
+        osc.start(t); osc.stop(t + dur + 0.15);
+        // A breath of noise under it, which is where the rasp lives.
+        this.noiseHit(dest, { t0: t, dur: dur * 0.8, gain: 0.05 * vol, type: 'bandpass', freq: 1800, sweepTo: 900, q: 0.8, attack: 0.2 });
         break;
       }
       case 'meow_happy':
@@ -790,8 +901,12 @@ export class AudioEngine {
           this.fmVoice(dest, { t0: t + i * 0.09, freq: mtof(n), ratio: 3, index: 2, dur: 0.2, release: 0.5, gain: 0.08 * vol }));
         break;
       default:
-        break;
+        // A name with no recipe is silence, which from the outside is exactly
+        // what a quiet moment sounds like. Say so instead.
+        console.warn(`audio: no recipe for "${name}"`);
+        return false;
     }
+    return true;
   }
 
   update(dt, opts) {

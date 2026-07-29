@@ -447,21 +447,21 @@ function paintFace(buf, sp, c, dir, hx, cy, rx, ry) {
 // ---------------------------------------------------------------------------
 
 export const CAT_BREEDS = {
-  tabby:      { base: '#b08b5a', mark: 'stripes', markCol: '#7a5a35', name: 'Tabby', price: 0, appeal: 1.0, rare: false },
-  tuxedo:     { base: '#3a3644', mark: 'tuxedo',  markCol: '#f7f2e6', name: 'Tuxedo', price: 320, appeal: 1.15, rare: false },
-  ginger:     { base: '#e08a4a', mark: 'stripes', markCol: '#b3652f', name: 'Ginger', price: 280, appeal: 1.1, rare: false },
-  calico:     { base: '#f2ead8', mark: 'patches', markCol: '#e08a4a', name: 'Calico', price: 460, appeal: 1.3, rare: false },
-  grey:       { base: '#9aa0ab', mark: 'none',    markCol: '#6d737e', name: 'Grey', price: 240, appeal: 1.05, rare: false },
-  siamese:    { base: '#e5d6bd', mark: 'points',  markCol: '#6b5240', name: 'Siamese', price: 720, appeal: 1.5, rare: true },
-  russianblue:{ base: '#8f9fb8', mark: 'none',    markCol: '#6d7d96', name: 'Russian Blue', price: 900, appeal: 1.6, rare: true },
-  maine:      { base: '#a37045', mark: 'fluff',   markCol: '#7a4f2c', name: 'Maine Coon', price: 1150, appeal: 1.75, rare: true },
-  persian:    { base: '#f0e2c8', mark: 'fluff',   markCol: '#d6c19c', name: 'Persian', price: 1400, appeal: 1.9, rare: true },
-  bengal:     { base: '#dfa958', mark: 'spots',   markCol: '#5c4326', name: 'Bengal', price: 1900, appeal: 2.2, rare: true },
-  tortie:     { base: '#5a4636', mark: 'patches', markCol: '#d98a3f', name: 'Tortoiseshell', price: 620, appeal: 1.4, rare: false },
-  white:      { base: '#f7f2e6', mark: 'none',    markCol: '#d9d0be', name: 'Snowcap', price: 380, appeal: 1.2, rare: false },
-  black:      { base: '#3a3644', mark: 'none',    markCol: '#524d5f', name: 'Midnight', price: 300, appeal: 1.1, rare: false },
-  sphynx:     { base: '#e8bfae', mark: 'none',    markCol: '#c99783', name: 'Sphynx', price: 2400, appeal: 2.4, rare: true },
-  ragdoll:    { base: '#f2e6d8', mark: 'points',  markCol: '#8a7060', name: 'Ragdoll', price: 1700, appeal: 2.05, rare: true },
+  tabby:      { base: '#b08b5a', mark: 'stripes', markCol: '#7a5a35', name: 'Tabby', price: 0, appeal: 1.0, voice: { pitch: 1.0,  gain: 1.0,  calls: ['meow', 'meow', 'mrrp'] }, rare: false },
+  tuxedo:     { base: '#3a3644', mark: 'tuxedo',  markCol: '#f7f2e6', name: 'Tuxedo', price: 320, appeal: 1.15, voice: { pitch: 0.95, gain: 1.05, calls: ['meow', 'mrrp', 'meow'] }, rare: false },
+  ginger:     { base: '#e08a4a', mark: 'stripes', markCol: '#b3652f', name: 'Ginger', price: 280, appeal: 1.1, voice: { pitch: 1.05, gain: 1.15, calls: ['meow', 'meow', 'yowl', 'mrrp'] }, rare: false },
+  calico:     { base: '#f2ead8', mark: 'patches', markCol: '#e08a4a', name: 'Calico', price: 460, appeal: 1.3, voice: { pitch: 1.12, gain: 1.0,  calls: ['meow', 'chirrup', 'mrrp'] }, rare: false },
+  grey:       { base: '#9aa0ab', mark: 'none',    markCol: '#6d737e', name: 'Grey', price: 240, appeal: 1.05, voice: { pitch: 0.92, gain: 0.8,  calls: ['mrrp', 'meow', 'squeak'] }, rare: false },
+  siamese:    { base: '#e5d6bd', mark: 'points',  markCol: '#6b5240', name: 'Siamese', price: 720, appeal: 1.5, voice: { pitch: 1.18, gain: 1.3,  calls: ['yowl', 'yowl', 'meow'] }, rare: true },
+  russianblue:{ base: '#8f9fb8', mark: 'none',    markCol: '#6d7d96', name: 'Russian Blue', price: 900, appeal: 1.6, voice: { pitch: 1.0,  gain: 0.68, calls: ['mrrp', 'squeak', 'chirrup'] }, rare: true },
+  maine:      { base: '#a37045', mark: 'fluff',   markCol: '#7a4f2c', name: 'Maine Coon', price: 1150, appeal: 1.75, voice: { pitch: 0.78, gain: 1.0,  calls: ['chirrup', 'mrrp', 'chirrup', 'meow'] }, rare: true },
+  persian:    { base: '#f0e2c8', mark: 'fluff',   markCol: '#d6c19c', name: 'Persian', price: 1400, appeal: 1.9, voice: { pitch: 0.85, gain: 0.72, calls: ['squeak', 'mrrp', 'meow'] }, rare: true },
+  bengal:     { base: '#dfa958', mark: 'spots',   markCol: '#5c4326', name: 'Bengal', price: 1900, appeal: 2.2, voice: { pitch: 1.08, gain: 1.25, calls: ['rasp', 'chirrup', 'yowl'] }, rare: true },
+  tortie:     { base: '#5a4636', mark: 'patches', markCol: '#d98a3f', name: 'Tortoiseshell', price: 620, appeal: 1.4, voice: { pitch: 1.06, gain: 1.12, calls: ['meow', 'yowl', 'mrrp'] }, rare: false },
+  white:      { base: '#f7f2e6', mark: 'none',    markCol: '#d9d0be', name: 'Snowcap', price: 380, appeal: 1.2, voice: { pitch: 1.02, gain: 0.95, calls: ['meow', 'mrrp', 'chirrup'] }, rare: false },
+  black:      { base: '#3a3644', mark: 'none',    markCol: '#524d5f', name: 'Midnight', price: 300, appeal: 1.1, voice: { pitch: 0.9,  gain: 0.95, calls: ['meow', 'mrrp', 'rasp'] }, rare: false },
+  sphynx:     { base: '#e8bfae', mark: 'none',    markCol: '#c99783', name: 'Sphynx', price: 2400, appeal: 2.4, voice: { pitch: 1.14, gain: 1.2,  calls: ['rasp', 'rasp', 'yowl', 'squeak'] }, rare: true },
+  ragdoll:    { base: '#f2e6d8', mark: 'points',  markCol: '#8a7060', name: 'Ragdoll', price: 1700, appeal: 2.05, voice: { pitch: 1.2,  gain: 0.62, calls: ['squeak', 'squeak', 'mrrp'] }, rare: true },
 };
 
 export const CAT_BREED_LIST = Object.keys(CAT_BREEDS);

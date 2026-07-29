@@ -1253,7 +1253,8 @@ class Game {
           c.pose = 'play';
           c.stateT = 8 + Math.random() * 8;
         }
-        audio.sfx('meow_happy', { gain: 0.85 });
+        // Every cat in the room, in its own voice, slightly staggered.
+        st.catActors.forEach((c, i) => setTimeout(() => c.speak(0, { gain: 1.2 }), i * 130));
         this.hud.toast('Chaos. Delightful, unproductive chaos.', 'good');
         break;
       }

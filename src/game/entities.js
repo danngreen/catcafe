@@ -509,7 +509,34 @@ export class Cat extends Actor {
     this.accessory = data.accessory || null;
     this.age = data.age || 0;
     this.meowT = 4 + rng() * 20;
-    this.sneezeT = 6 + rng() * 10;
+    // Sick cats say so promptly rather than on the next lull, so it is the
+    // first thing you notice about them and not the last.
+    this.sneezeT = this.sick ? 0.6 + rng() * 1.5 : 6 + rng() * 10;
+    // A voice within the breed's voice: two tabbies are not the same tabby.
+    this.pitchBias = 0.94 + rng() * 0.12;
+  }
+
+  /** How this breed sounds, and how loud. */
+  get voice() {
+    const b = CAT_BREEDS[this.breed] || CAT_BREEDS.tabby;
+    return b.voice || { pitch: 1, gain: 1, calls: ['meow'] };
+  }
+
+  /**
+   * Say something. Which noise depends on the breed — a Maine Coon chirrups
+   * and a Siamese yowls — and a contented cat says it a little higher.
+   */
+  speak(pan = 0, opts = {}) {
+    const v = this.voice;
+    const calls = v.calls;
+    const call = opts.call || calls[Math.floor(rng() * calls.length)];
+    const mood = this.happiness > 0.6 ? 1.08 : this.happiness < 0.3 ? 0.88 : 1;
+    audio.sfx(call, {
+      gain: 0.55 * v.gain * (opts.gain ?? 1),
+      pitch: v.pitch * this.pitchBias * mood,
+      pan,
+    });
+    return call;
   }
 
   /** How much this cat contributes to the cafe's draw. */
@@ -536,7 +563,14 @@ export class Cat extends Actor {
       this.sneezeT -= dt;
       if (this.sneezeT <= 0) {
         this.sneezeT = 5 + rng() * 9;
-        audio.sfx('sneeze', { gain: 0.7, pan: ctx.pan || 0 });
+        audio.sfx('sneeze', { gain: 0.75, pan: ctx.pan || 0 });
+        // A small unhappy noise after it, in their own voice, so an unwell cat
+        // is something you hear across the room rather than something you find
+        // by opening the book and reading it.
+        const voice = this.voice;
+        setTimeout(() => audio.sfx('squeak', {
+          gain: 0.4 * voice.gain, pitch: voice.pitch * 0.8, pan: ctx.pan || 0,
+        }), 300);
         this.showEmote('sick', 2.2);
       }
       this.animate(dt);
@@ -564,7 +598,7 @@ export class Cat extends Actor {
     if (this.meowT <= 0) {
       this.meowT = 9 + rng() * 26;
       if (this.happiness > 0.75 && rng() < 0.4) audio.sfx('purr', { gain: 0.45, pan: ctx.pan || 0 });
-      else audio.sfx(this.happiness > 0.6 ? 'meow_happy' : 'meow', { gain: 0.55, pan: ctx.pan || 0 });
+      else this.speak(ctx.pan || 0);
       if (rng() < 0.35) this.showEmote(this.happiness > 0.7 ? 'happy' : 'talk', 1.6);
     }
 

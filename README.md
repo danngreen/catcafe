@@ -255,6 +255,9 @@ while the room it opens off stays warmly lit, and standing out there you hear th
 rain unmuffled instead of through a roof. An umbrella table keeps the tiles under
 its canopy dry, which is the other half of what you paid for.
 
+Anything over 500, and taking a room down, asks first — both default to No, so
+the reflexive press does nothing.
+
 Adding *rooms* needs a hired crew: Trowel & Sons in Hollowdown (weekdays,
 7am–4pm) sell builders and timber, and your crew size caps how much floor you're
 allowed. Until you've hired someone the Rooms tab simply isn't offered. The plan
@@ -357,6 +360,14 @@ chord loops on a two-operator FM voice, upright bass and brushed drums, with
 different progressions per area and a sparser night variant. Meows are swept
 formant bands; purrs are amplitude-modulated noise; ambience is filtered noise
 beds whose levels follow the terrain around you.
+
+**Cat voices** are per breed. A Maine Coon chirrups, a Siamese yowls, a Ragdoll
+squeaks and a Sphynx rasps, out of six calls between them, and each breed draws
+from several so no cat is a one-note machine. Every cat also carries a small
+pitch bias of its own, so two tabbies are not the same tabby, and a contented
+one speaks a little higher. A sick cat sneezes within a second or two of falling
+ill and again every few seconds, with a small unhappy noise after it — being
+told across the room rather than by opening the book and reading it.
 
 **Rendering** bakes ground into 16x16-tile chunk canvases and y-sorts everything
 with a footprint into one list, so trees and roofs correctly overlap you.
