@@ -93,7 +93,7 @@ const BUDGET = {
   questchain: 9000,
   logbook: 12000,
   regular: 20000,
-  regularshot: 14000,
+  regularshot: 20000,
   barstool: 34000,
   painting: 12000,
   paintingshot: 14000,

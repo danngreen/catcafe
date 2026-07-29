@@ -842,9 +842,9 @@ class Game {
 
   /**
    * Who has let themselves into the cafe. Regulars are not out in the valley
-   * to be found — they turn up, cross the room, and wait to be spoken to. Due
-   * or not is derived from the seed and the date, so a shared valley gets the
-   * same visitor on the same evening without a word over the wire.
+   * to be found — they turn up, find somewhere to sit, and wait to be spoken
+   * to. Due or not is derived from the seed and the date, so a shared valley
+   * gets the same visitor on the same evening without a word over the wire.
    */
   updateRegulars(dt) {
     const st = this.state;
@@ -858,7 +858,7 @@ class Game {
         const door = map.meta.door || map.spawn || { x: 2, y: 2 };
         const v = new Villager(def, door.x * TILE + TILE / 2, (door.y + 1) * TILE - 2);
         map.villagers.push(v);
-        this.hud.toast(`${def.name} lets himself in.`, 'good', 5);
+        this.hud.toast(`${def.name} lets themselves in.`, 'good', 5);
         audio.sfx('door', { gain: 0.4 });
       } else if (!want && here && !here.talking) {
         here.standUp();
@@ -867,23 +867,19 @@ class Game {
     }
     for (const v of map.villagers) {
       if (!v.regular) continue;
-      v.sparkleT += dt;
       if (st.inCafe) this.updateRegularVisit(dt, map, v);
     }
   }
 
   /**
-   * Would this regular walk in right now? Split out because it is the whole of
-   * the rule and worth being able to ask directly: they are due, you are in
-   * the room, and — if they only ever sit in one kind of seat — the room has
-   * one. Owning a bar stool is not the same as having put one down.
+   * Would this regular walk in right now? They are due, and you are in the
+   * room. Where they end up once they are in is a separate question — they
+   * will take a chair, and stand near the counter if there is not one.
    */
   regularWelcome(def) {
     const st = this.state;
     if (!st.inCafe) return false;
-    if (!dueNow(def, this.worldSeed, st.clock, this.waitingOn(def.id))) return false;
-    if (def.seat && !this.seatsOfType(def.seat).length) return false;
-    return true;
+    return dueNow(def, this.worldSeed, st.clock, this.waitingOn(def.id));
   }
 
   /** Seats of one kind, in the cafe as it is actually laid out. */
@@ -892,39 +888,85 @@ class Game {
   }
 
   /**
-   * One regular's evening. Until they have said their piece they follow you
-   * around trying to catch your eye; once you have heard them out they stop
-   * bothering you and take their usual seat. Somebody who wants a seat and
-   * cannot find a free one turns round and goes home, which is the only way
-   * you would ever learn that one stool is not enough.
+   * Somewhere to be, in order of preference: their usual sort of seat, then
+   * any seat at all, then a spot by the counter. Never the queue — a regular
+   * is not here to order anything and standing in the line would only get in
+   * the way of the people who are.
+   */
+  regularSpot(map, v) {
+    const seats = map.meta.seats || [];
+    const free = seats.filter((s) => !s.taken);
+    const liked = v.seatPrefers ? free.find((s) => s.type === v.seatPrefers) : null;
+    return liked || free[0] || null;
+  }
+
+  /**
+   * A place to stand when every chair is taken: beside the counter, clear of
+   * the queue that forms straight out in front of it.
+   */
+  counterPerch(map) {
+    const spot = map.meta.staffSpot || map.meta.door;
+    if (!spot) return null;
+    // Rings outward from the counter, nearest first, skipping the column the
+    // queue forms in. Somebody who cannot find a chair should end up beside
+    // the counter, not standing in the way of the people ordering.
+    for (let r = 2; r <= 6; r++) {
+      const ring = [];
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          if (Math.abs(dx) <= 1 && dy > 0) continue;         // that is the queue
+          ring.push([dx, dy]);
+        }
+      }
+      // Beside rather than behind: prefer spots level with or below the counter.
+      ring.sort((a, b) => (b[1] - a[1]) || (Math.abs(a[0]) - Math.abs(b[0])));
+      for (const [dx, dy] of ring) {
+        const x = spot.x + dx, y = spot.y + dy;
+        if (!map.inBounds(x, y) || map.solid(x, y)) continue;
+        if (!map.meta.rooms || map.meta.rooms.some((rm) => (
+          x >= rm.x && x < rm.x + rm.w && y >= rm.y && y < rm.y + rm.h
+        ))) return { x, y };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * One regular's evening: in through the door, over to a seat, and there
+   * they stay. They do not follow you about — a visitor who trails you round
+   * your own cafe is a visitor you are trying to get away from. The question
+   * mark over their head is how they ask for a word.
    */
   updateRegularVisit(dt, map, v) {
-    const st = this.state;
-    if (v.shift === 'away') return;                 // came, looked, left
-    const settled = v.seatWanted && this.heardOut(v.def.id);
-    if (!settled) {
-      if (v.seat) v.standUp();
-      v.mode = 'follow';
-      v.updateRegular(dt, map, this.player, null);
-      return;
-    }
+    if (v.shift === 'away') return;
+    // Claim a seat if there is one going, and keep it.
     if (!v.seat) {
-      const free = this.seatsOfType(v.seatWanted).find((s) => !s.taken);
-      if (!free) {
-        if (v.mode !== 'left') {
-          v.mode = 'left';
-          v.shift = 'away';
-          this.hud.toast(`${v.def.name} looks for a free stool, finds none, and goes.`, 'warn', 6);
-        }
-        return;
+      const seat = this.regularSpot(map, v);
+      if (seat) {
+        seat.taken = v;
+        v.seat = seat;
+        v.mode = 'toSeat';
+      } else if (!v.perch) {
+        v.perch = this.counterPerch(map);
+        v.mode = 'toCounter';
       }
-      free.taken = v;
-      v.seat = free;
-      v.mode = 'toSeat';
     }
-    const spot = { x: v.seat.x * TILE + TILE / 2, y: (v.seat.y + 1) * TILE - 3 };
-    v.updateRegular(dt, map, null, spot);
-    if (v.arrived) v.mode = 'seated';
+    const target = v.seat
+      ? { x: v.seat.x * TILE + TILE / 2, y: (v.seat.y + 1) * TILE - 3 }
+      : v.perch && { x: v.perch.x * TILE + TILE / 2, y: (v.perch.y + 1) * TILE - 3 };
+    v.updateRegular(dt, map, target);
+    if (v.arrived) v.mode = v.seat ? 'seated' : 'standing';
+
+    // A thought bubble with a question mark, for as long as they have
+    // something to say. It is the only thing marking them out from the
+    // customers now, so it stays up rather than blinking past.
+    if (!this.heardOut(v.def.id) || this.waitingOn(v.def.id)) {
+      if (v.emote !== 'wonder') v.showEmote('wonder', 999);
+      v.emoteT = 999;
+    } else if (v.emote === 'wonder') {
+      v.clearEmote();
+    }
   }
 
   /** Have they already said the thing they keep coming in to say? */

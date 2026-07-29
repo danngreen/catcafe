@@ -1630,8 +1630,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const asCustomer = st.cafeSim.customers.filter((c) => c.def && c.def.id === 'bruin').length;
 
         // Bigger than an ordinary villager, and drawn with a shine.
-        const looksDifferent = !!(v0 && v0.big && v0.sparkle);
-        const drawsShine = !!(v0 && typeof v0.drawShine === 'function');
+        // Marked out by a thought bubble now rather than by size and glow —
+        // those read as "important NPC" rather than "wants a word".
+        const marked = !!(v0 && v0.emote === 'wonder');
+        const normalSize = !!(v0 && !v0.big && !v0.sparkle);
 
         // And talking to him actually reaches the quest machinery.
         let spoke = false;
@@ -1646,8 +1648,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         window.__reg = `outside=${outside} visits=${days}/120 (${(rate * 100).toFixed(0)}%)`
           + ` beforeDark=${tooEarly} stable=${stable} differsBySeed=${differs}`
           + ` quietDay due=${notDue} whenWaiting=${dueBecauseWaiting}`
-          + ` inRoom=${inRoom.length} approach ${startD.toFixed(0)}->${endD.toFixed(0)}`
-          + ` asCustomer=${asCustomer} big+sparkle=${looksDifferent} shine=${drawsShine} spoke=${spoke}`
+          + ` inRoom=${inRoom.length} settled ${startD.toFixed(0)}->${endD.toFixed(0)}`
+          + ` asCustomer=${asCustomer} marked=${marked} normalSize=${normalSize} spoke=${spoke}`
           + ` regulars=${REGULARS.length} idle=[${idle}] wrongHour=${wrongHour.length}`
           + ` fennel in=${fenIn} inDaylight=${!fenDark} leaves=${fenGone}`;
         if (outside) window.__errors.push('a regular is standing about in the valley: ' + window.__reg);
@@ -1660,8 +1662,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!dueBecauseWaiting) window.__errors.push('waiting on him does not bring him in: ' + window.__reg);
         if (!inRoom.length) window.__errors.push('she never came in: ' + window.__reg);
         if (asCustomer) window.__errors.push('the regular joined the queue: ' + window.__reg);
-        if (endD > startD - 10) window.__errors.push('she did not come over: ' + window.__reg);
-        if (!looksDifferent) window.__errors.push('she looks like everyone else: ' + window.__reg);
+        if (!marked) window.__errors.push('nothing marks her out from the customers: ' + window.__reg);
+        if (!normalSize) window.__errors.push('a regular is still drawn oversized: ' + window.__reg);
         if (!spoke) window.__errors.push('you cannot talk to her: ' + window.__reg);
         if (REGULARS.length < 3) window.__errors.push('there is only one regular: ' + window.__reg);
         if (idle.length) window.__errors.push('a regular has nothing to say to you: ' + window.__reg);
@@ -1670,12 +1672,15 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (fenDark) window.__errors.push('the daytime regular came in the dark: ' + window.__reg);
         if (!fenGone) window.__errors.push('a regular never leaves: ' + window.__reg);
       } else if (SCRIPT === 'regularshot') {
-        // Bruin in the room, next to ordinary customers, for scale.
+        // A regular sat among ordinary customers, for the eye.
         const { REGULARS, visitOn } = await import('../src/game/regulars.js');
         const st = g.state;
-        const def = REGULARS.find((r) => r.id === 'linnet');
+        const def = REGULARS.find((r) => r.id === 'bruin');
         st.money = 3000;
         for (const id of ['house_coffee', 'cake', 'cocoa']) st.cafeSim.addStock(id, 20, st.clock.day);
+        const room = st.cafe.rooms[0];
+        st.cafe.furniture.push({ type: 'barStool', x: room.x + 8, y: room.y + 2, variant: 0 });
+        st.rebuildCafe();
         g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
         await wait(900);
         st.shopOpen = true;
@@ -1683,481 +1688,14 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const win = visitOn(def, g.worldSeed, st.clock.day);
         st.clock.t = (win.from + 0.5) * (1200 / 24);
         const meta = st.cafeMap.meta;
-        g.player.x = (meta.offX + 6) * 16;
-        g.player.y = (meta.offY + 5) * 16;
-        // A couple of ordinary customers alongside, so the size reads.
+        g.player.x = (meta.offX + 4) * 16;
+        g.player.y = (meta.offY + 6) * 16;
         for (let i = 0; i < 3; i++) { st.cafeSim.trySpawn(st.cafeMap); await wait(250); }
         g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
-        await wait(2600);
+        // Long enough for him to cross the room and for the banner to fade.
+        await wait(9000);
         const v = (st.cafeMap.villagers || []).find((x) => x.def.id === 'bruin');
-        window.__pass = `bruin=${!!v} customers=${st.cafeSim.customers.length}`;
-      } else if (SCRIPT === 'barstool') {
-        // Bruin wants a bar stool. Not one in the bag — one on the floor.
-        // Before you have heard him out he follows you about; afterwards he
-        // stops bothering you and takes his stool.
-        const { REGULARS, visitOn } = await import('../src/game/regulars.js');
-        const st = g.state;
-        const seed = g.worldSeed;
-        const def = REGULARS.find((r) => r.id === 'bruin');
-        const bruinIn = () => (st.cafeMap.villagers || []).find((v) => v.def.id === 'bruin');
-        const stools = () => g.seatsOfType('barStool');
-
-        // Put him in the room, on a night he is due, with the room to himself.
-        const day = (() => { for (let d = 0; d < 200; d++) if (visitOn(def, seed, d)) return d; return 0; })();
-        const win = visitOn(def, seed, day);
-        const room = st.cafe.rooms[0];
-        st.cafe.furniture = st.cafe.furniture.filter((f) => f.type !== 'barStool');
-        st.rebuildCafe();
-        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
-        await wait(900);
-        st.clock.day = day;
-        st.clock.t = (win.from + 0.5) * (1200 / 24);
-        await wait(300);
-
-        // The rule itself, asked directly rather than inferred from where he
-        // happens to be standing — mutating the room mid-visit races with the
-        // rebuild it causes, and the question here is about the rule.
-        const dueAtAll = (await import('../src/game/regulars.js')).dueNow(def, seed, st.clock, false);
-        const stoolsNone = stools().length;
-        const welcomeNone = g.regularWelcome(def);
-        st.inventory.f_barstool = 1;
-        const welcomeInBag = g.regularWelcome(def);
-        // Now put one down for real.
-        st.cafe.furniture.push({ type: 'barStool', x: room.x + 2, y: room.y + 2, variant: 0 });
-        st.rebuildCafe();
-        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
-        await wait(900);
-        st.clock.day = day;
-        st.clock.t = (win.from + 0.5) * (1200 / 24);
-        await wait(300);
-        const stoolsOne = stools().length;
-        const welcomePlaced = g.regularWelcome(def);
-        // With every stool spoken for he is still welcome — he comes in, looks,
-        // and goes, which is how you find out one stool is not enough.
-        stools()[0].taken = { fake: true };
-        const welcomeTaken = g.regularWelcome(def);
-        stools()[0].taken = null;
-
-        // Now the behaviour. Stand well clear of the door.
-        const meta = st.cafeMap.meta;
-        g.player.x = (meta.offX + 8) * 16;
-        g.player.y = (meta.offY + 6) * 16;
-        g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
-        delete st.quests.pun_off;
-        await wait(1600);
-        const came = !!bruinIn();
-
-        // Before you have talked to him: he follows. Walk off and he closes.
-        g.player.x += 70;
-        await wait(150);
-        const v1 = bruinIn();
-        const nearBefore = v1 ? Math.hypot(v1.x - g.player.x, v1.y - g.player.y) : -1;
-        await wait(2600);
-        const v1b = bruinIn();
-        const nearAfter = v1b ? Math.hypot(v1b.x - g.player.x, v1b.y - g.player.y) : -1;
-        const followed = nearAfter < nearBefore - 15;
-        const sittingBefore = !!(v1b && v1b.seat);
-
-        // Take his job on and he settles. He is a large bear and he ambles:
-        // crossing the room takes the better part of ten seconds.
-        st.quests.pun_off = 'active';
-        let settledAt = -1;
-        for (let i = 0; i < 30 && settledAt < 0; i++) {
-          await wait(500);
-          const b = bruinIn();
-          if (b && b.mode === 'seated') settledAt = (i + 1) * 500;
-        }
-        const v2 = bruinIn();
-        const seated = !!(v2 && v2.seat && v2.seat.type === 'barStool');
-        const want = v2 && v2.seat ? { x: v2.seat.x * 16 + 8, y: (v2.seat.y + 1) * 16 - 3 } : null;
-        const onStool = want ? Math.abs(v2.x - want.x) < 4 && Math.abs(v2.y - want.y) < 5 : false;
-        // ...and stops chasing you round the room.
-        const heldX = v2 ? v2.x : 0;
-        g.player.x -= 90;
-        await wait(2000);
-        const after2 = bruinIn();
-        const stayedPut = after2 ? Math.abs(after2.x - heldX) < 6 : false;
-        const stoolFree = stools().filter((s2) => !s2.taken).length;
-
-        window.__stool = `due=${dueAtAll} stools ${stoolsNone}->${stoolsOne}`
-          + ` welcome none=${welcomeNone} inBag=${welcomeInBag} placed=${welcomePlaced} taken=${welcomeTaken}`
-          + ` came=${came} follow ${nearBefore.toFixed(0)}->${nearAfter.toFixed(0)} followed=${followed}`
-          + ` satEarly=${sittingBefore} seated=${seated} onStool=${onStool} sat@${settledAt}ms`
-          + ` stayedPut=${stayedPut} freeStools=${stoolFree}`;
-        if (!dueAtAll) window.__errors.push('he was not even due: ' + window.__stool);
-        if (stoolsNone) window.__errors.push('the room still had a stool: ' + window.__stool);
-        if (welcomeNone) window.__errors.push('he would come in with nowhere to perch: ' + window.__stool);
-        if (welcomeInBag) window.__errors.push('a stool in the bag was enough: ' + window.__stool);
-        if (!welcomePlaced) window.__errors.push('he would not come in even with a stool down: ' + window.__stool);
-        if (!welcomeTaken) window.__errors.push('a taken stool keeps him out of the building: ' + window.__stool);
-        if (!came) window.__errors.push('he never actually came in: ' + window.__stool);
-        if (sittingBefore) window.__errors.push('he sat down before saying anything: ' + window.__stool);
-        if (!followed) window.__errors.push('he did not follow you about: ' + window.__stool);
-        if (settledAt < 0 || !seated) window.__errors.push('he never took his stool: ' + window.__stool);
-        if (!onStool) window.__errors.push('he is sitting somewhere other than the stool: ' + window.__stool);
-        if (!stayedPut) window.__errors.push('he kept following after taking his seat: ' + window.__stool);
-        if (stoolFree) window.__errors.push('his stool is still going spare: ' + window.__stool);
-      } else if (SCRIPT === 'painting') {
-        // A picture hangs on a wall. Until now the wall was the one place the
-        // build screen would not let you put one.
-        const { OBJECTS } = await import('../src/art/objects.js');
-        const { T } = await import('../src/art/tiles.js');
-        const st = g.state;
-        st.money = 5000;
-        st.inventory.f_painting = 2;
-        g.openBuildMode();
-        await wait(700);
-        const bs = g.screens[g.screens.length - 1];
-        bs.mode = bs.modes.indexOf('Furnish');
-        bs.draft.furniture = [];
-        bs.rebuild();
-        await wait(300);
-        bs.palette = bs.furnitureStock.findIndex((k) => k.startsWith('f_painting'));
-
-        const room = bs.draft.rooms[0];
-        const floor = { x: room.x + 3, y: room.y + 3 };
-        const wall = { x: room.x + 3, y: room.y - 1 };
-
-        const onFloor = bs.fits('painting', floor.x, floor.y);
-        const onWall = bs.fits('painting', wall.x, wall.y);
-        const wallIsWall = bs.wallAt(wall.x, wall.y);
-        const floorIsWall = bs.wallAt(floor.x, floor.y);
-
-        // Put one up, the way a player does.
-        bs.cur = { x: wall.x, y: wall.y };
-        await wait(200);
-        const before = bs.draft.furniture.length;
-        key('Space', true); await wait(150); key('Space', false);
-        await wait(400);
-        const hung = bs.draft.furniture.find((f) => f.type === 'painting');
-        const placed = bs.draft.furniture.length > before;
-
-        // It has to actually appear on the wall, at wall height rather than
-        // shoved down the tile.
-        const map = bs.map;
-        const off = map.meta;
-        const obj = map.objects.find((o) => o.type === 'painting');
-        const tileUnderIt = obj ? map.get(obj.tx, obj.ty) : null;
-        const onWallTile = tileUnderIt === T.WALL_IN;
-        const lifted = obj ? obj.offY < 0 : false;
-
-        // And come back down again from the same tile.
-        key('KeyX', true); await wait(150); key('KeyX', false);
-        await wait(400);
-        const tookDown = !bs.draft.furniture.some((f) => f.type === 'painting');
-
-        window.__paint = `wallAt wall=${wallIsWall} floor=${floorIsWall}`
-          + ` fits floor=${onFloor.ok}("${onFloor.why || ''}") wall=${onWall.ok}`
-          + ` placed=${placed} at=${hung ? hung.x + ',' + hung.y : '-'}`
-          + ` onWallTile=${onWallTile} offY=${obj ? obj.offY : '-'} lifted=${lifted}`
-          + ` tookDown=${tookDown}`;
-        if (!wallIsWall) window.__errors.push('the wall row is not recognised as wall: ' + window.__paint);
-        if (floorIsWall) window.__errors.push('the floor counts as wall: ' + window.__paint);
-        if (!onWall.ok) window.__errors.push('a painting still will not go on a wall: ' + window.__paint);
-        if (onFloor.ok) window.__errors.push('a painting will still stand on the floor: ' + window.__paint);
-        if (!placed) window.__errors.push('pressing place hung nothing: ' + window.__paint);
-        if (!onWallTile) window.__errors.push('it ended up somewhere that is not a wall: ' + window.__paint);
-        if (!lifted) window.__errors.push('it is not hung at wall height: ' + window.__paint);
-        if (!tookDown) window.__errors.push('it cannot be taken back down: ' + window.__paint);
-      } else if (SCRIPT === 'paintingshot') {
-        // Pictures up on the wall, seen from inside the room.
-        const st = g.state;
-        st.money = 5000;
-        st.cafe.furniture = st.cafe.furniture.concat([
-          { type: 'painting', x: 3, y: -1, variant: 0 },
-          { type: 'painting', x: 7, y: -1, variant: 1 },
-        ]);
-        st.rebuildCafe();
-        await wait(400);
-        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
-        await wait(1200);
-        const off = st.cafeMap.meta;
-        g.player.x = (off.offX + 5) * 16;
-        g.player.y = (off.offY + 3) * 16;
-        g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
-        await wait(4200);
-        window.__pass = `paintings=${st.cafeMap.objects.filter((o) => o.type === 'painting').length}`;
-      } else if (SCRIPT === 'friends') {
-        // The friends list, and opening hours on the map. Both answer the
-        // question you actually have: who was that, and when are they open.
-        const { SHOPS, VILLAGERS, TOWNS } = await import('../src/world/places.js');
-        const { hoursText } = await import('../src/game/time.js');
-        const st = g.state;
-
-        // Know a few people, from different corners of the cast.
-        st.friends = { pip: 0.9, vesper: 0.5, bruin: 0.3, nightjar: 0.15, gorse: 0.6 };
-        st.visited = {};
-        st.visit('brambleford', 'Brambleford', 96, 168);
-        st.visit('grocer', "Pips' Provisions", 98, 170, 'brambleford');
-        st.visit('hollowdown', 'Hollowdown', 208, 68);
-
-        // --- the friends screen ---
-        key('Escape', true); await wait(140); key('Escape', false);
-        await wait(400);
-        const menu = g.screens[g.screens.length - 1];
-        const hasFriends = (menu.items || []).includes('Friends');
-        const orderOk = (menu.items || []).indexOf('Friends') === (menu.items || []).indexOf('Map') + 1;
-        // Walk down to it and open it.
-        const want = (menu.items || []).indexOf('Friends');
-        for (let i = 0; i < want; i++) { key('ArrowDown', true); await wait(90); key('ArrowDown', false); await wait(110); }
-        key('Space', true); await wait(140); key('Space', false);
-        await wait(500);
-        const fs = g.screens[g.screens.length - 1];
-        const opened = fs && fs.constructor.name === 'FriendsScreen';
-        const listed = opened ? fs.rows.length : 0;
-        const warmestFirst = opened && fs.rows.length > 1 ? fs.rows[0].level >= fs.rows[1].level : false;
-        const names = opened ? fs.rows.map((r) => r.def.name).join(',') : '';
-        // Everybody has to have somewhere you could go and look for them.
-        const wheres = opened ? fs.rows.map((r) => fs.constructor.whereabouts(r.def)) : [];
-        const vague = wheres.filter((wtxt) => !wtxt || /somewhere in the valley/i.test(wtxt));
-        // The regular says so rather than naming a town he is never in.
-        const bruinRow = opened ? fs.rows.find((r) => r.id === 'bruin') : null;
-        const bruinWhere = bruinRow ? fs.constructor.whereabouts(bruinRow.def) : '';
-        // A shopkeeper is found at their shop, not just their town.
-        const pipRow = opened ? fs.rows.find((r) => r.id === 'pip') : null;
-        const pipWhere = pipRow ? fs.constructor.whereabouts(pipRow.def) : '';
-        // Scrolling an over-long list must not throw.
-        for (let i = 0; i < 8; i++) { key('ArrowDown', true); await wait(60); key('ArrowDown', false); await wait(70); }
-        const stillOpen = g.screens[g.screens.length - 1] === fs;
-        key('KeyX', true); await wait(140); key('KeyX', false);
-        await wait(400);
-        key('Escape', true); await wait(140); key('Escape', false);
-        await wait(400);
-
-        // --- hours on the map ---
-        key('KeyM', true); await wait(140); key('KeyM', false);
-        await wait(600);
-        const ms = g.screens[g.screens.length - 1];
-        const isMap = ms && ms.constructor.name === 'MapScreen';
-        // Find the grocer in the list and highlight it.
-        let found = -1;
-        if (isMap) found = ms.places.findIndex((p) => p.id === 'grocer');
-        if (found >= 0) ms.index = found;
-        await wait(300);
-        const shop = SHOPS.find((s2) => s2.id === 'grocer');
-        const expected = hoursText(shop);
-        // Read it off the screen rather than trusting the lookup.
-        const canvas = document.getElementById('screen');
-        const cg = canvas.getContext('2d');
-        const before = cg.getImageData(0, canvas.height - 60, canvas.width, 24).data;
-        ms.index = ms.places.findIndex((p) => p.id === 'brambleford');   // a town, no hours
-        await wait(400);
-        const after = cg.getImageData(0, canvas.height - 60, canvas.width, 24).data;
-        let changed = 0;
-        for (let i = 0; i < before.length; i += 4) if (Math.abs(before[i] - after[i]) > 20) changed++;
-        key('KeyX', true); await wait(140); key('KeyX', false);
-        await wait(300);
-
-        window.__friends = `menu has=${hasFriends} afterMap=${orderOk} opened=${opened}`
-          + ` listed=${listed} warmestFirst=${warmestFirst} names=[${names}]`
-          + ` vague=${vague.length} bruin="${bruinWhere}" pip="${pipWhere}"`
-          + ` survivedScroll=${stillOpen} map=${isMap} grocerRow=${found}`
-          + ` hours="${expected}" lineChanged=${changed}px`;
-        if (!hasFriends) window.__errors.push('no Friends item in the menu: ' + window.__friends);
-        if (!orderOk) window.__errors.push('Friends is not after Map: ' + window.__friends);
-        if (!opened) window.__errors.push('the friends screen would not open: ' + window.__friends);
-        if (listed !== 5) window.__errors.push('the friends list is not everybody you know: ' + window.__friends);
-        if (!warmestFirst) window.__errors.push('the list is not warmest first: ' + window.__friends);
-        if (vague.length) window.__errors.push('somebody has nowhere you could look for them: ' + window.__friends);
-        if (!/cafe/i.test(bruinWhere)) window.__errors.push('the regular is given a town he is never in: ' + window.__friends);
-        if (!/Pips/i.test(pipWhere)) window.__errors.push('a shopkeeper is not placed at their shop: ' + window.__friends);
-        if (!stillOpen) window.__errors.push('scrolling the friends list closed it: ' + window.__friends);
-        if (!isMap) window.__errors.push('the map would not open: ' + window.__friends);
-        if (found < 0) window.__errors.push('a visited shop is not on the map: ' + window.__friends);
-        if (!expected) window.__errors.push('the shop has no hours to show: ' + window.__friends);
-        if (changed < 20) window.__errors.push('the map never shows opening hours: ' + window.__friends);
-      } else if (SCRIPT.startsWith('friendshot')) {
-        const st = g.state;
-        st.friends = { pip: 0.92, gorse: 0.61, vesper: 0.48, bruin: 0.3, nightjar: 0.16, shrimp: 0.55, moth: 0.22 };
-        st.visited = {};
-        st.visit('brambleford', 'Brambleford', 96, 168);
-        st.visit('grocer', "Pips' Provisions", 98, 170, 'brambleford');
-        st.visit('bakery', 'The Warm Loaf', 100, 172, 'brambleford');
-        st.visit('hollowdown', 'Hollowdown', 208, 68);
-        st.visit('hardware', 'The Chalk Pit Store', 210, 70, 'hollowdown');
-        const which = SCRIPT.split(':')[1] || 'friends';
-        await wait(400);
-        if (which === 'friends') {
-          const { FriendsScreen } = await import('../src/ui/menus.js');
-          g.push(new FriendsScreen(g));
-        } else {
-          const { MapScreen } = await import('../src/ui/menus.js');
-          const m = new MapScreen(g);
-          g.push(m);
-          await wait(300);
-          const i = m.places.findIndex((p) => p.id === 'hardware');
-          if (i >= 0) m.index = i;
-        }
-        await wait(900);
-        window.__pass = `showing=${which}`;
-      } else if (SCRIPT === 'confirm') {
-        // Two things you cannot take back get asked about first, and both
-        // default to No — the reflexive press has to do nothing.
-        const { ConfirmScreen, BIG_SPEND, ShopScreen } = await import('../src/ui/menus.js');
-        const { ITEMS, STOCK } = await import('../src/game/items.js');
-        const { SHOPS } = await import('../src/world/places.js');
-        const st = g.state;
-        st.money = 9000;
-        st.workers = 2;
-        st.materials = 6;
-
-        // --- a big purchase ---
-        const shopDef = SHOPS.find((sh) => sh.id === 'furniture');
-        g.push(new ShopScreen(g, shopDef, STOCK[shopDef.stock] || []));
-        await wait(500);
-        const shop = g.screens[g.screens.length - 1];
-        const dear = shop.items.findIndex((id) => shop.price(id) > BIG_SPEND);
-        const cheap = shop.items.findIndex((id) => shop.price(id) <= BIG_SPEND);
-        // Something cheap goes straight through.
-        shop.index = cheap;
-        const beforeCheap = st.money;
-        shop.buy(shop.items[cheap], 1);
-        await wait(250);
-        const boughtCheap = st.money < beforeCheap;
-        const askedForCheap = g.screens[g.screens.length - 1] !== shop;
-        // Something dear asks.
-        shop.index = dear;
-        const beforeDear = st.money;
-        shop.buy(shop.items[dear], 1);
-        await wait(300);
-        const ask = g.screens[g.screens.length - 1];
-        const asked = ask instanceof ConfirmScreen;
-        const spentWhileAsking = st.money !== beforeDear;
-        const defaultsToNo = asked ? ask.choice === 0 : false;
-        // Pressing Space straight away must not buy it.
-        key('Space', true); await wait(140); key('Space', false);
-        await wait(400);
-        const boughtByReflex = st.money !== beforeDear;
-        // Ask again and say yes this time.
-        shop.buy(shop.items[dear], 1);
-        await wait(300);
-        key('ArrowRight', true); await wait(120); key('ArrowRight', false);
-        await wait(150);
-        key('Space', true); await wait(140); key('Space', false);
-        await wait(400);
-        const boughtOnYes = st.money < beforeDear;
-        const dearName = ITEMS[shop.items[dear]].name;
-        while (g.screens.length) g.screens.pop();
-        await wait(300);
-
-        // --- demolishing a room ---
-        g.openBuildMode();
-        await wait(700);
-        const bs = g.screens[g.screens.length - 1];
-        bs.mode = bs.modes.indexOf('Rooms');
-        bs.draft.rooms.push({ x: 12, y: 0, w: 5, h: 5, name: 'Spare Room', floor: bs.draft.floor });
-        bs.rebuild();
-        await wait(300);
-        const roomsBefore = bs.draft.rooms.length;
-        bs.cur = { x: 14, y: 2 };
-        await wait(200);
-        key('KeyX', true); await wait(140); key('KeyX', false);
-        await wait(400);
-        const ask2 = g.screens[g.screens.length - 1];
-        const askedRoom = ask2 instanceof ConfirmScreen;
-        const stillThere = bs.draft.rooms.length === roomsBefore;
-        const roomDefaultsToNo = askedRoom ? ask2.choice === 0 : false;
-        // Back out: the room survives.
-        key('KeyX', true); await wait(140); key('KeyX', false);
-        await wait(400);
-        const survivedNo = bs.draft.rooms.length === roomsBefore;
-        // Now do it properly.
-        key('KeyX', true); await wait(140); key('KeyX', false);
-        await wait(400);
-        key('ArrowRight', true); await wait(120); key('ArrowRight', false);
-        await wait(150);
-        key('Space', true); await wait(140); key('Space', false);
-        await wait(500);
-        const gone = bs.draft.rooms.length === roomsBefore - 1;
-
-        window.__confirm = `threshold=${BIG_SPEND} cheap=${boughtCheap}/asked=${askedForCheap}`
-          + ` dear="${dearName}" asked=${asked} spentWhileAsking=${spentWhileAsking}`
-          + ` defaultNo=${defaultsToNo} boughtByReflex=${boughtByReflex} boughtOnYes=${boughtOnYes}`
-          + ` room asked=${askedRoom} defaultNo=${roomDefaultsToNo} survivedNo=${survivedNo} gone=${gone}`;
-        if (!boughtCheap || askedForCheap) window.__errors.push('a small purchase was interrupted: ' + window.__confirm);
-        if (!asked) window.__errors.push('a big purchase went through unasked: ' + window.__confirm);
-        if (spentWhileAsking) window.__errors.push('the money went before the question: ' + window.__confirm);
-        if (!defaultsToNo) window.__errors.push('the purchase question defaults to yes: ' + window.__confirm);
-        if (boughtByReflex) window.__errors.push('pressing space again bought it anyway: ' + window.__confirm);
-        if (!boughtOnYes) window.__errors.push('saying yes did not buy it: ' + window.__confirm);
-        if (!askedRoom) window.__errors.push('a room came down unasked: ' + window.__confirm);
-        if (!roomDefaultsToNo) window.__errors.push('the demolish question defaults to yes: ' + window.__confirm);
-        if (!survivedNo) window.__errors.push('backing out demolished it anyway: ' + window.__confirm);
-        if (!gone) window.__errors.push('saying yes did not take the room down: ' + window.__confirm);
-      } else if (SCRIPT === 'catvoices') {
-        // Fifteen cats all saying the one "mrow" is the sound of a machine.
-        // Every breed gets its own calls, and a poorly cat says so out loud.
-        const { CAT_BREEDS } = await import('../src/art/chars.js');
-        const { Cat } = await import('../src/game/entities.js');
-        const { audio } = await import('../src/engine/audio.js');
-        const st = g.state;
-
-        const breeds = Object.keys(CAT_BREEDS);
-        const noVoice = breeds.filter((b) => !CAT_BREEDS[b].voice);
-        const oneCall = breeds.filter((b) => (CAT_BREEDS[b].voice?.calls || []).length < 2);
-        const allCalls = new Set();
-        for (const b of breeds) for (const c of CAT_BREEDS[b].voice.calls) allCalls.add(c);
-
-        // Every call a breed can make has to be a sound the mixer knows. A
-        // typo here is silence, which is indistinguishable from a quiet cat.
-        const played = [];
-        const realSfx = audio.sfx.bind(audio);
-        audio.sfx = (name, opts) => { played.push({ name, ...opts }); return realSfx(name, opts); };
-
-        // Each breed, asked to speak many times, must use its own list only.
-        const wrong = [];
-        const spread = {};
-        for (const b of breeds) {
-          const cat = new Cat(b, 0, 0);
-          const heard = new Set();
-          played.length = 0;
-          for (let i = 0; i < 60; i++) heard.add(cat.speak(0));
-          for (const call of heard) {
-            if (!CAT_BREEDS[b].voice.calls.includes(call)) wrong.push(`${b}:${call}`);
-          }
-          spread[b] = heard.size;
-        }
-        const monotone = breeds.filter((b) => spread[b] < 2);
-
-        // Two breeds must not sound the same: pitch or calls have to differ.
-        const fingerprints = new Set(breeds.map((b) => {
-          const v = CAT_BREEDS[b].voice;
-          return `${v.pitch}|${v.gain}|${[...v.calls].sort().join(',')}`;
-        }));
-
-        // The mixer has to have a recipe for each one. Checked against the
-        // source rather than by playing it: headless has no audio context, so
-        // every call "succeeds" at runtime whether or not it exists.
-        const mixer = await fetch('../src/engine/audio.js').then((r) => r.text());
-        const silent = [...allCalls].filter((call) => !mixer.includes(`case '${call}':`));
-
-        // A sick cat sneezes promptly rather than at the next lull.
-        const well = new Cat('tabby', 0, 0, {});
-        const ill = new Cat('tabby', 0, 0, { sick: true });
-        const promptly = ill.sneezeT < 3 && well.sneezeT > 3;
-        played.length = 0;
-        const map = st.cafeMap;
-        ill.sneezeT = 0;
-        ill.update(0.016, map, { pan: 0 });
-        await wait(600);
-        const sneezed = played.some((p) => p.name === 'sneeze');
-        const followUp = played.some((p) => p.name === 'squeak');
-
-        audio.sfx = realSfx;
-        window.__voices = `breeds=${breeds.length} noVoice=[${noVoice}] oneCall=[${oneCall}]`
-          + ` calls=[${[...allCalls].sort().join(' ')}] usedWrong=[${wrong.slice(0, 4)}]`
-          + ` monotone=[${monotone}] distinctVoices=${fingerprints.size}/${breeds.length}`
-          + ` silent=[${silent}] sickPrompt=${promptly} sneezed=${sneezed} followUp=${followUp}`;
-        if (noVoice.length) window.__errors.push('a breed has no voice: ' + window.__voices);
-        if (oneCall.length) window.__errors.push('a breed only knows one noise: ' + window.__voices);
-        if (allCalls.size < 4) window.__errors.push('the cats barely vary: ' + window.__voices);
-        if (wrong.length) window.__errors.push('a cat made a noise its breed does not: ' + window.__voices);
-        if (monotone.length) window.__errors.push('a breed never varies what it says: ' + window.__voices);
-        if (fingerprints.size < 8) window.__errors.push('too many breeds sound alike: ' + window.__voices);
-        if (silent.length) window.__errors.push('a call has no recipe in the mixer: ' + window.__voices);
-        if (!promptly) window.__errors.push('a sick cat waits to say so: ' + window.__voices);
-        if (!sneezed) window.__errors.push('a sick cat made no sound: ' + window.__voices);
-        if (!followUp) window.__errors.push('the sneeze has no poorly noise after it: ' + window.__voices);
+        window.__pass = `bruin=${!!v} mode=${v ? v.mode : '-'} customers=${st.cafeSim.customers.length}`;
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get

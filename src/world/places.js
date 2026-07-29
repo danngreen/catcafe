@@ -461,7 +461,7 @@ export const VILLAGERS = [
   // A regular rather than a resident: Bruin is not stood in a town waiting to
   // be found, he lets himself into your cafe every so often and comes over.
   { id: 'bruin', name: 'Bruin', species: 'bear', coat: 'white', role: 'villager',
-    regular: true, when: 'night', big: true, sparkle: true, seat: 'barStool',
+    regular: true, when: 'night', seat: 'barStool',
     lines: ['I do not queue. Queueing is for people with somewhere to be.',
       'What do you call a raven who works nights? A crow-nological anomaly. ...You laughed. Slightly.',
       'A pun is a small unkindness you do to a word. The word forgives you. Usually.',
@@ -469,14 +469,14 @@ export const VILLAGERS = [
     hint: 'There is a contest. Longest Face Wins, they call it. Whoever hears the most puns without '
       + 'laughing. I have not won it in four years and I intend to lose again with style.' },
   { id: 'fennel', name: 'Fennel', species: 'rabbit', coat: 'cream', role: 'villager',
-    regular: true, big: true, sparkle: true, visitChance: 0.45,
+    regular: true, visitChance: 0.45,
     lines: ['I have a job. Afternoons. It is not a demanding job and I am not a demanding man.',
       'Do you have the cordial? You do not have the cordial. That is fine. I will wait.',
       "I could go and get it myself, yes. I could. Let's both sit with that for a moment.",
       '*settles into the nearest chair with the finality of a dropped sandbag*'],
     hint: 'Root & Remedy. Oakhollow. Ask for the cordial and do not let them talk you into the tea.' },
   { id: 'linnet', name: 'Linnet', species: 'deer', coat: 'brown', role: 'villager',
-    regular: true, when: 'night', big: true, sparkle: true, visitChance: 0.42,
+    regular: true, when: 'night', visitChance: 0.42,
     lines: ['I come for the grey one. I am not going to pretend otherwise.',
       'She used to sit with me. Every night, same chair. Then she stopped.',
       'I have not done anything. I have been over it a great many times.',

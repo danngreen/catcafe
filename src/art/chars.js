@@ -669,15 +669,25 @@ export function catSprite(breedKey, dir, frame, pose = 'walk', groomed = false) 
 }
 
 /** Small emote bubble shown above a head. */
+/** Bubbles that are thought rather than said. */
+const THOUGHTS = new Set(['wonder']);
+
 export function emoteSprite(kind) {
   return cache.get(`e|${kind}`, () => {
     const buf = new PixBuf(16, 14);
     const bg = rgb('#fdf6e6'), ed = rgb('#5b5170');
     buf.ellipse(8, 6, 6.4, 5.2, bg);
     outline(buf, '#5b5170');
-    // Little tail on the bubble.
-    buf.set(7, 11, ed); buf.set(8, 11, bg); buf.set(9, 11, ed);
-    buf.set(8, 12, ed);
+    // Said out loud gets a pointed tail; thought gets two round ones trailing
+    // off, which is how you tell somebody talking from somebody wondering.
+    if (THOUGHTS.has(kind)) {
+      buf.ellipse(6, 11, 1.6, 1.3, bg);
+      buf.ellipse(4, 13, 1.1, 0.9, bg);
+      outline(buf, '#5b5170');
+    } else {
+      buf.set(7, 11, ed); buf.set(8, 11, bg); buf.set(9, 11, ed);
+      buf.set(8, 12, ed);
+    }
     const ink = rgb('#4a4258');
     switch (kind) {
       case 'talk': buf.set(5, 6, ink); buf.set(8, 6, ink); buf.set(11, 6, ink); break;
@@ -714,6 +724,15 @@ export function emoteSprite(kind) {
         const h = rgb('#f39ac0');
         buf.set(6, 4, h); buf.set(10, 4, h);
         buf.rect(5, 5, 7, 2, h); buf.rect(6, 7, 5, 1, h); buf.set(8, 8, h);
+        break;
+      }
+      case 'wonder': {
+        // A question mark, in a thought bubble: this one has something to ask
+        // you and is waiting to be spoken to.
+        const q = rgb('#4a4258');
+        buf.hline(6, 3, 4, q); buf.set(10, 4, q); buf.set(10, 5, q);
+        buf.set(9, 6, q); buf.set(8, 7, q);
+        buf.set(8, 9, q);
         break;
       }
       case 'quest': {

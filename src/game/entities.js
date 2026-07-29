@@ -269,40 +269,31 @@ export class Villager extends Actor {
     // and paler than anyone else in the room, with a slow shine, so it is
     // obvious at a glance that this is not another customer.
     this.regular = !!def.regular;
-    this.big = !!def.big;
-    this.sparkle = !!def.sparkle;
-    this.sparkleT = 0;
-    // Some regulars come in for a particular perch. Until they have said what
-    // they came to say they follow you about instead, which is the difference
-    // between a stranger with something on their mind and a regular.
-    this.seatWanted = def.seat || null;
+    // Which seat they would rather have. A preference, not a requirement —
+    // they will take any chair going, and stand if there is none.
+    this.seatPrefers = def.seat || null;
     this.seat = null;
-    this.mode = 'follow';
-    this.nagT = 0;
-    if (this.regular) { this.speed = 20; this.range = 0; }
+    this.mode = 'arriving';
+    if (this.regular) { this.speed = 22; this.range = 0; }
   }
 
   /** Give up whatever they were sitting on. */
   standUp() {
     if (this.seat) { this.seat.taken = null; this.seat = null; }
+    this.perch = null;
   }
 
   /**
-   * Cross the room to whoever is in it and then stand there. No wandering: a
-   * regular who drifts off mid-conversation is a regular you chase.
-   *
-   * `target` overrides the player — that is how somebody heads for their stool
-   * once they have no more reason to be following you about.
+   * Walk to a spot and stay on it. Regulars do not wander and do not follow —
+   * they come in, find somewhere to be, and wait to be spoken to.
    */
-  updateRegular(dt, map, player, target) {
+  updateRegular(dt, map, target) {
     this.moving = false;
     if (this.talking) { this.animate(dt); return; }
-    const aim = target || player;
-    if (!aim) { this.animate(dt); return; }
-    const stop = target ? 3 : 22;
-    const dx = aim.x - this.x, dy = aim.y - this.y;
+    if (!target) { this.animate(dt); return; }
+    const dx = target.x - this.x, dy = target.y - this.y;
     const dist = Math.hypot(dx, dy);
-    if (dist > stop) {
+    if (dist > 3) {
       const step = this.speed * dt;
       const before = { x: this.x, y: this.y };
       moveActor(map, this, (dx / dist) * step, (dy / dist) * step);
@@ -310,17 +301,10 @@ export class Villager extends Actor {
       if (Math.abs(dx) > Math.abs(dy)) this.dir = dx > 0 ? 'right' : 'left';
       else this.dir = dy > 0 ? 'down' : 'up';
       this.arrived = false;
-    } else if (target) {
-      this.x = aim.x; this.y = aim.y;
+    } else {
+      this.x = target.x; this.y = target.y;
       this.dir = 'down';
       this.arrived = true;
-    } else {
-      this.faceTowards(player.x, player.y);
-      this.arrived = true;
-      // Trying to catch your eye, which is the only way somebody who does not
-      // order anything can ask for your attention.
-      this.nagT -= dt;
-      if (this.nagT <= 0) { this.nagT = 3.5 + rng() * 2.5; this.showEmote('talk', 1.6); }
     }
     this.animate(dt);
   }
@@ -422,51 +406,109 @@ export class Villager extends Actor {
     const a = this.alpha * (this.ghost ? 0.62 : 1);
     const lift = this.ghost ? Math.sin(this.bobT * 1.7) * 1.5 - 2 : 0;
     if (a < 1) ctx.globalAlpha = a;
-    if (this.big) {
-      // Drawn half again as large, from the feet, so he stands head and
-      // shoulders over a room full of ordinary customers.
-      const k = 1.5;
-      const w = Math.round(spr.width * k), h = Math.round(spr.height * k);
-      const bx = Math.round(this.x - w / 2 - ox), by = Math.round(this.y - h - oy + lift);
-      if (this.sparkle) this.drawShine(ctx, bx, by, w, h);
-      ctx.drawImage(spr, bx, by, w, h);
-    } else {
-      ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - CHAR_H - oy + lift));
-    }
+    ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - CHAR_H - oy + lift));
     if (a < 1) ctx.globalAlpha = 1;
   }
 
-  /** A slow warm glow and a few drifting motes, behind the sprite. */
-  drawShine(ctx, bx, by, w, h) {
-    const t = this.sparkleT;
-    const cx = bx + w / 2, cy = by + h * 0.55;
-    const pulse = 0.62 + Math.sin(t * 1.6) * 0.22;
-    // Additive, so it lifts whatever it is over rather than fogging it. A
-    // plain alpha wash just made him look like he needed dusting.
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, w * 1.05);
-    g.addColorStop(0, `rgba(255,244,198,${0.44 * pulse})`);
-    g.addColorStop(0.45, `rgba(255,232,170,${0.20 * pulse})`);
-    g.addColorStop(1, 'rgba(255,232,170,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(cx, cy, w * 1.05, 0, Math.PI * 2);
-    ctx.fill();
-    // Motes drifting up around him, brightest at mid-rise.
-    for (let i = 0; i < 7; i++) {
-      const p = t * 0.75 + i * 0.898;
-      const rise = (p * 0.3 + i * 0.14) % 1;
-      const a2 = Math.sin(rise * Math.PI);
-      if (a2 < 0.12) continue;
-      ctx.globalAlpha = a2;
-      ctx.fillStyle = i % 3 ? '#fffbe8' : '#ffe9a8';
-      const sx = Math.round(cx + Math.cos(p * 1.7 + i * 2) * (w * 0.62));
-      const sy = Math.round(by + h * (0.95 - rise * 0.95));
-      ctx.fillRect(sx, sy, 1, 1);
-      if (a2 > 0.6) { ctx.fillRect(sx, sy - 1, 1, 1); ctx.fillRect(sx + 1, sy, 1, 1); }
+  /** Send them home (or bring them back) through their own door. */
+  setShift(active) {
+    if (active && (this.shift === 'away' || this.shift === 'leaving')) {
+      if (this.shift === 'away') { this.x = this.burrow.x; this.y = this.burrow.y; this.alpha = 0; }
+      this.shift = 'arriving';
+      this.target = { x: this.home.x, y: this.home.y };
+    } else if (!active && (this.shift === 'here' || this.shift === 'arriving')) {
+      this.shift = 'leaving';
+      this.target = { x: this.burrow.x, y: this.burrow.y };
     }
-    ctx.restore();
+  }
+
+  get present() { return this.shift !== 'away'; }
+
+  update(dt, map) {
+    if (this.shift === 'away') return;
+    if (this.shift === 'leaving' || this.shift === 'arriving') { this.updateShift(dt, map); return; }
+    if (this.talking) { this.moving = false; this.animate(dt); return; }
+    this.wanderT -= dt;
+    if (this.wanderT <= 0) {
+      this.wanderT = 1.6 + rng() * 4.5;
+      if (rng() < 0.42) this.target = null;
+      else {
+        const a = rng() * Math.PI * 2;
+        const d = 16 + rng() * this.range;
+        this.target = { x: this.home.x + Math.cos(a) * d, y: this.home.y + Math.sin(a) * d };
+      }
+    }
+    this.moving = false;
+    if (this.target) {
+      const dx = this.target.x - this.x, dy = this.target.y - this.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 3) this.target = null;
+      else {
+        const step = this.speed * dt;
+        const before = { x: this.x, y: this.y };
+        moveActor(map, this, (dx / dist) * step, (dy / dist) * step);
+        this.moving = Math.hypot(this.x - before.x, this.y - before.y) > 0.05;
+        if (!this.moving) this.target = null;
+        if (Math.abs(dx) > Math.abs(dy)) this.dir = dx > 0 ? 'right' : 'left';
+        else this.dir = dy > 0 ? 'down' : 'up';
+      }
+    }
+    this.animate(dt);
+  }
+
+  /** Walking out to the treeline, or in from it, fading as they go. */
+  updateShift(dt, map) {
+    const t = this.target || this.burrow;
+    const dx = t.x - this.x, dy = t.y - this.y;
+    const dist = Math.hypot(dx, dy);
+    const arriving = this.shift === 'arriving';
+    this.alpha = clamp(arriving ? this.alpha + dt * 1.6 : this.alpha - dt * 0.9, 0, 1);
+
+    if (dist < 3 || (!arriving && this.alpha <= 0)) {
+      if (arriving) { this.shift = 'here'; this.alpha = 1; this.target = null; }
+      else { this.shift = 'away'; this.alpha = 0; this.target = null; }
+      this.moving = false;
+      return;
+    }
+    const step = this.speed * 1.25 * dt;
+    const before = { x: this.x, y: this.y };
+    moveActor(map, this, (dx / dist) * step, (dy / dist) * step);
+    this.moving = Math.hypot(this.x - before.x, this.y - before.y) > 0.05;
+
+    // Walls happen — this walk is a straight line, not a path. Rather than stand
+    // against a hedge forever, take what we've got: on the way out, finish
+    // fading where we are; on the way in, simply be here.
+    //
+    // The second half matters more than it looks. Somebody stuck mid-arrival is
+    // drawn but can't be talked to, which from the outside is indistinguishable
+    // from being stuck on the quest they're part of.
+    if (!this.moving) {
+      this.stuckT = (this.stuckT || 0) + dt;
+      if (arriving && this.stuckT > 1.2) {
+        this.shift = 'here';
+        this.alpha = 1;
+        this.target = null;
+        this.stuckT = 0;
+        return;
+      }
+      if (!arriving) this.alpha = Math.max(0, this.alpha - dt * 1.4);
+    } else {
+      this.stuckT = 0;
+    }
+    if (Math.abs(dx) > Math.abs(dy)) this.dir = dx > 0 ? 'right' : 'left';
+    else this.dir = dy > 0 ? 'down' : 'up';
+    this.animate(dt);
+  }
+
+  draw(ctx, ox, oy) {
+    if (this.shift === 'away') return;
+    const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, this.dir, this.frame);
+    // Ghosts hover, and you can see the hedge through them.
+    const a = this.alpha * (this.ghost ? 0.62 : 1);
+    const lift = this.ghost ? Math.sin(this.bobT * 1.7) * 1.5 - 2 : 0;
+    if (a < 1) ctx.globalAlpha = a;
+    ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - CHAR_H - oy + lift));
+    if (a < 1) ctx.globalAlpha = 1;
   }
 
   drawEmote(ctx, ox, oy, topY) {
