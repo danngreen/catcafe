@@ -8,7 +8,7 @@ import { VIEW_W, VIEW_H } from '../engine/display.js';
 import { P } from '../art/palette.js';
 import { ITEMS, CAT as ICAT, baseId, variantOf, invKey } from '../game/items.js';
 import { CAT_BREEDS } from '../art/chars.js';
-import { TOWNS } from '../world/places.js';
+import { TOWNS, SHOPS, VILLAGERS } from '../world/places.js';
 import { iconSprite } from '../art/icons.js';
 import { objSprite, VARIANT_SWATCHES, VARIANT_NAMES } from '../art/objects.js';
 import { catSprite, playerCatSprite } from '../art/chars.js';
@@ -16,6 +16,9 @@ import { audio } from '../engine/audio.js';
 import { clamp, money, wrapText } from '../engine/util.js';
 import { QUESTS, objectiveText, progressText } from '../game/quests.js';
 import { HIRE_POOL, shiftHours, fmtHour } from '../game/cafe.js';
+import { shopOpen, hoursText } from '../game/time.js';
+import { lookOf } from '../game/entities.js';
+import { charSprite } from '../art/chars.js';
 
 export class Screen {
   constructor() { this.t = 0; this.done = false; }
@@ -1288,6 +1291,18 @@ export class MapScreen extends Screen {
         { color: P.uiTextDim, shadow: P.uiShadow });
     }
 
+    // Opening hours for whatever is highlighted. You have been there, so you
+    // know when it opens — which is exactly the thing you walk across the
+    // valley and find out you did not.
+    const here = this.places[this.index];
+    const shop = here ? SHOPS.find((s2) => s2.id === here.id) : null;
+    if (shop) {
+      const open = shopOpen(shop, this.game.state.clock);
+      const line = `${hoursText(shop)}  —  ${open ? 'open now' : 'shut now'}`;
+      drawTextCentered(ctx, line, VIEW_W / 2, y + h - 26,
+        { color: open ? P.uiGreen : P.uiTextDim, shadow: P.uiShadow });
+    }
+
     if (this.pickMode) {
       const p = this.places[this.index];
       const fare = p ? this.game.state.taxiFare(p) : 0;
@@ -1396,9 +1411,111 @@ export class SummaryScreen extends Screen {
 // Pause
 // ---------------------------------------------------------------------------
 
+/**
+ * Everybody you have got to know, and where to find them again — which is the
+ * question you actually have about a villager three towns away whose name you
+ * half remember.
+ */
+export class FriendsScreen extends Screen {
+  constructor(game) {
+    super();
+    this.game = game;
+    this.index = 0;
+    this.scroll = 0;
+    this.rows = this.buildRows();
+  }
+
+  /** Anyone you have spoken to, warmest first. */
+  buildRows() {
+    const st = this.game.state;
+    return Object.entries(st.friends)
+      .map(([id, level]) => ({ def: VILLAGERS.find((v) => v.id === id), id, level }))
+      .filter((r) => r.def)
+      .sort((a, b) => b.level - a.level || a.def.name.localeCompare(b.def.name));
+  }
+
+  /** Where to look for them, in the terms a player thinks in. */
+  static whereabouts(def) {
+    if (def.regular) return 'Comes to your cafe';
+    const shop = SHOPS.find((s) => s.keeper === def.id);
+    const town = TOWNS.find((t) => t.id === (shop ? shop.town : def.town));
+    const when = def.when === 'night' ? ', after dark' : '';
+    if (shop) return `${shop.name}${when}`;
+    if (town) return `${town.name}${when}`;
+    if (def.role === 'wanderer') return `Out in the valley${when || ', anywhere'}`;
+    return def.spot ? `Near the ${def.spot}${when}` : `Somewhere in the valley${when}`;
+  }
+
+  static warmth(level) {
+    if (level >= 0.75) return 'Firm friends';
+    if (level >= 0.45) return 'Friendly';
+    if (level >= 0.2) return 'On good terms';
+    return 'Passing acquaintance';
+  }
+
+  update(dt, input) {
+    this.t += dt;
+    const n = this.rows.length;
+    if (n) {
+      if (input.repeat('up', dt)) { this.index = (this.index - 1 + n) % n; audio.sfx('ui_move', { gain: 0.6 }); }
+      if (input.repeat('down', dt)) { this.index = (this.index + 1) % n; audio.sfx('ui_move', { gain: 0.6 }); }
+      const vis = 6;
+      if (this.index < this.scroll) this.scroll = this.index;
+      if (this.index >= this.scroll + vis) this.scroll = this.index - vis + 1;
+    }
+    if (input.hit('use') || input.hit('cancel') || input.hit('menu')) this.close();
+  }
+
+  draw(ctx) {
+    dim(ctx, 0.68);
+    const { x, w } = fitRect(16, VIEW_W - 32, 300);
+    const y = 22, h = VIEW_H - 44;
+    panel(ctx, x, y, w, h);
+    panelTitle(ctx, x, y, w, 'Friends');
+
+    if (!this.rows.length) {
+      drawTextCentered(ctx, 'You have not got to know anybody yet.', x + w / 2, y + 46,
+        { color: P.uiTextDim, shadow: P.uiShadow });
+      drawTextCentered(ctx, 'Talk to people. It is mostly that.', x + w / 2, y + 60,
+        { color: P.uiTextDim, shadow: P.uiShadow });
+      drawTextCentered(ctx, 'Space or X to close', x + w / 2, y + h - 14, { color: P.uiTextDim, shadow: P.uiShadow });
+      return;
+    }
+
+    const vis = 6;
+    for (let i = this.scroll; i < Math.min(this.rows.length, this.scroll + vis); i++) {
+      const r = this.rows[i];
+      const ry = y + 26 + (i - this.scroll) * 30;
+      const sel = i === this.index;
+      if (sel) {
+        ctx.fillStyle = 'rgba(255,207,107,0.12)';
+        ctx.fillRect(x + 6, ry - 4, w - 12, 28);
+        cursor(ctx, x + 6, ry + 6, this.t);
+      }
+      const look = lookOf(r.def);
+      ctx.drawImage(charSprite(look.species, look.coat, look.cloth, 'down', 0), x + 18, ry - 4);
+      drawText(ctx, r.def.name, x + 42, ry, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
+      drawText(ctx, FriendsScreen.whereabouts(r.def), x + 42, ry + 12,
+        { color: P.uiTextDim, shadow: P.uiShadow });
+      // How well you know them, said in words as well as in a bar — a bar on
+      // its own never says what it is a bar of.
+      drawTextRight(ctx, FriendsScreen.warmth(r.level), x + w - 14, ry,
+        { color: sel ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
+      bar(ctx, x + w - 82, ry + 14, 68, 6, r.level, r.level > 0.6 ? P.uiGreen : P.uiPink);
+    }
+
+    if (this.rows.length > vis) {
+      drawTextRight(ctx, `${this.index + 1}/${this.rows.length}`, x + w - 14, y + h - 26,
+        { color: P.uiTextDim, shadow: P.uiShadow });
+    }
+    drawTextCentered(ctx, 'Up/Down to look through    Space or X to close', x + w / 2, y + h - 14,
+      { color: P.uiTextDim, shadow: P.uiShadow });
+  }
+}
+
 export class PauseScreen extends ListScreen {
   constructor(game) {
-    super(['Cafe book', 'Journal', 'Map', 'Bag', 'Save game', 'Sound', 'Back'], 8);
+    super(['Cafe book', 'Journal', 'Map', 'Friends', 'Bag', 'Save game', 'Sound', 'Back'], 8);
     this.game = game;
   }
   update(dt, input) {
@@ -1411,6 +1528,7 @@ export class PauseScreen extends ListScreen {
         case 'Cafe book': this.game.push(new CafeScreen(this.game)); break;
         case 'Journal': this.game.push(new JournalScreen(this.game)); break;
         case 'Map': this.game.push(new MapScreen(this.game)); break;
+        case 'Friends': this.game.push(new FriendsScreen(this.game)); break;
         case 'Bag': this.game.push(new BagScreen(this.game)); break;
         case 'Save game': this.game.save(); break;
         case 'Sound': this.game.push(new SoundScreen(this.game)); break;

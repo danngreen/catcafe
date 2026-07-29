@@ -315,7 +315,15 @@ hand a thing over — the sort of job you finish by being at home.
 Mail birds carry letters between friends. Taxi birds will fly you to anywhere
 you've already visited, for a fare, between 7am and 7pm — one comes down,
 collects you in a wicker basket, and sets you down at the far end. The map
-groups everywhere you've been under its town.
+groups everywhere you've been under its town, and tells you the opening hours of
+whatever is highlighted, and whether it is open at this moment — the thing you
+otherwise find out by walking across the valley.
+
+The menu keeps a **Friends** page next to the map: everyone you have got to know,
+warmest first, with their face, how well you know them, and where to go and look
+for them — their shop if they keep one, their town otherwise, "after dark" if
+that is when they are out, and "comes to your cafe" for the regulars, who are
+nowhere else.
 
 A day is twenty real minutes, with a full dawn-to-night cycle and a day of the
 week that shops and customers both care about.

@@ -229,16 +229,25 @@ export class Player extends Actor {
 // Villagers
 // ---------------------------------------------------------------------------
 
+/**
+ * What somebody looks like. Most of the cast leave it to their id, so this has
+ * to be one function rather than a line inside the constructor — the friends
+ * list draws people who are nowhere in the world at the time.
+ */
+export function lookOf(def) {
+  const look = villagerLook(hashId(def.id));
+  return {
+    species: def.species || look.species,
+    coat: def.coat || look.coat,
+    cloth: def.cloth || look.cloth,
+  };
+}
+
 export class Villager extends Actor {
   constructor(def, x, y) {
     super(x, y);
     this.def = def;
-    const look = villagerLook(hashId(def.id));
-    this.look = {
-      species: def.species || look.species,
-      coat: def.coat || look.coat,
-      cloth: def.cloth || look.cloth,
-    };
+    this.look = lookOf(def);
     this.home = { x, y };
     this.speed = 26 + rng() * 10;
     this.wanderT = rng() * 3;

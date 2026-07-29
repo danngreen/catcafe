@@ -1877,6 +1877,119 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
         await wait(4200);
         window.__pass = `paintings=${st.cafeMap.objects.filter((o) => o.type === 'painting').length}`;
+      } else if (SCRIPT === 'friends') {
+        // The friends list, and opening hours on the map. Both answer the
+        // question you actually have: who was that, and when are they open.
+        const { SHOPS, VILLAGERS, TOWNS } = await import('../src/world/places.js');
+        const { hoursText } = await import('../src/game/time.js');
+        const st = g.state;
+
+        // Know a few people, from different corners of the cast.
+        st.friends = { pip: 0.9, vesper: 0.5, bruin: 0.3, nightjar: 0.15, gorse: 0.6 };
+        st.visited = {};
+        st.visit('brambleford', 'Brambleford', 96, 168);
+        st.visit('grocer', "Pips' Provisions", 98, 170, 'brambleford');
+        st.visit('hollowdown', 'Hollowdown', 208, 68);
+
+        // --- the friends screen ---
+        key('Escape', true); await wait(140); key('Escape', false);
+        await wait(400);
+        const menu = g.screens[g.screens.length - 1];
+        const hasFriends = (menu.items || []).includes('Friends');
+        const orderOk = (menu.items || []).indexOf('Friends') === (menu.items || []).indexOf('Map') + 1;
+        // Walk down to it and open it.
+        const want = (menu.items || []).indexOf('Friends');
+        for (let i = 0; i < want; i++) { key('ArrowDown', true); await wait(90); key('ArrowDown', false); await wait(110); }
+        key('Space', true); await wait(140); key('Space', false);
+        await wait(500);
+        const fs = g.screens[g.screens.length - 1];
+        const opened = fs && fs.constructor.name === 'FriendsScreen';
+        const listed = opened ? fs.rows.length : 0;
+        const warmestFirst = opened && fs.rows.length > 1 ? fs.rows[0].level >= fs.rows[1].level : false;
+        const names = opened ? fs.rows.map((r) => r.def.name).join(',') : '';
+        // Everybody has to have somewhere you could go and look for them.
+        const wheres = opened ? fs.rows.map((r) => fs.constructor.whereabouts(r.def)) : [];
+        const vague = wheres.filter((wtxt) => !wtxt || /somewhere in the valley/i.test(wtxt));
+        // The regular says so rather than naming a town he is never in.
+        const bruinRow = opened ? fs.rows.find((r) => r.id === 'bruin') : null;
+        const bruinWhere = bruinRow ? fs.constructor.whereabouts(bruinRow.def) : '';
+        // A shopkeeper is found at their shop, not just their town.
+        const pipRow = opened ? fs.rows.find((r) => r.id === 'pip') : null;
+        const pipWhere = pipRow ? fs.constructor.whereabouts(pipRow.def) : '';
+        // Scrolling an over-long list must not throw.
+        for (let i = 0; i < 8; i++) { key('ArrowDown', true); await wait(60); key('ArrowDown', false); await wait(70); }
+        const stillOpen = g.screens[g.screens.length - 1] === fs;
+        key('KeyX', true); await wait(140); key('KeyX', false);
+        await wait(400);
+        key('Escape', true); await wait(140); key('Escape', false);
+        await wait(400);
+
+        // --- hours on the map ---
+        key('KeyM', true); await wait(140); key('KeyM', false);
+        await wait(600);
+        const ms = g.screens[g.screens.length - 1];
+        const isMap = ms && ms.constructor.name === 'MapScreen';
+        // Find the grocer in the list and highlight it.
+        let found = -1;
+        if (isMap) found = ms.places.findIndex((p) => p.id === 'grocer');
+        if (found >= 0) ms.index = found;
+        await wait(300);
+        const shop = SHOPS.find((s2) => s2.id === 'grocer');
+        const expected = hoursText(shop);
+        // Read it off the screen rather than trusting the lookup.
+        const canvas = document.getElementById('screen');
+        const cg = canvas.getContext('2d');
+        const before = cg.getImageData(0, canvas.height - 60, canvas.width, 24).data;
+        ms.index = ms.places.findIndex((p) => p.id === 'brambleford');   // a town, no hours
+        await wait(400);
+        const after = cg.getImageData(0, canvas.height - 60, canvas.width, 24).data;
+        let changed = 0;
+        for (let i = 0; i < before.length; i += 4) if (Math.abs(before[i] - after[i]) > 20) changed++;
+        key('KeyX', true); await wait(140); key('KeyX', false);
+        await wait(300);
+
+        window.__friends = `menu has=${hasFriends} afterMap=${orderOk} opened=${opened}`
+          + ` listed=${listed} warmestFirst=${warmestFirst} names=[${names}]`
+          + ` vague=${vague.length} bruin="${bruinWhere}" pip="${pipWhere}"`
+          + ` survivedScroll=${stillOpen} map=${isMap} grocerRow=${found}`
+          + ` hours="${expected}" lineChanged=${changed}px`;
+        if (!hasFriends) window.__errors.push('no Friends item in the menu: ' + window.__friends);
+        if (!orderOk) window.__errors.push('Friends is not after Map: ' + window.__friends);
+        if (!opened) window.__errors.push('the friends screen would not open: ' + window.__friends);
+        if (listed !== 5) window.__errors.push('the friends list is not everybody you know: ' + window.__friends);
+        if (!warmestFirst) window.__errors.push('the list is not warmest first: ' + window.__friends);
+        if (vague.length) window.__errors.push('somebody has nowhere you could look for them: ' + window.__friends);
+        if (!/cafe/i.test(bruinWhere)) window.__errors.push('the regular is given a town he is never in: ' + window.__friends);
+        if (!/Pips/i.test(pipWhere)) window.__errors.push('a shopkeeper is not placed at their shop: ' + window.__friends);
+        if (!stillOpen) window.__errors.push('scrolling the friends list closed it: ' + window.__friends);
+        if (!isMap) window.__errors.push('the map would not open: ' + window.__friends);
+        if (found < 0) window.__errors.push('a visited shop is not on the map: ' + window.__friends);
+        if (!expected) window.__errors.push('the shop has no hours to show: ' + window.__friends);
+        if (changed < 20) window.__errors.push('the map never shows opening hours: ' + window.__friends);
+      } else if (SCRIPT.startsWith('friendshot')) {
+        const st = g.state;
+        st.friends = { pip: 0.92, gorse: 0.61, vesper: 0.48, bruin: 0.3, nightjar: 0.16, shrimp: 0.55, moth: 0.22 };
+        st.visited = {};
+        st.visit('brambleford', 'Brambleford', 96, 168);
+        st.visit('grocer', "Pips' Provisions", 98, 170, 'brambleford');
+        st.visit('bakery', 'The Warm Loaf', 100, 172, 'brambleford');
+        st.visit('hollowdown', 'Hollowdown', 208, 68);
+        st.visit('hardware', 'The Chalk Pit Store', 210, 70, 'hollowdown');
+        const which = SCRIPT.split(':')[1] || 'friends';
+        await wait(400);
+        if (which === 'friends') {
+          const { FriendsScreen } = await import('../src/ui/menus.js');
+          g.push(new FriendsScreen(g));
+        } else {
+          const { MapScreen } = await import('../src/ui/menus.js');
+          const m = new MapScreen(g);
+          g.push(m);
+          await wait(300);
+          const i = m.places.findIndex((p) => p.id === 'hardware');
+          if (i >= 0) m.index = i;
+        }
+        await wait(900);
+        window.__pass = `showing=${which}`;
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -3971,6 +4084,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__reg ? ` ${window.__reg}` : '')
         + (window.__stool ? ` ${window.__stool}` : '')
         + (window.__paint ? ` ${window.__paint}` : '')
+        + (window.__friends ? ` ${window.__friends}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')
