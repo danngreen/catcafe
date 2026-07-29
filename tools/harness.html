@@ -1523,14 +1523,15 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (after <= before) window.__errors.push('the lighthouse would not give up its logbook: ' + window.__log);
         if (twice !== after) window.__errors.push('the logbook can be taken twice: ' + window.__log);
       } else if (SCRIPT === 'regular') {
-        // Bruin is a regular, not a resident: he is nowhere in the valley, he
-        // lets himself into the cafe now and then, and he comes to you rather
-        // than joining the queue.
+        // Regulars are not residents: they are nowhere in the valley, they let
+        // themselves into the cafe now and then, and they come to you rather
+        // than joining the queue. Linnet is the plain case — Bruin wants a
+        // stool before he will come in at all, which barstool covers.
         const { REGULARS, visitOn, dueNow } = await import('../src/game/regulars.js');
         const { VILLAGERS } = await import('../src/world/places.js');
         const st = g.state;
         const seed = g.worldSeed;
-        const def = REGULARS.find((r) => r.id === 'bruin');
+        const def = REGULARS.find((r) => r.id === 'linnet');
 
         // None of them are standing about outside.
         const outside = g.villagers.filter((v) => v.def.regular).length;
@@ -1616,7 +1617,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.player.y = (meta.offY + 6) * 16;
         g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
         await wait(1200);
-        const inRoom = (st.cafeMap.villagers || []).filter((v) => v.def.id === 'bruin');
+        const inRoom = (st.cafeMap.villagers || []).filter((v) => v.def.id === 'linnet');
         const v0 = inRoom[0];
         const startD = v0 ? Math.hypot(v0.x - g.player.x, v0.y - g.player.y) : -1;
         await wait(2500);
@@ -1654,11 +1655,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!differs) window.__errors.push('every valley gets the same visits: ' + window.__reg);
         if (notDue) window.__errors.push('the quiet day was not quiet: ' + window.__reg);
         if (!dueBecauseWaiting) window.__errors.push('waiting on him does not bring him in: ' + window.__reg);
-        if (!inRoom.length) window.__errors.push('he never came in: ' + window.__reg);
+        if (!inRoom.length) window.__errors.push('she never came in: ' + window.__reg);
         if (asCustomer) window.__errors.push('the regular joined the queue: ' + window.__reg);
-        if (endD > startD - 10) window.__errors.push('he did not come over: ' + window.__reg);
-        if (!looksDifferent) window.__errors.push('he looks like everyone else: ' + window.__reg);
-        if (!spoke) window.__errors.push('you cannot talk to him: ' + window.__reg);
+        if (endD > startD - 10) window.__errors.push('she did not come over: ' + window.__reg);
+        if (!looksDifferent) window.__errors.push('she looks like everyone else: ' + window.__reg);
+        if (!spoke) window.__errors.push('you cannot talk to her: ' + window.__reg);
         if (REGULARS.length < 3) window.__errors.push('there is only one regular: ' + window.__reg);
         if (idle.length) window.__errors.push('a regular has nothing to say to you: ' + window.__reg);
         if (wrongHour.length) window.__errors.push('a regular turns up at the wrong sort of hour: ' + window.__reg);
@@ -1669,7 +1670,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // Bruin in the room, next to ordinary customers, for scale.
         const { REGULARS, visitOn } = await import('../src/game/regulars.js');
         const st = g.state;
-        const def = REGULARS.find((r) => r.id === 'bruin');
+        const def = REGULARS.find((r) => r.id === 'linnet');
         st.money = 3000;
         for (const id of ['house_coffee', 'cake', 'cocoa']) st.cafeSim.addStock(id, 20, st.clock.day);
         g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
@@ -1687,6 +1688,112 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await wait(2600);
         const v = (st.cafeMap.villagers || []).find((x) => x.def.id === 'bruin');
         window.__pass = `bruin=${!!v} customers=${st.cafeSim.customers.length}`;
+      } else if (SCRIPT === 'barstool') {
+        // Bruin wants a bar stool. Not one in the bag — one on the floor.
+        // Before you have heard him out he follows you about; afterwards he
+        // stops bothering you and takes his stool.
+        const { REGULARS, visitOn } = await import('../src/game/regulars.js');
+        const st = g.state;
+        const seed = g.worldSeed;
+        const def = REGULARS.find((r) => r.id === 'bruin');
+        const bruinIn = () => (st.cafeMap.villagers || []).find((v) => v.def.id === 'bruin');
+        const stools = () => g.seatsOfType('barStool');
+
+        // Put him in the room, on a night he is due, with the room to himself.
+        const day = (() => { for (let d = 0; d < 200; d++) if (visitOn(def, seed, d)) return d; return 0; })();
+        const win = visitOn(def, seed, day);
+        const room = st.cafe.rooms[0];
+        st.cafe.furniture = st.cafe.furniture.filter((f) => f.type !== 'barStool');
+        st.rebuildCafe();
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        await wait(900);
+        st.clock.day = day;
+        st.clock.t = (win.from + 0.5) * (1200 / 24);
+        await wait(300);
+
+        // The rule itself, asked directly rather than inferred from where he
+        // happens to be standing — mutating the room mid-visit races with the
+        // rebuild it causes, and the question here is about the rule.
+        const dueAtAll = (await import('../src/game/regulars.js')).dueNow(def, seed, st.clock, false);
+        const stoolsNone = stools().length;
+        const welcomeNone = g.regularWelcome(def);
+        st.inventory.f_barstool = 1;
+        const welcomeInBag = g.regularWelcome(def);
+        // Now put one down for real.
+        st.cafe.furniture.push({ type: 'barStool', x: room.x + 2, y: room.y + 2, variant: 0 });
+        st.rebuildCafe();
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        await wait(900);
+        st.clock.day = day;
+        st.clock.t = (win.from + 0.5) * (1200 / 24);
+        await wait(300);
+        const stoolsOne = stools().length;
+        const welcomePlaced = g.regularWelcome(def);
+        // With every stool spoken for he is still welcome — he comes in, looks,
+        // and goes, which is how you find out one stool is not enough.
+        stools()[0].taken = { fake: true };
+        const welcomeTaken = g.regularWelcome(def);
+        stools()[0].taken = null;
+
+        // Now the behaviour. Stand well clear of the door.
+        const meta = st.cafeMap.meta;
+        g.player.x = (meta.offX + 8) * 16;
+        g.player.y = (meta.offY + 6) * 16;
+        g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
+        delete st.quests.pun_off;
+        await wait(1600);
+        const came = !!bruinIn();
+
+        // Before you have talked to him: he follows. Walk off and he closes.
+        g.player.x += 70;
+        await wait(150);
+        const v1 = bruinIn();
+        const nearBefore = v1 ? Math.hypot(v1.x - g.player.x, v1.y - g.player.y) : -1;
+        await wait(2600);
+        const v1b = bruinIn();
+        const nearAfter = v1b ? Math.hypot(v1b.x - g.player.x, v1b.y - g.player.y) : -1;
+        const followed = nearAfter < nearBefore - 15;
+        const sittingBefore = !!(v1b && v1b.seat);
+
+        // Take his job on and he settles. He is a large bear and he ambles:
+        // crossing the room takes the better part of ten seconds.
+        st.quests.pun_off = 'active';
+        let settledAt = -1;
+        for (let i = 0; i < 30 && settledAt < 0; i++) {
+          await wait(500);
+          const b = bruinIn();
+          if (b && b.mode === 'seated') settledAt = (i + 1) * 500;
+        }
+        const v2 = bruinIn();
+        const seated = !!(v2 && v2.seat && v2.seat.type === 'barStool');
+        const want = v2 && v2.seat ? { x: v2.seat.x * 16 + 8, y: (v2.seat.y + 1) * 16 - 3 } : null;
+        const onStool = want ? Math.abs(v2.x - want.x) < 4 && Math.abs(v2.y - want.y) < 5 : false;
+        // ...and stops chasing you round the room.
+        const heldX = v2 ? v2.x : 0;
+        g.player.x -= 90;
+        await wait(2000);
+        const after2 = bruinIn();
+        const stayedPut = after2 ? Math.abs(after2.x - heldX) < 6 : false;
+        const stoolFree = stools().filter((s2) => !s2.taken).length;
+
+        window.__stool = `due=${dueAtAll} stools ${stoolsNone}->${stoolsOne}`
+          + ` welcome none=${welcomeNone} inBag=${welcomeInBag} placed=${welcomePlaced} taken=${welcomeTaken}`
+          + ` came=${came} follow ${nearBefore.toFixed(0)}->${nearAfter.toFixed(0)} followed=${followed}`
+          + ` satEarly=${sittingBefore} seated=${seated} onStool=${onStool} sat@${settledAt}ms`
+          + ` stayedPut=${stayedPut} freeStools=${stoolFree}`;
+        if (!dueAtAll) window.__errors.push('he was not even due: ' + window.__stool);
+        if (stoolsNone) window.__errors.push('the room still had a stool: ' + window.__stool);
+        if (welcomeNone) window.__errors.push('he would come in with nowhere to perch: ' + window.__stool);
+        if (welcomeInBag) window.__errors.push('a stool in the bag was enough: ' + window.__stool);
+        if (!welcomePlaced) window.__errors.push('he would not come in even with a stool down: ' + window.__stool);
+        if (!welcomeTaken) window.__errors.push('a taken stool keeps him out of the building: ' + window.__stool);
+        if (!came) window.__errors.push('he never actually came in: ' + window.__stool);
+        if (sittingBefore) window.__errors.push('he sat down before saying anything: ' + window.__stool);
+        if (!followed) window.__errors.push('he did not follow you about: ' + window.__stool);
+        if (settledAt < 0 || !seated) window.__errors.push('he never took his stool: ' + window.__stool);
+        if (!onStool) window.__errors.push('he is sitting somewhere other than the stool: ' + window.__stool);
+        if (!stayedPut) window.__errors.push('he kept following after taking his seat: ' + window.__stool);
+        if (stoolFree) window.__errors.push('his stool is still going spare: ' + window.__stool);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -3779,6 +3886,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__chain ? ` ${window.__chain}` : '')
         + (window.__log ? ` ${window.__log}` : '')
         + (window.__reg ? ` ${window.__reg}` : '')
+        + (window.__stool ? ` ${window.__stool}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

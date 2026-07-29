@@ -310,7 +310,9 @@ export function buildCafeMap(cafe) {
     if (['chair', 'chairUp', 'stool', 'barStool', 'sofa',
       'patioChair', 'patioStool', 'patioBench'].includes(f.type)) {
       const slots = f.type === 'sofa' || f.type === 'patioBench' ? 3 : 1;
-      for (let i = 0; i < slots; i++) seats.push({ x: x + i, y, taken: null });
+      // The type comes along: a regular who only ever perches at the bar has
+      // to be able to tell a bar stool from a sofa.
+      for (let i = 0; i < slots; i++) seats.push({ x: x + i, y, taken: null, type: f.type });
     }
     if (f.type.startsWith('table') || f.type.startsWith('patioTable')
       || f.type === 'bar' || f.type === 'umbrella') tables.push({ x, y, w: o.tw });

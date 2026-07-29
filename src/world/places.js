@@ -461,7 +461,7 @@ export const VILLAGERS = [
   // A regular rather than a resident: Bruin is not stood in a town waiting to
   // be found, he lets himself into your cafe every so often and comes over.
   { id: 'bruin', name: 'Bruin', species: 'bear', coat: 'white', role: 'villager',
-    regular: true, when: 'night', big: true, sparkle: true,
+    regular: true, when: 'night', big: true, sparkle: true, seat: 'barStool',
     lines: ['I do not queue. Queueing is for people with somewhere to be.',
       'What do you call a raven who works nights? A crow-nological anomaly. ...You laughed. Slightly.',
       'A pun is a small unkindness you do to a word. The word forgives you. Usually.',

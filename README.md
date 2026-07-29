@@ -298,6 +298,13 @@ which you do not stock and which he is in no hurry about. Linnet comes in every
 night for a cat who has stopped sitting with her, and would like to know what
 she has got wrong.
 
+Bruin will not come in at all unless there is a bar stool on the floor — owning
+one is not the same as having put one down. Until you have heard him out he
+follows you round the room trying to catch your eye; once you have taken his
+errand on he stops bothering you and takes his stool. If every stool is spoken
+for he comes in, looks, and goes again, which is how you learn that one stool is
+not enough.
+
 Whether one is due is worked out from the seed and the date, so everybody in a
 shared valley gets the same visitor on the same evening; and if one of their
 errands is waiting on them, they turn up that night rather than whenever the

@@ -263,29 +263,55 @@ export class Villager extends Actor {
     this.big = !!def.big;
     this.sparkle = !!def.sparkle;
     this.sparkleT = 0;
+    // Some regulars come in for a particular perch. Until they have said what
+    // they came to say they follow you about instead, which is the difference
+    // between a stranger with something on their mind and a regular.
+    this.seatWanted = def.seat || null;
+    this.seat = null;
+    this.mode = 'follow';
+    this.nagT = 0;
     if (this.regular) { this.speed = 20; this.range = 0; }
+  }
+
+  /** Give up whatever they were sitting on. */
+  standUp() {
+    if (this.seat) { this.seat.taken = null; this.seat = null; }
   }
 
   /**
    * Cross the room to whoever is in it and then stand there. No wandering: a
    * regular who drifts off mid-conversation is a regular you chase.
+   *
+   * `target` overrides the player — that is how somebody heads for their stool
+   * once they have no more reason to be following you about.
    */
-  updateRegular(dt, map, player) {
+  updateRegular(dt, map, player, target) {
     this.moving = false;
     if (this.talking) { this.animate(dt); return; }
-    if (player) {
-      const dx = player.x - this.x, dy = player.y - this.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist > 22) {
-        const step = this.speed * dt;
-        const before = { x: this.x, y: this.y };
-        moveActor(map, this, (dx / dist) * step, (dy / dist) * step);
-        this.moving = Math.hypot(this.x - before.x, this.y - before.y) > 0.05;
-        if (Math.abs(dx) > Math.abs(dy)) this.dir = dx > 0 ? 'right' : 'left';
-        else this.dir = dy > 0 ? 'down' : 'up';
-      } else {
-        this.faceTowards(player.x, player.y);
-      }
+    const aim = target || player;
+    if (!aim) { this.animate(dt); return; }
+    const stop = target ? 3 : 22;
+    const dx = aim.x - this.x, dy = aim.y - this.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > stop) {
+      const step = this.speed * dt;
+      const before = { x: this.x, y: this.y };
+      moveActor(map, this, (dx / dist) * step, (dy / dist) * step);
+      this.moving = Math.hypot(this.x - before.x, this.y - before.y) > 0.05;
+      if (Math.abs(dx) > Math.abs(dy)) this.dir = dx > 0 ? 'right' : 'left';
+      else this.dir = dy > 0 ? 'down' : 'up';
+      this.arrived = false;
+    } else if (target) {
+      this.x = aim.x; this.y = aim.y;
+      this.dir = 'down';
+      this.arrived = true;
+    } else {
+      this.faceTowards(player.x, player.y);
+      this.arrived = true;
+      // Trying to catch your eye, which is the only way somebody who does not
+      // order anything can ask for your attention.
+      this.nagT -= dt;
+      if (this.nagT <= 0) { this.nagT = 3.5 + rng() * 2.5; this.showEmote('talk', 1.6); }
     }
     this.animate(dt);
   }

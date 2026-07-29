@@ -852,25 +852,85 @@ class Game {
     if (!map) return;
     map.villagers ||= [];
     for (const def of REGULARS) {
-      const waiting = this.waitingOn(def.id);
-      const want = st.inCafe && dueNow(def, this.worldSeed, st.clock, waiting);
+      const want = this.regularWelcome(def);
       const here = map.villagers.find((v) => v.def.id === def.id);
       if (want && !here) {
-        // In through the front door, like anybody else.
         const door = map.meta.door || map.spawn || { x: 2, y: 2 };
         const v = new Villager(def, door.x * TILE + TILE / 2, (door.y + 1) * TILE - 2);
         map.villagers.push(v);
         this.hud.toast(`${def.name} lets himself in.`, 'good', 5);
         audio.sfx('door', { gain: 0.4 });
       } else if (!want && here && !here.talking) {
+        here.standUp();
         map.villagers.splice(map.villagers.indexOf(here), 1);
       }
     }
     for (const v of map.villagers) {
       if (!v.regular) continue;
       v.sparkleT += dt;
-      if (st.inCafe) v.updateRegular(dt, map, this.player);
+      if (st.inCafe) this.updateRegularVisit(dt, map, v);
     }
+  }
+
+  /**
+   * Would this regular walk in right now? Split out because it is the whole of
+   * the rule and worth being able to ask directly: they are due, you are in
+   * the room, and — if they only ever sit in one kind of seat — the room has
+   * one. Owning a bar stool is not the same as having put one down.
+   */
+  regularWelcome(def) {
+    const st = this.state;
+    if (!st.inCafe) return false;
+    if (!dueNow(def, this.worldSeed, st.clock, this.waitingOn(def.id))) return false;
+    if (def.seat && !this.seatsOfType(def.seat).length) return false;
+    return true;
+  }
+
+  /** Seats of one kind, in the cafe as it is actually laid out. */
+  seatsOfType(type) {
+    return (this.state.cafeMap?.meta?.seats || []).filter((s) => s.type === type);
+  }
+
+  /**
+   * One regular's evening. Until they have said their piece they follow you
+   * around trying to catch your eye; once you have heard them out they stop
+   * bothering you and take their usual seat. Somebody who wants a seat and
+   * cannot find a free one turns round and goes home, which is the only way
+   * you would ever learn that one stool is not enough.
+   */
+  updateRegularVisit(dt, map, v) {
+    const st = this.state;
+    if (v.shift === 'away') return;                 // came, looked, left
+    const settled = v.seatWanted && this.heardOut(v.def.id);
+    if (!settled) {
+      if (v.seat) v.standUp();
+      v.mode = 'follow';
+      v.updateRegular(dt, map, this.player, null);
+      return;
+    }
+    if (!v.seat) {
+      const free = this.seatsOfType(v.seatWanted).find((s) => !s.taken);
+      if (!free) {
+        if (v.mode !== 'left') {
+          v.mode = 'left';
+          v.shift = 'away';
+          this.hud.toast(`${v.def.name} looks for a free stool, finds none, and goes.`, 'warn', 6);
+        }
+        return;
+      }
+      free.taken = v;
+      v.seat = free;
+      v.mode = 'toSeat';
+    }
+    const spot = { x: v.seat.x * TILE + TILE / 2, y: (v.seat.y + 1) * TILE - 3 };
+    v.updateRegular(dt, map, null, spot);
+    if (v.arrived) v.mode = 'seated';
+  }
+
+  /** Have they already said the thing they keep coming in to say? */
+  heardOut(id) {
+    const st = this.state;
+    return QUESTS.some((q) => q.giver === id && st.quests[q.id]);
   }
 
   /** Is one of their errands sat on a step only they can move along? */
