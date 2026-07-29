@@ -668,7 +668,8 @@ export class AudioEngine {
           osc.type = ratio === 1 ? 'sawtooth' : 'triangle';
           const f = osc.frequency;
           f.setValueAtTime(f0 * ratio, t);
-          f.exponentialRampToValueAtTime(f0 * 1.7 * ratio, t + dur * 0.2);
+          // f.exponentialRampToValueAtTime(f0 * 1.7 * ratio, t + dur * 0.2);
+          f.exponentialRampToValueAtTime(f0 * 1.2 * ratio, t + dur * 0.2);
           f.setValueAtTime(f0 * 1.7 * ratio, t + dur * 0.62);
           f.exponentialRampToValueAtTime(f0 * 0.9 * ratio, t + dur);
           const bp = c.createBiquadFilter();
@@ -694,7 +695,7 @@ export class AudioEngine {
         osc.frequency.exponentialRampToValueAtTime(f0 * 0.95, t + dur);
         const gn = c.createGain();
         gn.gain.setValueAtTime(0.0001, t);
-        gn.gain.linearRampToValueAtTime(0.1 * vol, t + 0.02);
+        gn.gain.linearRampToValueAtTime(0.15 * vol, t + 0.02);
         gn.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.05);
         osc.connect(gn); gn.connect(dest);
         osc.start(t); osc.stop(t + dur + 0.1);
