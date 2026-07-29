@@ -371,6 +371,35 @@ told across the room rather than by opening the book and reading it.
 **Rendering** bakes ground into 16x16-tile chunk canvases and y-sorts everything
 with a footprint into one list, so trees and roofs correctly overlap you.
 
+## Keeping it up
+
+`deploy/catcafe.service` is a systemd unit for a box that lives in the house.
+
+```bash
+sudo cp deploy/catcafe.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now catcafe
+systemctl status catcafe
+journalctl -u catcafe -f          # what the server is saying
+```
+
+Check `which node` first and correct `ExecStart` if it is not `/usr/bin/node` —
+a Node installed through nvm lives under your home directory and systemd will
+not find it on `$PATH`.
+
+Two settings are deliberate. `Restart=always` rather than `on-failure`, because
+the server catches SIGTERM to write the valleys out and then exits **0** — a
+clean exit that `on-failure` would not bring back. And there is no
+`ProtectHome`, which most hardening advice suggests and which would hide
+`/home/orangepi` from the service and stop it finding its own code.
+
+Saves are written every twenty seconds, when the last player leaves a valley,
+and on the way down, each one to a temp file and renamed over the real one so a
+crash mid-write cannot leave half a valley. An unclean kill costs at most the
+last twenty seconds.
+
+To update: `git pull && sudo systemctl restart catcafe`.
+
 ## Testing
 
 There's a headless smoke test that drives the game through scenarios in a real

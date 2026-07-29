@@ -1,0 +1,54 @@
+[Unit]
+Description=Cat Cafe
+Documentation=https://github.com/
+# The server binds every interface, so it does not need to wait for a
+# particular address to come up. network.target is enough.
+After=network.target
+
+[Service]
+Type=simple
+User=orangepi
+Group=orangepi
+WorkingDirectory=/home/orangepi/catcafe
+
+# Check this with `which node` before trusting it. Node installed through nvm
+# lives under the user's home and systemd will not find it on $PATH.
+ExecStart=/usr/bin/node /home/orangepi/catcafe/server.js
+
+# The port to serve on, and where the valleys are kept. SESSION_SAVE may be an
+# absolute path or one relative to the repository; leave it unset for
+# `<repo>/saves`. Never set it to 0 here — that plays without saving anything,
+# which is what the test harness wants and the opposite of what a house server
+# wants.
+Environment=PORT=8080
+# Environment=SESSION_SAVE=/home/orangepi/catcafe/saves
+
+# `on-failure` would not bring it back from a clean exit, and this server exits
+# 0 on SIGTERM — it catches the signal to write the valleys out before it goes.
+# For something meant to stay up, always is the honest setting.
+Restart=always
+RestartSec=5
+# Keep trying rather than giving up after the default five attempts in ten
+# seconds. A bad deploy will loop until it is fixed, which on a box in the
+# house is better than finding it quietly dead a week later.
+StartLimitIntervalSec=0
+
+# Stopping is a save. persist() is synchronous — write to a temp file, rename
+# over the real one — so the handler finishes well inside this.
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+SyslogIdentifier=catcafe
+
+# Modest hardening. Note what is NOT here: ProtectHome, which every hardening
+# guide suggests and which would hide /home/orangepi from the service and stop
+# it finding its own code.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
