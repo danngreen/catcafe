@@ -374,13 +374,31 @@ export class BuildScreen extends Screen {
    */
   fits(type, x, y) {
     const [tw, th] = footprint(type);
+    const def = OBJECTS[type];
     for (let j = 0; j < th; j++) {
       for (let i = 0; i < tw; i++) {
-        if (!this.roomAt(x + i, y - j)) return { ok: false, why: 'That would stick out of the building.' };
-        if (this.furnitureAt(x + i, y - j)) return { ok: false, why: 'Something is already there.' };
+        const cx = x + i, cy = y - j;
+        const ok = def && def.wall ? this.wallAt(cx, cy) : !!this.roomAt(cx, cy);
+        if (!ok) {
+          return {
+            ok: false,
+            why: def && def.wall ? 'That hangs on a wall. Put it on one.'
+              : 'That would stick out of the building.',
+          };
+        }
+        if (this.furnitureAt(cx, cy)) return { ok: false, why: 'Something is already there.' };
       }
     }
     return { ok: true };
+  }
+
+  /**
+   * The course of wall you look at face-on: not floor itself, but directly
+   * above floor. It is the only place a picture can hang, and until now the
+   * only place you could not put one.
+   */
+  wallAt(x, y) {
+    return !this.roomAt(x, y) && !!this.roomAt(x, y + 1);
   }
 
   /** The tiles a piece of this type would cover, anchored here. */

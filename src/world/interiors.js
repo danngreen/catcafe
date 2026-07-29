@@ -6,6 +6,7 @@ import { GameMap } from './tilemap.js';
 import { T, OUTDOOR_FLOORS } from '../art/tiles.js';
 import { SHOPS, BOOKS } from './places.js';
 import { makeRng } from '../engine/util.js';
+import { OBJECTS } from '../art/objects.js';
 
 // Windows hang on the wall rather than standing on the floor. The natural
 // resting place for an object is the bottom of its tile, which for a window in
@@ -303,8 +304,13 @@ export function buildCafeMap(cafe) {
   for (const f of cafe.furniture) {
     const x = f.x + offX, y = f.y + offY;
     if (!map.inBounds(x, y)) continue;
-    const o = map.addObject(f.type, x, y,
-      { variant: f.variant || 0, offY: f.type === 'windowIn' ? WALL_MOUNT : (f.type === 'painting' ? 10 : 0) });
+    // Anything that hangs on a wall hangs at wall height when it is actually
+    // on a wall. A painting used to be pushed ten pixels down the tile, which
+    // was only ever right because it could not be put on a wall in the first
+    // place.
+    const def = OBJECTS[f.type];
+    const onWall = def && def.wall && map.get(x, y) === T.WALL_IN;
+    const o = map.addObject(f.type, x, y, { variant: f.variant || 0, offY: onWall ? WALL_MOUNT : 0 });
     if (!o) continue;
     o.furniture = f;
     if (['chair', 'chairUp', 'stool', 'barStool', 'sofa',

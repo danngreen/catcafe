@@ -993,10 +993,13 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           { x: 0, y: 0, w: 11, h: 8, name: 'Cafe' },
           { x: 11, y: 0, w: 9, h: 8, name: 'Terrace', floor: T.PATIO_SLAB },
         ];
+        // An empty room: a cat crossing the patch this samples reads as rain
+        // indoors, and so does a regular. Early morning keeps the visitors out
+        // whatever the seed; the cats have to be asked.
+        st.cats = [];
+        st.catActors = [];
         st.rebuildCafe();
         await wait(300);
-        // Early morning: no regular can be due at this hour whatever the seed,
-        // and one crossing the room would read as weather in the sample.
         st.clock.t = 8 * (1200 / 24);
         g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
         await wait(1000);
@@ -1794,6 +1797,86 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!onStool) window.__errors.push('he is sitting somewhere other than the stool: ' + window.__stool);
         if (!stayedPut) window.__errors.push('he kept following after taking his seat: ' + window.__stool);
         if (stoolFree) window.__errors.push('his stool is still going spare: ' + window.__stool);
+      } else if (SCRIPT === 'painting') {
+        // A picture hangs on a wall. Until now the wall was the one place the
+        // build screen would not let you put one.
+        const { OBJECTS } = await import('../src/art/objects.js');
+        const { T } = await import('../src/art/tiles.js');
+        const st = g.state;
+        st.money = 5000;
+        st.inventory.f_painting = 2;
+        g.openBuildMode();
+        await wait(700);
+        const bs = g.screens[g.screens.length - 1];
+        bs.mode = bs.modes.indexOf('Furnish');
+        bs.draft.furniture = [];
+        bs.rebuild();
+        await wait(300);
+        bs.palette = bs.furnitureStock.findIndex((k) => k.startsWith('f_painting'));
+
+        const room = bs.draft.rooms[0];
+        const floor = { x: room.x + 3, y: room.y + 3 };
+        const wall = { x: room.x + 3, y: room.y - 1 };
+
+        const onFloor = bs.fits('painting', floor.x, floor.y);
+        const onWall = bs.fits('painting', wall.x, wall.y);
+        const wallIsWall = bs.wallAt(wall.x, wall.y);
+        const floorIsWall = bs.wallAt(floor.x, floor.y);
+
+        // Put one up, the way a player does.
+        bs.cur = { x: wall.x, y: wall.y };
+        await wait(200);
+        const before = bs.draft.furniture.length;
+        key('Space', true); await wait(150); key('Space', false);
+        await wait(400);
+        const hung = bs.draft.furniture.find((f) => f.type === 'painting');
+        const placed = bs.draft.furniture.length > before;
+
+        // It has to actually appear on the wall, at wall height rather than
+        // shoved down the tile.
+        const map = bs.map;
+        const off = map.meta;
+        const obj = map.objects.find((o) => o.type === 'painting');
+        const tileUnderIt = obj ? map.get(obj.tx, obj.ty) : null;
+        const onWallTile = tileUnderIt === T.WALL_IN;
+        const lifted = obj ? obj.offY < 0 : false;
+
+        // And come back down again from the same tile.
+        key('KeyX', true); await wait(150); key('KeyX', false);
+        await wait(400);
+        const tookDown = !bs.draft.furniture.some((f) => f.type === 'painting');
+
+        window.__paint = `wallAt wall=${wallIsWall} floor=${floorIsWall}`
+          + ` fits floor=${onFloor.ok}("${onFloor.why || ''}") wall=${onWall.ok}`
+          + ` placed=${placed} at=${hung ? hung.x + ',' + hung.y : '-'}`
+          + ` onWallTile=${onWallTile} offY=${obj ? obj.offY : '-'} lifted=${lifted}`
+          + ` tookDown=${tookDown}`;
+        if (!wallIsWall) window.__errors.push('the wall row is not recognised as wall: ' + window.__paint);
+        if (floorIsWall) window.__errors.push('the floor counts as wall: ' + window.__paint);
+        if (!onWall.ok) window.__errors.push('a painting still will not go on a wall: ' + window.__paint);
+        if (onFloor.ok) window.__errors.push('a painting will still stand on the floor: ' + window.__paint);
+        if (!placed) window.__errors.push('pressing place hung nothing: ' + window.__paint);
+        if (!onWallTile) window.__errors.push('it ended up somewhere that is not a wall: ' + window.__paint);
+        if (!lifted) window.__errors.push('it is not hung at wall height: ' + window.__paint);
+        if (!tookDown) window.__errors.push('it cannot be taken back down: ' + window.__paint);
+      } else if (SCRIPT === 'paintingshot') {
+        // Pictures up on the wall, seen from inside the room.
+        const st = g.state;
+        st.money = 5000;
+        st.cafe.furniture = st.cafe.furniture.concat([
+          { type: 'painting', x: 3, y: -1, variant: 0 },
+          { type: 'painting', x: 7, y: -1, variant: 1 },
+        ]);
+        st.rebuildCafe();
+        await wait(400);
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        await wait(1200);
+        const off = st.cafeMap.meta;
+        g.player.x = (off.offX + 5) * 16;
+        g.player.y = (off.offY + 3) * 16;
+        g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
+        await wait(4200);
+        window.__pass = `paintings=${st.cafeMap.objects.filter((o) => o.type === 'painting').length}`;
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -3887,6 +3970,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__log ? ` ${window.__log}` : '')
         + (window.__reg ? ` ${window.__reg}` : '')
         + (window.__stool ? ` ${window.__stool}` : '')
+        + (window.__paint ? ` ${window.__paint}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')
