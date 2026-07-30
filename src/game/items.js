@@ -91,6 +91,8 @@ export const ITEMS = {
   f_umbrella: { name: 'Umbrella Table', cat: CAT.FURNITURE, icon: 'umbrella', cost: 340, place: 'umbrella', appeal: 2.2, outdoor: true, desc: 'Shade on the hot days, shelter on the sudden ones. Earns its keep either way.' },
   f_fountain: { name: 'Stone Fountain', cat: CAT.FURNITURE, icon: 'fountain', cost: 1400, place: 'fountain', appeal: 4.2, rare: true, outdoor: true, catJoy: 1.2, desc: 'Absurdly expensive. People sit near it and forget to leave, and the cats stare at it for hours.' },
 
+  f_telephone: { name: 'Telephone', cat: CAT.FURNITURE, icon: 'phone', place: 'phone', appeal: 0.4, desc: 'Cream bakelite, a dial, and a bell loud enough to be heard from the pantry. People ring up wanting things brought to them.' },
+
   f_counter: { name: 'Service Counter', cat: CAT.FURNITURE, icon: 'counterUnit', cost: 260, place: 'counter', appeal: 0.5, desc: 'Where the money happens.' },
   f_case: { name: 'Pastry Case', cat: CAT.FURNITURE, icon: 'cake', cost: 320, place: 'pastryCase', appeal: 1.4, desc: 'Cake at eye level sells itself.' },
   f_machine: { name: 'Coffee Machine', cat: CAT.FURNITURE, icon: 'grinder', cost: 380, place: 'coffeeMachine', appeal: 1.2, desc: 'Hisses impressively. Customers trust a machine that hisses.' },

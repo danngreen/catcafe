@@ -6,6 +6,7 @@
 import { TILE, T, TERRAIN, prio, EDGE_DIRS } from '../art/tiles.js';
 import { CHUNK } from './tilemap.js';
 import { objSprite } from '../art/objects.js';
+import { emoteSprite } from '../art/chars.js';
 import { makeCanvas } from '../engine/pixel.js';
 import { VIEW_W, VIEW_H } from '../engine/display.js';
 import { clamp } from '../engine/util.js';
@@ -170,6 +171,7 @@ export class Renderer {
   }
 
   update(dt) {
+    this.t = (this.t || 0) + dt;
     this._waterT += dt;
     if (this._waterT > 0.16) { this._waterT = 0; this.waterFrame = (this.waterFrame + 1) % 6; }
   }
@@ -229,6 +231,17 @@ export class Renderer {
       const dy = (d.ty + 1) * TILE - spr.height + d.offY - oy;
       if (dx > VIEW_W || dy > VIEW_H || dx + spr.width < 0 || dy + spr.height < 0) continue;
       ctx.drawImage(spr, dx, dy);
+    }
+
+    // A ringing telephone puts a mark over itself. Objects have no emotes, so
+    // it is drawn here, with the bubbles, for the same reason they are: it has
+    // to sit on top of whatever is standing in front of it.
+    for (const d of drawables) {
+      if (!d.ringMark) continue;
+      const bx = Math.round(d.tx * TILE + (d.tw * TILE) / 2 - ox);
+      const by = Math.round((d.ty + 1) * TILE - (d.h || TILE) - oy - 6);
+      const bob = Math.round(Math.sin(this.t * 12) * 2);
+      ctx.drawImage(emoteSprite('alert'), bx - 8, by - 14 + bob);
     }
 
     // Speech bubbles and emotes go on last. Drawn inline with their owner they

@@ -314,6 +314,28 @@ errands is waiting on them, they turn up that night rather than whenever the
 dice say. Their errands are cafe-shaped: stock a thing, put a thing in a room,
 hand a thing over — the sort of job you finish by being at home.
 
+**Deliveries.** Hollis will part with a telephone once the cafe is a business
+rather than a nice little spot — forty seats, a thousand-pound day, and the money
+to pay the exchange. Put it down where you can hear it from the pantry.
+
+It rings a few times a day, shakes, and puts a mark over itself. Answer it like
+you would talk to anybody and somebody asks for between one and five things,
+brought to them somewhere in the valley, within three to eight hours. Take the
+order or don't. Nothing moves when you take it — a delivery is a promise, not a
+sale.
+
+Taken orders sit on the map as squares with a ring round them that empties as
+the time does; highlight one for what was asked for, what it pays, and how long
+is left. The pay is the counter price of the goods plus a pound of fee for every
+five blocks as the crow flies. Turn up with only some of it and you are paid for
+what you brought and the whole fee anyway — a short delivery is still a
+delivery. Turn up with none and there is nothing to pay for. Let it lapse and
+nothing happens at all.
+
+Every cottage in the valley now opens, and the one expecting an order has its
+windows lit — glowing in daylight, spilling out after dark. Somebody is in there
+until the time runs out.
+
 Mail birds carry letters between friends. Taxi birds will fly you to anywhere
 you've already visited, for a fare, between 7am and 7pm — one comes down,
 collects you in a wicker basket, and sets you down at the far end. The map

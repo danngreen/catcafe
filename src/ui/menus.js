@@ -16,7 +16,8 @@ import { audio } from '../engine/audio.js';
 import { clamp, money, wrapText } from '../engine/util.js';
 import { QUESTS, objectiveText, progressText } from '../game/quests.js';
 import { HIRE_POOL, shiftHours, fmtHour } from '../game/cafe.js';
-import { shopOpen, hoursText } from '../game/time.js';
+import { shopOpen, hoursText, HOUR_SECONDS } from '../game/time.js';
+import { timeFraction, timeLeft, fullValue, orderText } from '../game/deliveries.js';
 import { lookOf } from '../game/entities.js';
 import { charSprite } from '../art/chars.js';
 
@@ -1176,6 +1177,16 @@ export class MapScreen extends Screen {
    * gather under their own heading at the end.
    */
   buildRows() {
+    const st = this.game.state;
+    const rows0 = [];
+    // Orders first: they are the only thing on this screen with a clock on it.
+    const runs = st.liveDeliveries();
+    if (runs.length) {
+      rows0.push({ header: 'Out for delivery' });
+      for (const d of runs) {
+        rows0.push({ place: { id: d.id, name: d.name, x: d.x, y: d.y, delivery: d }, depth: 1 });
+      }
+    }
     const known = this.game.state.knownPlaces();
     const byId = new Map(known.map((p) => [p.id, p]));
     const rows = [];
@@ -1194,7 +1205,7 @@ export class MapScreen extends Screen {
       rows.push({ header: 'Out in the valley' });
       for (const p of rest) rows.push({ place: p, depth: 1 });
     }
-    return rows;
+    return [...rows0, ...rows];
   }
 
   update(dt, input) {
@@ -1324,6 +1335,31 @@ export class MapScreen extends Screen {
         drawText(ctx, label, lx2, ly2, { color: labelCol, shadow: '#000000' });
       };
 
+      // Deliveries: a square where it has to go, and a ring round it that
+      // empties as the time does. A number would be exact and unreadable at a
+      // glance; an arc you can take in while walking.
+      const now = st.clock.absolute;
+      for (const d of st.liveDeliveries()) {
+        const p = spot(d.x * 16, d.y * 16);
+        const frac = timeFraction(d, now);
+        // A dark full ring behind the coloured arc, so the arc reads as a
+        // fraction of something rather than as a stray mark on a green map.
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(12,10,20,0.8)';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = frac > 0.5 ? '#7fd46a' : frac > 0.25 ? '#eec453' : '#e8615c';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 8, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#101018';
+        ctx.fillRect(p.x - 3, p.y - 3, 7, 7);
+        ctx.fillStyle = frac > 0.25 ? '#fdf6e6' : '#ffb0aa';
+        ctx.fillRect(p.x - 2, p.y - 2, 5, 5);
+      }
+
       for (const o of others.slice(0, 8)) {
         pin(o, o.inside ? '#c8c2b4' : '#8fe0ff', o.name, o.inside ? P.uiTextDim : '#8fe0ff');
       }
@@ -1375,11 +1411,23 @@ export class MapScreen extends Screen {
         { color: P.uiTextDim, shadow: P.uiShadow });
     }
 
-    // Opening hours for whatever is highlighted. You have been there, so you
-    // know when it opens — which is exactly the thing you walk across the
-    // valley and find out you did not.
+    // What the highlighted thing is. An order says what was asked for, what it
+    // pays, and how long is left — the three things you need to decide whether
+    // to walk it.
     const here = this.places[this.index];
-    const shop = here ? SHOPS.find((s2) => s2.id === here.id) : null;
+    const run = here && here.delivery;
+    if (run) {
+      const now = this.game.state.clock.absolute;
+      const left = timeLeft(run, now) / HOUR_SECONDS;
+      const frac = timeFraction(run, now);
+      drawTextCentered(ctx, orderText(run.items), VIEW_W / 2, y + h - 38,
+        { color: P.uiText, shadow: P.uiShadow });
+      const mins = Math.max(1, Math.round(left * 60));
+      const when = left >= 1 ? `${left.toFixed(1)} hours left` : `${mins} minutes left`;
+      drawTextCentered(ctx, `up to ${money(fullValue(run))}   —   ${when}`, VIEW_W / 2, y + h - 26,
+        { color: frac > 0.25 ? P.uiGold : P.uiRed, shadow: P.uiShadow });
+    }
+    const shop = here && !run ? SHOPS.find((s2) => s2.id === here.id) : null;
     if (shop) {
       const open = shopOpen(shop, this.game.state.clock);
       const line = `${hoursText(shop)}  —  ${open ? 'open now' : 'shut now'}`;

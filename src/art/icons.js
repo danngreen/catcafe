@@ -229,6 +229,17 @@ export const ICONS = {
     b.set(4, 8, rgb('#a8d8ee')); b.set(12, 8, rgb('#a8d8ee'));
   },
 
+  phone: (b) => {
+    b.rect(3, 8, 10, 6, rgb('#3a3644'));
+    b.hline(3, 8, 10, rgb('#565064'));
+    b.ellipse(8, 11, 2.6, 2.2, rgb('#d8d2c4'));
+    b.ellipse(8, 11, 1.1, 1, rgb('#3a3644'));
+    b.rect(2, 5, 12, 3, rgb('#565064'));
+    b.rect(1, 4, 3, 4, rgb('#3a3644'));
+    b.rect(12, 4, 3, 4, rgb('#3a3644'));
+    b.hline(2, 5, 12, rgb('#7a7288'));
+  },
+
   plant: (b) => {
     b.rect(4, 10, 8, 5, rgb(P.terracotta));
     b.rect(3, 9, 10, 2, rgb(P.terracottaLt));

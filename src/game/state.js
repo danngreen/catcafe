@@ -8,6 +8,7 @@ import { item, baseId } from './items.js';
 import { CAT_BREEDS } from '../art/chars.js';
 import { startingCafe, buildCafeMap } from '../world/interiors.js';
 import { weatherNow } from './weather.js';
+import { live, expired } from './deliveries.js';
 import { shiftHours } from './cafe.js';
 import { VILLAGERS } from '../world/places.js';
 import { TILE } from '../art/tiles.js';
@@ -40,7 +41,9 @@ export class GameState {
     this.inCafe = false;
     this.mapId = 'overworld';
     this.visited = {};          // place id -> true
+    this.deliveries = [];       // orders taken over the phone, not yet run
     this.bestDayProfit = 0;
+    this.bestDayGross = 0;      // best day's takings before costs
     this.totalCustomers = 0;
     this.daysPlayed = 0;
     this.worldW = 352;
@@ -157,8 +160,10 @@ export class GameState {
       flags: this.flags, quests: this.quests, questStep: this.questStep, friends: this.friends,
       workers: this.workers, materials: this.materials, employee: this.employee,
       shopOpen: this.shopOpen, shopHours: this.shopHours, visited: this.visited,
+      deliveries: this.deliveries,
       mail: this.mail, pendingLetters: this.pendingLetters,
-      bestDayProfit: this.bestDayProfit, totalCustomers: this.totalCustomers,
+      bestDayProfit: this.bestDayProfit, bestDayGross: this.bestDayGross,
+      totalCustomers: this.totalCustomers,
       daysPlayed: this.daysPlayed,
     };
   }
@@ -269,10 +274,24 @@ export class GameState {
    * floor. Customers are carried across rather than swept out: putting down a
    * plant pot should not empty the room.
    */
+  /**
+   * The most seats this cafe has ever had at once. Kept as a high-water mark
+   * rather than a live count: pulling a chair out for an afternoon should not
+   * undo having built the place up to forty.
+   */
+  noteSeatCount() {
+    const n = this.cafeMap?.meta?.seats?.length || 0;
+    if (n > (this.flags.most_seats || 0)) {
+      this.flags.most_seats = n;
+      this.touch('flags');
+    }
+  }
+
   rebuildCafe() {
     this.cafeMap = buildCafeMap(this.cafe);
     this.refreshCatActors();
     this.cafeSim.reseatCustomers(this.cafeMap);
+    this.noteSeatCount();
     this.hooks.onCafeRebuilt?.(this.cafeMap);
   }
 
@@ -323,6 +342,43 @@ export class GameState {
     return out;
   }
 
+  // ------------------------------------------------------------ deliveries
+
+  /** Take an order. Published one at a time so two phones cannot collide. */
+  addDelivery(d) {
+    this.deliveries = [...this.deliveries, d];
+    this.pub({ op: 'deliveryAdd', d });
+    this.touch('deliveries');
+  }
+
+  /** Run, refused, or run out of time — all the same to the books. */
+  clearDelivery(id) {
+    const before = this.deliveries.length;
+    this.deliveries = this.deliveries.filter((d) => d.id !== id);
+    if (this.deliveries.length === before) return false;
+    this.pub({ op: 'deliveryDone', id });
+    this.touch('deliveries');
+    return true;
+  }
+
+  /** The ones still worth walking to. */
+  liveDeliveries() { return live(this.deliveries, this.clock.absolute); }
+
+  /**
+   * Drop the ones nobody is waiting for any more. Called on the clock rather
+   * than filtered at every read, so the map and the books agree about what
+   * exists — and so the toast telling you it lapsed happens exactly once.
+   */
+  expireDeliveries() {
+    const now = this.clock.absolute;
+    const gone = this.deliveries.filter((d) => expired(d, now));
+    for (const d of gone) {
+      this.clearDelivery(d.id);
+      this.toast(`Nobody waited for the order to ${d.name}.`, 'warn');
+    }
+    return gone.length;
+  }
+
   taxiFare(place) {
     const base = 60;
     return base + Math.round(Math.hypot(place.x - 96, place.y - 168) * 0.8);
@@ -340,6 +396,7 @@ export class GameState {
     this.daysPlayed++;
     this.totalCustomers += summary.customers;
     if (summary.profit > this.bestDayProfit) this.bestDayProfit = summary.profit;
+    if (summary.revenue > this.bestDayGross) this.bestDayGross = summary.revenue;
 
     // Mail in flight arrives.
     const arriving = this.pendingLetters.filter((l) => l.day <= this.clock.day);
@@ -430,7 +487,9 @@ export class GameState {
     this.shopOpen = data.shopOpen ?? true;
     this.shopHours = data.shopHours || [8, 18];
     this.visited = data.visited || {};
+    this.deliveries = data.deliveries || [];
     this.bestDayProfit = data.bestDayProfit || 0;
+    this.bestDayGross = data.bestDayGross || 0;
     this.totalCustomers = data.totalCustomers || 0;
     this.daysPlayed = data.daysPlayed || 0;
     this.migrateEmployee();

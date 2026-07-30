@@ -8,16 +8,16 @@ import { Input } from './engine/input.js';
 import { audio } from './engine/audio.js';
 import { drawText, drawTextCentered, drawTextRight, textWidth, LINE_H } from './engine/font.js';
 import { makeCanvas } from './engine/pixel.js';
-import { clamp, money, makeRng } from './engine/util.js';
+import { clamp, money, makeRng, hashStr } from './engine/util.js';
 
 import { Tileset, TILE, T, isWater } from './art/tiles.js';
 import { P } from './art/palette.js';
-import { charSprite, catSprite, CAT_BREED_LIST, CAT_BREEDS, COAT_LIST, CLOTHES, COATS } from './art/chars.js';
+import { charSprite, catSprite, CAT_BREED_LIST, CAT_BREEDS, COAT_LIST, CLOTHES, COATS, SPECIES_LIST } from './art/chars.js';
 import { buildingSprite } from './art/objects.js';
 
 import { generateWorld, WORLD_W, WORLD_H } from './world/worldgen.js';
 import { Renderer, Camera } from './world/render.js';
-import { buildShopInterior, buildSpecialInterior } from './world/interiors.js';
+import { buildShopInterior, buildSpecialInterior, buildHouseInterior } from './world/interiors.js';
 import { SHOPS, VILLAGERS, TOWNS, GOSSIP, PLAYER_NAMES } from './world/places.js';
 
 import { GameState, seedStartingInventory } from './game/state.js';
@@ -27,6 +27,10 @@ import { ITEMS, STOCK, FLEA_POOL, baseId } from './game/items.js';
 import { shopOpen, hoursText, HOUR_SECONDS, DAY_FULL } from './game/time.js';
 import { weatherNow, weatherAmbience, weatherLight, weatherLine, WeatherFx } from './game/weather.js';
 import { REGULARS, REGULAR_BY_ID, dueNow } from './game/regulars.js';
+import {
+  makeDelivery, ringingNow, RING_SECONDS, orderText, fullValue, settle,
+  timeFraction, timeLeft, expired,
+} from './game/deliveries.js';
 import { BOOK_BY_ID } from './world/places.js';
 import { QUESTS, QUESTS_BY_GIVER, objectiveMet, questSteps, currentStep,
   stepIndex, isLastStep, progressText, objectiveText, repairAllSteps } from './game/quests.js';
@@ -49,6 +53,13 @@ const WORLD_SEED = 20260724;
  * one-shot switches: a spot you searched too early should still be there when
  * you come back knowing what you're looking for.
  */
+export // Whoever answers the door. Not part of the cast — they exist for half a minute
+// and then go back to their evening.
+const RESIDENT_NAMES = [
+  'Amble', 'Perch', 'Wick', 'Fettle', 'Cobble', 'Tansy', 'Dabble', 'Rook',
+  'Nettle', 'Havers', 'Muddle', 'Quince', 'Sorrel', 'Pippin', 'Larch',
+];
+
 export const SEARCH_SPOTS = {
   bushes: (st) => {
     if (st.clock.isDark) {
@@ -319,6 +330,7 @@ class Game {
     this.towns = world.towns;
     this.doors = world.doors;
     this.landmarks = world.landmarks;
+    this.houses = world.houses || [];    // every cottage door in the valley
     this.barriers = world.barriers;      // handy when asking why a pass is open
 
     // Interiors are built on demand and belong to the world we just replaced.
@@ -737,6 +749,8 @@ class Game {
     this.updateCafeSim(dt);
     this.updateEmployee(dt);
     this.updateRegulars(dt);
+    this.updatePhone(dt);
+    this.updateDeliveries(dt);
     this.updateWeather(dt);
     this.updateAudio(dt);
     this.hud.update(dt, st);
@@ -967,6 +981,202 @@ class Game {
     } else if (v.emote === 'wonder') {
       v.clearEmote();
     }
+  }
+
+  // ------------------------------------------------------------ deliveries
+
+  /**
+   * Orders lapse on the clock, and a house with somebody waiting has its lights
+   * on. Only the client running the sim clears expired orders, or every player
+   * would announce the same lapse.
+   */
+  updateDeliveries() {
+    const st = this.state;
+    if (net.simOwner) st.expireDeliveries();
+    const wanted = new Set(st.liveDeliveries().filter((d) => d.house).map((d) => d.house));
+    if (this._litHouses === undefined) this._litHouses = new Set();
+    // Only re-bake a building when its light actually changes.
+    for (const o of this.overworld.objects) {
+      if (o.type !== '_building') continue;
+      const id = o.data && o.data.house;
+      if (!id || !o.cfg) continue;
+      const lit = wanted.has(id);
+      if (lit === !!o.cfg.lit) continue;
+      o.cfg = { ...o.cfg, lit };
+      o.sprite = buildingSprite(o.cfg);
+      o.w = o.sprite.width;
+      o.h = o.sprite.height;
+      this.renderer.invalidateAll();
+    }
+  }
+
+  /** Everywhere an order could be sent. Houses, doorsteps, and open country. */
+  deliverySpots() {
+    const out = [];
+    for (const h of this.houses) {
+      out.push({ x: h.x, y: h.y, name: h.name, town: h.town, house: h.id });
+    }
+    // A few outdoor addresses: somebody waiting by a landmark, and somebody
+    // stood in the middle of nowhere who will not explain why.
+    for (const l of this.landmarks) {
+      out.push({ x: l.x, y: l.y + 1, name: l.name, town: null, house: null });
+    }
+    for (const [id, t] of Object.entries(this.towns)) {
+      out.push({ x: t.hub.x, y: t.hub.y + 1, name: `The green at ${t.name}`, town: id, house: null });
+    }
+    return out.filter((p) => this.overworld.inBounds(p.x, p.y));
+  }
+
+  /**
+   * Put somebody in the front room if an order is due here, and take them away
+   * again once the time is up. Interiors are built once and kept, so this runs
+   * on the way in rather than at build time.
+   */
+  fitRecipient(map, houseId) {
+    const st = this.state;
+    const d = st.liveDeliveries().find((x) => x.house === houseId);
+    map.villagers = (map.villagers || []).filter((v) => !v.recipient);
+    if (!d) return;
+    const room = map.meta.room;
+    const spot = { x: room.x + Math.floor(room.w / 2), y: room.y + Math.floor(room.h / 2) };
+    const rng = makeRng(hashStr(houseId));
+    const def = {
+      id: `resident:${houseId}`,
+      name: RESIDENT_NAMES[rng.int(RESIDENT_NAMES.length)],
+      species: SPECIES_LIST[rng.int(SPECIES_LIST.length)],
+      coat: COAT_LIST[rng.int(COAT_LIST.length)],
+      lines: ['*waiting, with the door on the latch*'],
+    };
+    const v = new Villager(def, spot.x * TILE + TILE / 2, (spot.y + 1) * TILE - 2);
+    v.recipient = d.id;
+    v.range = 8;
+    map.villagers.push(v);
+  }
+
+  /**
+   * Hand the bag over. Paid for what you actually brought and the fee in full
+   * for having turned up — a short delivery is still a delivery. Nothing at all
+   * if you brought none of it, and no penalty either way.
+   */
+  completeDelivery(v, finish) {
+    const st = this.state;
+    const d = st.deliveries.find((x) => x.id === v.recipient);
+    if (!d) { this.dialogue.say('*they look at you blankly*', { onDone: finish }); return; }
+    const s = settle(d, (id) => st.cafeSim.stockCount(id));
+    for (const id of s.brought) st.cafeSim.takeStock(id, 1);
+    if (s.total) st.earn(s.total);
+    st.clearDelivery(d.id);
+    // Take them out of the room, so the front room is empty on the way back.
+    const map = this.currentMap;
+    if (map.villagers) map.villagers = map.villagers.filter((x) => x !== v);
+
+    let text;
+    if (!s.brought.length) {
+      text = `"...you have not brought any of it, have you."\n\n`
+        + `They close the door with more patience than you deserve. `
+        + `You are not out of pocket, but you are not in it either.`;
+      audio.sfx('ui_back');
+    } else if (s.missing.length) {
+      text = `"Some of it, then."\n\nYou hand over ${orderText(s.brought)}. `
+        + `They had also asked for ${orderText(s.missing)}.\n\n`
+        + `${money(s.goods)} for the goods and ${money(s.fee)} for the walk — `
+        + `${money(s.total)}. The fee is the fee whatever is in the bag.`;
+      audio.sfx('cash', { gain: 0.7 });
+    } else {
+      text = `"All of it. Marvellous."\n\nYou hand over ${orderText(s.brought)}.\n\n`
+        + `${money(s.goods)} for the goods and ${money(s.fee)} for the walk — ${money(s.total)}.`;
+      audio.sfx('cash', { gain: 0.8 });
+      st.reputation = clamp(st.reputation + 0.02, 0, 1);
+      st.touch('reputation');
+    }
+    this.hud.toast(s.total ? `Delivered — ${money(s.total)}` : 'Nothing to deliver', s.total ? 'good' : 'warn');
+    this.dialogue.say(text, { speaker: v.def.name, onDone: finish });
+  }
+
+  /** Is this phone ringing, and has anybody dealt with the call? */
+  phoneCall() {
+    const st = this.state;
+    if (!st.cafe.furniture.some((f) => f.type === 'phone')) return null;
+    return ringingNow(this.worldSeed, st.clock, (id) => !!st.flags[`call_${id}`]);
+  }
+
+  /**
+   * The phone. Rings a few times a day at times the seed decides, so everybody
+   * in the valley hears it at once; shakes and puts a mark over itself so you
+   * can find it; and stops for good once somebody has answered or refused,
+   * which is a flag and therefore shared.
+   */
+  updatePhone(dt) {
+    const st = this.state;
+    const map = st.cafeMap;
+    const call = this.phoneCall();
+    this.ringing = call;
+    if (!map) return;
+    const phones = map.objects.filter((o) => o.type === 'phone');
+    if (!call || !phones.length) {
+      for (const o of phones) { o.variant = 0; o.ringMark = false; }
+      this.ringT = 0;
+      return;
+    }
+    // Shake, and re-ring every couple of seconds while it goes unanswered.
+    this.ringT = (this.ringT || 0) + dt;
+    const shake = Math.floor(this.ringT * 7) % 4;
+    for (const o of phones) {
+      o.variant = shake === 1 ? 1 : shake === 3 ? 2 : 0;
+      o.ringMark = true;
+    }
+    if (st.inCafe && (this.ringSfxT || 0) <= 0) {
+      this.ringSfxT = 2.2;
+      audio.sfx('ring', { gain: 0.5 });
+    }
+    this.ringSfxT = (this.ringSfxT || 0) - dt;
+  }
+
+  /** Pick up. An order, and the choice of taking it on or not. */
+  answerPhone() {
+    const st = this.state;
+    const call = this.phoneCall();
+    if (!call) {
+      this.dialogue.say('The telephone. Cream bakelite, heavier than it looks.\n\nNobody is on it.');
+      return;
+    }
+    const spots = this.deliverySpots();
+    if (!spots.length) { this.dialogue.say('The line crackles and goes dead.'); return; }
+    const seed = hashStr(`${this.worldSeed}:${call.id}`);
+    const rng = makeRng(seed);
+    const spot = spots[rng.int(spots.length)];
+    const from = this.homeDoor || { x: spot.x, y: spot.y };
+    const d = makeDelivery(spot, from, st.clock.absolute, () => rng());
+    d.call = call.id;
+
+    // Muted chatter down the line for as long as the call lasts.
+    audio.setAmbience({ ...audio.ambience, chatter: 0.5, indoor: 0.2 });
+    const hours = Math.max(1, Math.round((d.due - d.taken) / HOUR_SECONDS));
+    // Short on purpose: the choice should be the second thing you see, not the
+    // fifth page of it.
+    this.dialogue.say(
+      `"${orderText(d.items)}, to ${d.name}."\n\n`
+      + `${money(fullValue(d))} all in. They can wait ${hours}h.`,
+      {
+        speaker: 'On the telephone',
+        choices: [
+          { label: 'Take the order', value: 'yes' },
+          { label: 'Not today', value: 'no' },
+        ],
+        onDone: (v) => {
+          st.flags[`call_${call.id}`] = v === 'yes' ? 'taken' : 'no';
+          st.touch('flags');
+          if (v === 'yes') {
+            st.addDelivery(d);
+            audio.sfx('quest', { gain: 0.6 });
+            this.hud.toast(`Order for ${d.name} — see the map.`, 'good', 6);
+          } else {
+            audio.sfx('ui_back');
+            this.hud.toast('You put the phone down.', 'info');
+          }
+        },
+      },
+    );
   }
 
   /** Have they already said the thing they keep coming in to say? */
@@ -1392,6 +1602,10 @@ class Game {
         this.openPostbox();
         break;
 
+      case 'phone':
+        this.answerPhone();
+        break;
+
       case 'taxi':
         this.openTaxi(it.town);
         break;
@@ -1403,6 +1617,16 @@ class Game {
 
   openDoor(it, tile) {
     const st = this.state;
+    // Somebody's front door. Every cottage opens; the only ones with anything
+    // in them are the ones expecting a delivery.
+    if (it.house) {
+      const key = `house:${it.house}`;
+      let map = this.maps.get(key);
+      if (!map) { map = buildHouseInterior(it.house); this.maps.set(key, map); }
+      this.fitRecipient(map, it.house);
+      this.enterInterior(key, map, tile.x, tile.y);
+      return;
+    }
     const shopId = it.shop;
     if (shopId === 'cafe') {
       this.enterInterior('cafe', st.cafeMap, tile.x, tile.y);
@@ -1602,6 +1826,9 @@ class Game {
     v.talking = true;
     v.faceTowards(this.player.x, this.player.y);
     const finish = () => { v.talking = false; };
+
+    // Somebody waiting on an order wants the order, not the weather.
+    if (v.recipient) { this.completeDelivery(v, finish); return; }
 
     // 1. Handing over, or reporting in on, whatever step is in play.
     for (const q of QUESTS) {

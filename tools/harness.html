@@ -1696,6 +1696,253 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await wait(9000);
         const v = (st.cafeMap.villagers || []).find((x) => x.def.id === 'bruin');
         window.__pass = `bruin=${!!v} mode=${v ? v.mode : '-'} customers=${st.cafeSim.customers.length}`;
+      } else if (SCRIPT === 'delivery') {
+        // The telephone, end to end: it rings, you answer, an order goes on the
+        // map with a clock on it, and somebody at the far end takes the bag.
+        const D = await import('../src/game/deliveries.js');
+        const { ITEMS } = await import('../src/game/items.js');
+        const st = g.state;
+        st.money = 2000;
+
+        // A phone in the cafe, and the clock parked on a ring.
+        st.cafe.furniture = st.cafe.furniture.filter((f) => f.type !== 'phone');
+        st.cafe.furniture.push({ type: 'phone', x: 1, y: 3, variant: 0 });
+        st.rebuildCafe();
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        await wait(900);
+        st.flags = {};
+        const rings = D.ringsOn(g.worldSeed, st.clock.day);
+        const stableRings = JSON.stringify(rings) === JSON.stringify(D.ringsOn(g.worldSeed, st.clock.day));
+        const differsBySeed = JSON.stringify(rings) !== JSON.stringify(D.ringsOn(g.worldSeed + 1, st.clock.day));
+        st.clock.t = rings[0].at + 2;
+        await wait(700);
+        const ringing = !!g.phoneCall();
+        // The object shakes and marks itself.
+        const phoneObj = st.cafeMap.objects.find((o) => o.type === 'phone');
+        const marked = !!(phoneObj && phoneObj.ringMark);
+        const variants = new Set();
+        for (let i = 0; i < 14; i++) { await wait(90); variants.add(phoneObj.variant); }
+        const shakes = variants.size > 1;
+        // And it has an interact, so you can talk to it like an NPC.
+        const spot = { x: 1 + st.cafeMap.meta.offX, y: 3 + st.cafeMap.meta.offY };
+        const it = st.cafeMap.interactAt(spot.x, spot.y);
+        const talkable = !!(it && it.kind === 'phone');
+
+        // Answer it.
+        const before = st.deliveries.length;
+        const moneyBefore = st.money;
+        g.answerPhone();
+        await wait(500);
+        const asked = g.dialogue.active;
+        // Choices are up/down and only appear on the last page, so press on
+        // until the call ends. Index 0 is "Take the order".
+        for (let i = 0; i < 10 && g.dialogue.active; i++) {
+          key('Space', true); await wait(130); key('Space', false); await wait(260);
+        }
+        const took = st.deliveries.length > before;
+        const d = st.deliveries[st.deliveries.length - 1];
+        const nothingMoved = st.money === moneyBefore;
+        // Between one and five things, and a real deadline.
+        const count = d ? d.items.length : 0;
+        const hours = d ? (d.due - d.taken) / 50 : 0;
+        // Fee is a pound per five blocks from the cafe door.
+        const expectFee = Math.max(1, Math.round(Math.hypot(d.x - g.homeDoor.x, d.y - g.homeDoor.y) / 5));
+        const feeOk = d ? d.fee === expectFee : false;
+        // And the ring stops once dealt with.
+        const stillRinging = !!g.phoneCall();
+
+        // It shows on the map with a ring that empties.
+        key('KeyM', true); await wait(140); key('KeyM', false);
+        await wait(600);
+        const ms = g.screens[g.screens.length - 1];
+        const onMap = ms && ms.places ? ms.places.some((p) => p.delivery && p.delivery.id === d.id) : false;
+        const fracFull = D.timeFraction(d, st.clock.absolute);
+        key('KeyX', true); await wait(140); key('KeyX', false);
+        await wait(300);
+
+        // Stock only part of it, then deliver: paid for what you brought plus
+        // the whole fee.
+        st.stock = {};
+        const bring = d.items.slice(0, Math.max(1, d.items.length - 1));
+        for (const id of bring) st.cafeSim.addStock(id, 1, st.clock.day);
+        const s = D.settle(d, (id) => st.cafeSim.stockCount(id));
+        const partialOk = s.fee === d.fee && s.brought.length === bring.length;
+        const noneOk = D.settle(d, () => 0).total === 0;
+
+        // Expiry: the ring empties, the order goes, and nothing is charged.
+        const moneyBeforeExpiry = st.money;
+        st.clock.day += 1;
+        const fracGone = D.timeFraction(d, st.clock.absolute);
+        st.expireDeliveries();
+        const clearedOnExpiry = !st.deliveries.some((x) => x.id === d.id);
+        const noPenalty = st.money === moneyBeforeExpiry;
+
+        window.__deliv = `rings=${rings.length} stable=${stableRings} bySeed=${differsBySeed}`
+          + ` ringing=${ringing} marked=${marked} shakes=${shakes} talkable=${talkable}`
+          + ` asked=${asked} took=${took} items=${count} hours=${hours.toFixed(1)}`
+          + ` fee=${d ? d.fee : '-'}/${expectFee} feeOk=${feeOk} nothingMoved=${nothingMoved}`
+          + ` stopped=${!stillRinging} onMap=${onMap} frac ${fracFull.toFixed(2)}->${fracGone.toFixed(2)}`
+          + ` partial=${partialOk} noneZero=${noneOk} cleared=${clearedOnExpiry} noPenalty=${noPenalty}`;
+        if (!stableRings) window.__errors.push('the ring times are not stable: ' + window.__deliv);
+        if (!differsBySeed) window.__errors.push('every valley rings alike: ' + window.__deliv);
+        if (!ringing) window.__errors.push('the phone did not ring: ' + window.__deliv);
+        if (!marked) window.__errors.push('nothing marks the ringing phone: ' + window.__deliv);
+        if (!shakes) window.__errors.push('the phone does not shake: ' + window.__deliv);
+        if (!talkable) window.__errors.push('you cannot talk to the phone: ' + window.__deliv);
+        if (!asked) window.__errors.push('answering it said nothing: ' + window.__deliv);
+        if (!took) window.__errors.push('accepting did not take the order: ' + window.__deliv);
+        if (count < 1 || count > 5) window.__errors.push('the order is not 1 to 5 things: ' + window.__deliv);
+        if (hours < 3 || hours > 8) window.__errors.push('the deadline is not 3 to 8 hours: ' + window.__deliv);
+        if (!feeOk) window.__errors.push('the fee is not a pound per five blocks: ' + window.__deliv);
+        if (!nothingMoved) window.__errors.push('taking an order moved money: ' + window.__deliv);
+        if (stillRinging) window.__errors.push('it kept ringing after being answered: ' + window.__deliv);
+        if (!onMap) window.__errors.push('the order is not on the map: ' + window.__deliv);
+        if (fracFull <= 0.5) window.__errors.push('the ring did not start full: ' + window.__deliv);
+        if (fracGone !== 0) window.__errors.push('the ring did not empty: ' + window.__deliv);
+        if (!partialOk) window.__errors.push('a part delivery loses the fee: ' + window.__deliv);
+        if (!noneOk) window.__errors.push('an empty-handed delivery still pays: ' + window.__deliv);
+        if (!clearedOnExpiry) window.__errors.push('an expired order stayed on the books: ' + window.__deliv);
+        if (!noPenalty) window.__errors.push('letting one lapse cost money: ' + window.__deliv);
+      } else if (SCRIPT === 'deliverhouse') {
+        // The far end: cottages open, a light goes on where somebody is
+        // waiting, and handing the bag over is the only thing that moves money.
+        const D = await import('../src/game/deliveries.js');
+        const st = g.state;
+        st.money = 500;
+        st.deliveries = [];
+
+        const house = g.houses[0];
+        const houses = g.houses.length;
+        const lit = () => {
+          const b = g.overworld.objects.find((o) => o.data && o.data.house === house.id);
+          return !!(b && b.cfg && b.cfg.lit);
+        };
+        const darkBefore = !lit();
+
+        // An order to that cottage, with everything in stock.
+        const now = st.clock.absolute;
+        const d = D.makeDelivery(
+          { x: house.x, y: house.y, name: house.name, town: house.town, house: house.id },
+          g.homeDoor, now, () => 0.5,
+        );
+        st.addDelivery(d);
+        g.updateDeliveries(0.016);
+        await wait(400);
+        const litNow = lit();
+        st.stock = {};
+        for (const id of d.items) st.cafeSim.addStock(id, 2, st.clock.day);
+        const owed = D.fullValue(d);
+
+        // Walk in. The door is a real door on the overworld.
+        const it = g.overworld.interactAt(house.x, house.y);
+        const isDoor = !!(it && it.kind === 'door' && it.house === house.id);
+        g.player.x = house.x * 16 + 8;
+        g.player.y = (house.y + 1) * 16;
+        g.openDoor(it, { x: house.x, y: house.y });
+        await wait(1000);
+        const inside = st.mapId.startsWith('house:');
+        const map = g.currentMap;
+        const who = (map.villagers || []).find((v) => v.recipient === d.id);
+        const someoneIn = !!who;
+
+        // Hand it over.
+        const moneyBefore = st.money;
+        const stockBefore = d.items.reduce((n, id) => n + st.cafeSim.stockCount(id), 0);
+        if (who) {
+          g.player.x = who.x + 10; g.player.y = who.y;
+          await wait(250);
+          g.interact();
+          await wait(600);
+          for (let i = 0; i < 8 && g.dialogue.active; i++) {
+            key('Space', true); await wait(130); key('Space', false); await wait(240);
+          }
+        }
+        const paid = st.money - moneyBefore;
+        const stockAfter = d.items.reduce((n, id) => n + st.cafeSim.stockCount(id), 0);
+        const debited = stockBefore - stockAfter;
+        const offBooks = !st.deliveries.some((x) => x.id === d.id);
+        g.updateDeliveries(0.016);
+        await wait(300);
+        const darkAgain = !lit();
+
+        // An expired order: nobody in, no light, nothing charged.
+        st.deliveries = [];
+        const old = D.makeDelivery(
+          { x: house.x, y: house.y, name: house.name, town: house.town, house: house.id },
+          g.homeDoor, now - 100000, () => 0.5,
+        );
+        st.deliveries = [old];
+        const expiredLive = st.liveDeliveries().length;
+        g.fitRecipient(map, house.id);
+        const nobodyIn = !(map.villagers || []).some((v) => v.recipient);
+
+        window.__house = `houses=${houses} isDoor=${isDoor} darkBefore=${darkBefore}`
+          + ` litWhenWaiting=${litNow} inside=${inside} someoneIn=${someoneIn}`
+          + ` owed=${owed} paid=${paid} debited=${debited}/${d.items.length}`
+          + ` offBooks=${offBooks} darkAgain=${darkAgain}`
+          + ` expiredLive=${expiredLive} nobodyIn=${nobodyIn}`;
+        if (houses < 10) window.__errors.push('barely any cottages to deliver to: ' + window.__house);
+        if (!isDoor) window.__errors.push('a cottage is not a door: ' + window.__house);
+        if (!darkBefore) window.__errors.push('cottages are lit with nothing pending: ' + window.__house);
+        if (!litNow) window.__errors.push('the light did not come on: ' + window.__house);
+        if (!inside) window.__errors.push('you cannot get inside a cottage: ' + window.__house);
+        if (!someoneIn) window.__errors.push('nobody was waiting: ' + window.__house);
+        if (paid !== owed) window.__errors.push('the wrong amount was paid: ' + window.__house);
+        if (debited !== d.items.length) window.__errors.push('the pantry was not debited: ' + window.__house);
+        if (!offBooks) window.__errors.push('a delivered order stayed on the books: ' + window.__house);
+        if (!darkAgain) window.__errors.push('the light stayed on afterwards: ' + window.__house);
+        if (expiredLive) window.__errors.push('an expired order still counts as live: ' + window.__house);
+        if (!nobodyIn) window.__errors.push('somebody waited past the deadline: ' + window.__house);
+      } else if (SCRIPT.startsWith('delivshot')) {
+        const D = await import('../src/game/deliveries.js');
+        const st = g.state;
+        const which = SCRIPT.split(':')[1] || 'lit';
+        st.money = 2000;
+        const house = g.houses.find((h) => h.town === 'brambleford');
+        const now = st.clock.absolute;
+        const mk = (h, mul) => D.makeDelivery(
+          { x: h.x, y: h.y, name: h.name, town: h.town, house: h.id }, g.homeDoor, now, () => mul,
+        );
+        st.deliveries = [mk(house, 0.5)];
+        for (const t of ['thistlewick', 'saltmere', 'hollowdown']) {
+          const h2 = g.houses.find((h) => h.town === t);
+          if (h2) st.deliveries.push(mk(h2, 0.2));
+        }
+        // One nearly out of time, so all three ring colours show.
+        st.deliveries[1].due = now + 200;
+        st.deliveries[2].due = now + 40;
+        st.touch('deliveries');
+        g.updateDeliveries(0.016);
+        await wait(500);
+        if (which === 'map') {
+          const { MapScreen } = await import('../src/ui/menus.js');
+          st.visit('brambleford', 'Brambleford', 96, 168);
+          st.visit('hollowdown', 'Hollowdown', 208, 68);
+          const m = new MapScreen(g);
+          g.push(m);
+          await wait(400);
+          m.index = 0;
+          await wait(700);
+        } else if (which === 'phone') {
+          st.cafe.furniture = st.cafe.furniture.filter((f) => f.type !== 'phone');
+          st.cafe.furniture.push({ type: 'phone', x: 5, y: 5, variant: 0 });
+          st.rebuildCafe();
+          g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+          await wait(900);
+          st.flags = {};
+          st.clock.t = D.ringsOn(g.worldSeed, st.clock.day)[0].at + 3;
+          const off = st.cafeMap.meta;
+          g.player.x = (off.offX + 3) * 16 + 8;
+          g.player.y = (off.offY + 6) * 16;
+          g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
+          await wait(4600);
+        } else {
+          g.player.x = house.x * 16 + 8;
+          g.player.y = (house.y + 3) * 16;
+          g.cam.follow(g.overworld, g.player.x, g.player.y, true);
+          await wait(4200);
+        }
+        window.__pass = `showing=${which} deliveries=${st.deliveries.length}`;
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -3793,6 +4040,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__friends ? ` ${window.__friends}` : '')
         + (window.__confirm ? ` ${window.__confirm}` : '')
         + (window.__voices ? ` ${window.__voices}` : '')
+        + (window.__deliv ? ` ${window.__deliv}` : '')
+        + (window.__house ? ` ${window.__house}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

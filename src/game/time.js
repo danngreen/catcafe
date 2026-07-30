@@ -47,6 +47,8 @@ export class Clock {
   get hour() { return Math.floor(this.t / HOUR_SECONDS); }
   get minute() { return Math.floor((this.t % HOUR_SECONDS) / HOUR_SECONDS * 60); }
   get hourFloat() { return this.t / HOUR_SECONDS; }
+  /** Seconds since the valley began. Deadlines need a clock that never wraps. */
+  get absolute() { return this.day * DAY_SECONDS + this.t; }
   get dayOfWeek() { return this.day % 7; }
   get dayName() { return DAY_NAMES[this.dayOfWeek]; }
   get dayFull() { return DAY_FULL[this.dayOfWeek]; }

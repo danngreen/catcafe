@@ -402,7 +402,7 @@ function paintPerch(buf, v) {
 export function paintBuilding(buf, opts) {
   const {
     tw = 4, wallH = 26, roofH = 22, wall = P.plaster, roof = P.terracotta,
-    roofStyle = 'tile', timbered = false, doorX = null, windows = 2, v = 0,
+    roofStyle = 'tile', timbered = false, doorX = null, windows = 2, v = 0, lit = false,
     sign = null, awning = null, chimney = true, storeys = 1,
   } = opts;
 
@@ -475,10 +475,21 @@ export function paintBuilding(buf, opts) {
     for (let i = 0; i < count; i++) {
       const wx = usable[Math.floor((i * usable.length) / Math.max(1, count))];
       buf.rect(wx - 1, winY - 1, 12, 12, rgb(P.woodDk));
-      buf.rect(wx, winY, 10, 10, rgb(P.glass));
-      buf.rect(wx, winY, 10, 4, rgb(P.glassLt));
-      buf.vline(wx + 5, winY, 10, rgb(P.woodDk));
-      buf.hline(wx, winY + 5, 10, rgb(P.woodDk));
+      if (lit) {
+        // Somebody is in and waiting. Warm all the way through, with the light
+        // spilling a little past the frame so it reads in daylight too.
+        buf.rect(wx - 3, winY - 3, 16, 16, rgb('#ffe9a8', 44));
+        buf.rect(wx - 2, winY - 2, 14, 14, rgb('#ffdf90', 70));
+        buf.rect(wx, winY, 10, 10, rgb('#ffd97a'));
+        buf.rect(wx, winY, 10, 4, rgb('#fff0b8'));
+        buf.vline(wx + 5, winY, 10, rgb('#a8823c'));
+        buf.hline(wx, winY + 5, 10, rgb('#a8823c'));
+      } else {
+        buf.rect(wx, winY, 10, 10, rgb(P.glass));
+        buf.rect(wx, winY, 10, 4, rgb(P.glassLt));
+        buf.vline(wx + 5, winY, 10, rgb(P.woodDk));
+        buf.hline(wx, winY + 5, 10, rgb(P.woodDk));
+      }
       // Window box with flowers.
       if (n(i + row * 5, v, 3) > 0.4) {
         buf.rect(wx - 2, winY + 10, 14, 3, rgb(P.woodDk));
@@ -1110,6 +1121,35 @@ function paintSofa(buf, v, col) {
   outline(buf);
 }
 
+/**
+ * A land-line telephone: cradle, handset across the top, dial on the front.
+ * `v` is the ring frame — it leans one way and then the other, because a
+ * ringing phone that sits perfectly still is a phone you walk past.
+ */
+function paintPhone(buf, v) {
+  const lean = v === 1 ? -1 : v === 2 ? 1 : 0;
+  const body = '#3a3644', hi = '#565064', dk = '#221f2b';
+  const x0 = 3 + lean;
+  groundShadow(buf, buf.w / 2, buf.h - 2, 7, 2.4);
+  // Base, wider at the bottom.
+  buf.rect(x0, buf.h - 10, 12, 8, rgb(body));
+  buf.rect(x0 - 1, buf.h - 4, 14, 3, rgb(dk));
+  buf.hline(x0, buf.h - 10, 12, rgb(hi));
+  // The dial.
+  buf.ellipse(x0 + 6, buf.h - 6, 3.4, 2.8, rgb('#d8d2c4'));
+  buf.ellipse(x0 + 6, buf.h - 6, 1.6, 1.4, rgb(body));
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * 6.2832;
+    buf.set(Math.round(x0 + 6 + Math.cos(a) * 2.4), Math.round(buf.h - 6 + Math.sin(a) * 2), rgb('#6b6478'));
+  }
+  // Handset lying across the cradle, tilted with the lean.
+  buf.rect(x0 - 1, buf.h - 14, 14, 3, rgb(hi));
+  buf.rect(x0 - 2, buf.h - 15, 4, 4, rgb(body));
+  buf.rect(x0 + 11, buf.h - 15, 4, 4, rgb(body));
+  buf.hline(x0 - 1, buf.h - 14, 14, rgb('#7a7288'));
+  outline(buf);
+}
+
 function paintCounterUnit(buf, v) {
   groundShadow(buf, buf.w / 2, buf.h - 3, buf.w / 2 - 1, 3);
   buf.rect(0, buf.h - 18, buf.w, 15, rgb(P.wood));
@@ -1436,6 +1476,9 @@ export const OBJECTS = {
   umbrella:   { w: 48, h: 60, tw: 2, th: 2, solid: true, variants: 4, paint: (b, v) => paintUmbrellaTable(b, v, ['#d95f5f', '#5b8fd6', '#7fbe57', '#eec453'][v % 4]) },
   fountain:   { w: 48, h: 48, tw: 2, th: 2, solid: true, variants: 1, paint: paintFountain },
 
+  // Three frames: upright, leaning left, leaning right. The ring picks one.
+  phone:      { w: 18, h: 22, tw: 1, th: 1, solid: true, variants: 3, paint: paintPhone },
+
   counter:    { w: 32, h: 24, tw: 2, th: 1, solid: true, variants: 1, paint: paintCounterUnit },
   bar:        { w: 48, h: 34, tw: 3, th: 1, solid: true, variants: 1, paint: paintBar },
   barStool:   { w: 16, h: 22, tw: 1, th: 1, solid: false, variants: 3, paint: paintBarStool },
@@ -1527,7 +1570,7 @@ export function buildingSprite(cfg) {
   // The board's colour is part of the picture, so it belongs in the key: two
   // shops sharing a glyph but not a paint pot must not share a sprite.
   const signBg = cfg.signBg || SIGN_BG[cfg.signKey] || P.plaster;
-  const key = `b|${cfg.tw}|${cfg.wall}|${cfg.roof}|${cfg.roofStyle}|${cfg.timbered ? 1 : 0}|${cfg.wallH}|${cfg.roofH}|${cfg.signKey || ''}|${signBg}|${cfg.awning || ''}|${cfg.v || 0}|${cfg.windows ?? 2}|${cfg.storeys || 1}`;
+  const key = `b|${cfg.tw}|${cfg.wall}|${cfg.roof}|${cfg.roofStyle}|${cfg.timbered ? 1 : 0}|${cfg.wallH}|${cfg.roofH}|${cfg.signKey || ''}|${signBg}|${cfg.awning || ''}|${cfg.v || 0}|${cfg.windows ?? 2}|${cfg.storeys || 1}|${cfg.lit ? 1 : 0}`;
   return cache.get(key, () => {
     const w = cfg.tw * TILE + 16;
     const h = (cfg.wallH || 26) + (cfg.roofH || 22) + 16;

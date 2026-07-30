@@ -246,6 +246,48 @@ export const QUESTS = [
     reward: { money: 150, items: [['seashell', 1]], friendship: ['moth'] },
   },
   {
+    id: 'the_telephone',
+    giver: 'hollis',
+    title: 'A Line Out',
+    desc: 'Hollis at the inn thinks a cafe your size ought to have a telephone.',
+    offer: "I have been watching your place fill up. Forty seats and a day's take I would be "
+      + "pleased with myself — you are past being a nice little spot, you are a business.\\n\\n"
+      + "Which means you want a line out. Half my trade comes down the wire and always has: "
+      + "somebody who cannot get to you, ringing up to ask whether you would come to them.\\n\\n"
+      + "The exchange is in Hollowdown and they will want paying. Get it done and I will hand "
+      + "over the handset I have got sitting in the cellar doing nothing.",
+    complete: "*Hollis blows the dust off a cream bakelite telephone and sets it on the bar*\\n\\n"
+      + "Put it where you can hear it from the pantry. It will ring a few times a day and it "
+      + "will always ring when you are busy — that is the nature of the thing.\\n\\n"
+      + "Take the order, carry it out, and get paid for the walk as well as the cake.",
+    steps: [
+      {
+        objective: { type: 'seatsEver', count: 40 },
+        note: 'Get the cafe up to 40 seats',
+        progress: 'Forty seats. Build the rooms, then fill them — sofas and benches count for three.',
+        done: 'Forty. Right. Now show me a day that fills them.',
+      },
+      {
+        objective: { type: 'gross', amount: 1000 },
+        note: 'Take 1000 in a single day',
+        progress: 'A thousand across one day, before costs. The morning card keeps the record.',
+        done: "That'll do. Now go and pay the exchange — Hollowdown, ask for a line.",
+      },
+      {
+        objective: { type: 'money', amount: 600 },
+        note: 'Have 600 to pay the exchange',
+        progress: 'Six hundred. The exchange does not do favours and neither do I.',
+        done: 'Good. Come and see me and we will get you connected.',
+      },
+      {
+        objective: { type: 'talk', to: 'hollis' },
+        note: 'See Hollis at the Sleeping Hare',
+        progress: 'Back to the inn in Brambleford. Hollis is behind the bar, as ever.',
+      },
+    ],
+    reward: { money: -600, items: [['f_telephone', 1]], rep: 0.1, friendship: ['hollis'] },
+  },
+  {
     id: 'the_usual',
     giver: 'fennel',
     title: 'The Usual',
@@ -584,6 +626,14 @@ export function stepMet(o, st) {
       return st.cafe.rooms.length >= o.count;
     case 'profit':
       return st.bestDayProfit >= o.amount;
+    // Seats you have had at once rather than seats you have now: taking a
+    // chair out for a week should not undo having built the place up.
+    case 'money':
+      return st.money >= o.amount;
+    case 'seatsEver':
+      return (st.flags.most_seats || 0) >= o.count;
+    case 'gross':
+      return (st.bestDayGross || 0) >= o.amount;
     case 'rarecat':
       return st.cats.some((c) => { const b = st.breedInfo(c.breed); return b && b.rare; });
     case 'furniture':
@@ -632,6 +682,9 @@ function stepText(o, st, step) {
     case 'coat': return "Raise a cat's coat with good food";
     case 'rooms': return `Build another room (${st.cafe.rooms.length}/${o.count})`;
     case 'profit': return `Clear ${o.amount} profit in a day (best: ${Math.round(st.bestDayProfit)})`;
+    case 'money': return `Save up ${o.amount} (${Math.min(st.money, o.amount)}/${o.amount})`;
+    case 'seatsEver': return `Have ${o.count} seats in the cafe (${Math.min(st.flags.most_seats || 0, o.count)}/${o.count})`;
+    case 'gross': return `Take ${o.amount} in a single day (best: ${Math.round(st.bestDayGross || 0)})`;
     case 'rarecat': return 'Own a rare breed';
     case 'furniture': return `Put ${placeName(o.place)} in the cafe`;
     default: return '';

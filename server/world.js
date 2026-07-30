@@ -14,6 +14,7 @@ export const FIELDS = new Set([
   'money', 'reputation', 'inventory', 'stock', 'cats', 'cafe', 'flags', 'quests', 'questStep',
   'friends', 'workers', 'materials', 'employee', 'shopOpen', 'shopHours',
   'visited', 'mail', 'pendingLetters', 'bestDayProfit', 'totalCustomers', 'daysPlayed',
+  'deliveries',
 ]);
 
 /**
@@ -70,6 +71,25 @@ export function applyOp(world, op) {
       if (op.state === 'active' && world.quests[id]) return [];
       world.quests[id] = op.state;
       return ['quests'];
+    }
+    // Orders taken over the phone, added and cleared one at a time. Sending
+    // the whole list would let two players who each answered a call overwrite
+    // one another's order, which is the same mistake whole-map quest writes
+    // were making.
+    case 'deliveryAdd': {
+      const d = op.d;
+      if (!d || !d.id) return [];
+      world.deliveries ||= [];
+      if (world.deliveries.some((x) => x.id === d.id)) return [];
+      world.deliveries.push(d);
+      return ['deliveries'];
+    }
+    case 'deliveryDone': {
+      const id = String(op.id || '');
+      if (!id || !world.deliveries) return [];
+      const before = world.deliveries.length;
+      world.deliveries = world.deliveries.filter((x) => x.id !== id);
+      return world.deliveries.length === before ? [] : ['deliveries'];
     }
     // Steps only ever go forward. A client that is a moment behind must not be
     // able to drag everybody back to where it thinks they are.

@@ -5,7 +5,7 @@
 import { GameMap } from './tilemap.js';
 import { T, OUTDOOR_FLOORS } from '../art/tiles.js';
 import { SHOPS, BOOKS } from './places.js';
-import { makeRng } from '../engine/util.js';
+import { makeRng, hashStr } from '../engine/util.js';
 import { OBJECTS } from '../art/objects.js';
 
 // Windows hang on the wall rather than standing on the floor. The natural
@@ -189,6 +189,55 @@ export function buildShopInterior(shopId) {
 // Special interiors
 // ---------------------------------------------------------------------------
 
+/**
+ * Somebody's front room. One of a handful of layouts chosen by the house's id,
+ * so the same cottage is always the same cottage inside, and furnished from a
+ * short list — these are places you visit for thirty seconds with a bag of
+ * cake, not places to explore.
+ */
+export function buildHouseInterior(id) {
+  const rng = makeRng(hashStr(id));
+  const w = 11 + rng.int(3), h = 9 + rng.int(2);
+  const floors = [T.FLOOR_WOOD, T.FLOOR_STONE, T.RUG, T.CARPET_GREEN];
+  const map = new GameMap(`house:${id}`, w + 4, h + 5, {
+    kind: 'indoor', name: 'A cottage', fill: T.VOID, music: 'cafe',
+    ambience: { indoor: 0.5 },
+  });
+  const room = { x: 2, y: 3, w, h };
+  wallInRooms(map, [room], floors[rng.int(floors.length)]);
+  const doorX = room.x + Math.floor(room.w / 2);
+  const doorY = room.y + room.h;
+  map.set(doorX, doorY, map.get(doorX, doorY - 1));
+  map.addObject('doormat', doorX, doorY, { flat: true });
+  map.addWarp(doorX, doorY, 'overworld', 0, 0, { sound: 'door' });
+  map.spawn = { x: doorX, y: doorY - 1 };
+
+  // Somewhere to sit, something to look at, a fire more often than not.
+  map.addObject('windowIn', room.x + 2, room.y - 1, { offY: WALL_MOUNT });
+  map.addObject('windowIn', room.x + room.w - 3, room.y - 1, { offY: WALL_MOUNT });
+  if (rng.chance(0.7)) map.addObject('painting', room.x + Math.floor(room.w / 2), room.y - 1, { offY: WALL_MOUNT, variant: rng.int(3) });
+  const kit = ['sofa', 'tableRound', 'chair', 'bookshelf', 'plantPot', 'lampIn', 'catBed', 'fireplace'];
+  const spots = [];
+  for (let y = room.y + 1; y < room.y + room.h - 1; y += 2) {
+    for (let x = room.x + 1; x < room.x + room.w - 2; x += 3) spots.push({ x, y });
+  }
+  for (let i = spots.length - 1; i > 0; i--) {
+    const j = rng.int(i + 1);
+    [spots[i], spots[j]] = [spots[j], spots[i]];
+  }
+  const many = 4 + rng.int(3);
+  for (let i = 0; i < many && i < spots.length; i++) {
+    const type = kit[rng.int(kit.length)];
+    map.addObject(type, spots[i].x, spots[i].y, {
+      variant: rng.int(3),
+      lightR: type === 'lampIn' || type === 'fireplace' ? 70 : undefined,
+    });
+  }
+  map.lights.push({ x: (room.x + room.w / 2) * 16, y: (room.y + room.h / 2) * 16, r: 120, color: '#ffdcae' });
+  map.meta = { house: id, room, door: { x: doorX, y: doorY } };
+  return map;
+}
+
 export function buildSpecialInterior(id) {
   if (id === 'oldmill') {
     const map = new GameMap('shop:oldmill', 17, 14, { kind: 'indoor', name: 'The Old Mill', fill: T.VOID, music: 'night', ambience: { indoor: 0.4, water: 0.35 } });
@@ -320,6 +369,8 @@ export function buildCafeMap(cafe) {
       // to be able to tell a bar stool from a sofa.
       for (let i = 0; i < slots; i++) seats.push({ x: x + i, y, taken: null, type: f.type });
     }
+    // The telephone answers when you talk to it, like anybody else in here.
+    if (f.type === 'phone') map.setInteract(x, y, { kind: 'phone' });
     if (f.type.startsWith('table') || f.type.startsWith('patioTable')
       || f.type === 'bar' || f.type === 'umbrella') tables.push({ x, y, w: o.tw });
     // The canopy keeps the rain off what is under it, which is the whole
@@ -367,8 +418,3 @@ export function buildCafeMap(cafe) {
   return map;
 }
 
-function hashStr(s) {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
-  return h >>> 0;
-}

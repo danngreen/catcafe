@@ -897,6 +897,29 @@ export class AudioEngine {
       case 'brush':
         this.noiseHit(dest, { t0: t, dur: 0.22, gain: 0.07 * vol, type: 'bandpass', freq: 2200, sweepTo: 3400, q: 0.9, attack: 0.05 });
         break;
+      case 'ring': {
+        // A bell phone: two hammers on two slightly different bells, struck
+        // fast, twice, with a gap. The beat between the two pitches is what
+        // makes it a bell rather than a beep.
+        for (let burst = 0; burst < 2; burst++) {
+          const t0 = t + burst * 0.42;
+          for (let i = 0; i < 14; i++) {
+            const ti = t0 + i * 0.022;
+            for (const f of [1180, 1560]) {
+              const osc = c.createOscillator();
+              osc.type = 'triangle';
+              osc.frequency.value = f * pitch * (1 + (i % 2) * 0.004);
+              const gn = c.createGain();
+              gn.gain.setValueAtTime(0.0001, ti);
+              gn.gain.linearRampToValueAtTime(0.045 * vol, ti + 0.004);
+              gn.gain.exponentialRampToValueAtTime(0.0001, ti + 0.05);
+              osc.connect(gn); gn.connect(dest);
+              osc.start(ti); osc.stop(ti + 0.07);
+            }
+          }
+        }
+        break;
+      }
       case 'quest':
         [67, 72, 76, 79].forEach((n, i) =>
           this.fmVoice(dest, { t0: t + i * 0.09, freq: mtof(n), ratio: 3, index: 2, dur: 0.2, release: 0.5, gain: 0.08 * vol }));

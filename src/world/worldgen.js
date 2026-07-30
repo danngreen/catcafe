@@ -110,8 +110,9 @@ export function generateWorld(seed = 20240724) {
   // ------------------------------------------------------------------- towns
   const towns = {};
   const doors = [];
+  const houses = [];              // every cottage you can knock on
   for (const spec of TOWNS) {
-    towns[spec.id] = stampTown(map, spec, elev, reserved, rng, doors, seed);
+    towns[spec.id] = stampTown(map, spec, elev, reserved, rng, doors, seed, houses);
   }
 
   // ------------------------------------------------------------------- roads
@@ -171,7 +172,7 @@ export function generateWorld(seed = 20240724) {
 
   map.indexObjects();
 
-  return { map, towns, doors, landmarks, barriers, elev, inland };
+  return { map, towns, doors, houses, landmarks, barriers, elev, inland };
 }
 
 // ---------------------------------------------------------------------------
@@ -403,7 +404,7 @@ function tidyBridges(map) {
 
 const HOUSE_WALLS = ['#efe2c8', '#e8dcc2', '#f0e4cc', '#dfe6e8', '#e6d9bd'];
 
-function stampTown(map, spec, elev, reserved, rng, doors, seed) {
+function stampTown(map, spec, elev, reserved, rng, doors, seed, houseList = []) {
   const { x: ox, y: oy, w, h } = spec;
   const terraced = spec.id === 'hollowdown';
 
@@ -553,13 +554,22 @@ function stampTown(map, spec, elev, reserved, rng, doors, seed) {
     const v = rng.int(4);
     const roof = spec.style.roofs[rng.int(spec.style.roofs.length)];
     const wall = HOUSE_WALLS[rng.int(HOUSE_WALLS.length)];
-    const spr = buildingSprite({
+    // Cottages are real addresses now: each one has an id, a door you can
+    // walk through, and a light that comes on when somebody inside is waiting
+    // for a delivery. The sprite config stays on the building so the lit
+    // version can be baked from it later.
+    const cfg = {
       tw, wall, roof, roofStyle: rng.chance(0.22) ? 'thatch' : rng.chance(0.2) ? 'gable' : 'tile',
       timbered: spec.style.timbered && rng.chance(0.55),
       wallH: 26, roofH: 22, windows: 2, v,
-    });
-    map.addBuilding(spr, pl.x, py, tw, 2, {});
-    map.setInteract(pl.x + Math.floor(tw / 2), py + 1, { kind: 'sign', text: 'A cottage. Someone is definitely home, but they are definitely not answering.' });
+    };
+    const id = `house:${spec.id}:${houses}`;
+    const b = map.addBuilding(buildingSprite(cfg), pl.x, py, tw, 2, { data: { house: id } });
+    if (b) b.cfg = cfg;
+    const dx = pl.x + Math.floor(tw / 2);
+    map.setInteract(dx, py + 1, { kind: 'door', house: id, name: 'A cottage' });
+    map.addObject('doormat', dx, py + 1, { flat: true });
+    houseList.push({ id, x: dx, y: py + 1, town: spec.id, name: `A cottage in ${spec.name}` });
   }
 
   // --- street furniture ---
