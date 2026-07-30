@@ -32,7 +32,7 @@ import {
   timeFraction, timeLeft, expired,
 } from './game/deliveries.js';
 import { BOOK_BY_ID } from './world/places.js';
-import { QUESTS, QUESTS_BY_GIVER, objectiveMet, questSteps, currentStep,
+import { QUESTS, QUESTS_BY_GIVER, objectiveMet, questSteps, currentStep, repairLostItems,
   stepIndex, isLastStep, progressText, objectiveText, repairAllSteps } from './game/quests.js';
 
 import { Dialogue, Hud, Fader, panel, panelTitle, dim, cursor } from './ui/core.js';
@@ -110,7 +110,12 @@ export const SEARCH_SPOTS = {
     };
   },
   pier_mud: (st) => {
-    if (st.has('golden_collar') || st.flags.got_collar) {
+    // The collar is the only one in the valley and this is the only place it
+    // comes from, so the mud gives it up again to anybody who still needs it.
+    // Refusing on the strength of "you found it once" leaves a player who has
+    // lost it with nowhere left to look.
+    const stillWanted = st.quests?.lane_end_hedge === 'active' && !st.has('golden_collar');
+    if (!stillWanted) {
       return { text: 'Mud, rope, and the ribs of a boat nobody has thought about in a long time.', sfx: 'splash' };
     }
     if (!st.flags.read_town_history) {
@@ -2033,10 +2038,20 @@ class Game {
   }
 
   repairQuests() {
-    const moved = repairAllSteps(this.state);
-    if (!moved) return;
-    this.hud.toast(moved === 1 ? 'Your journal was out of date. Fixed.'
-      : `${moved} journal entries were out of date. Fixed.`, 'good', 6);
+    const st = this.state;
+    // Put back anything one-of-a-kind that has gone astray before working out
+    // where the player has got to — a step that wants the collar cannot be
+    // judged while the collar is missing.
+    const found = repairLostItems(st, (id, n) => {
+      st.give(id, n);
+      this.hud.toast(`${st.itemName(id)} turned up again — check your bag.`, 'good', 7);
+    });
+    const moved = repairAllSteps(st);
+    if (!moved && !found) return;
+    if (moved) {
+      this.hud.toast(moved === 1 ? 'Your journal was out of date. Fixed.'
+        : `${moved} journal entries were out of date. Fixed.`, 'good', 6);
+    }
     this.refreshQuestMarks();
   }
 

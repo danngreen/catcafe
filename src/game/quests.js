@@ -182,6 +182,7 @@ export const QUESTS = [
     steps: [
       {
         objective: { type: 'flag', flag: 'saw_the_hedge' },
+        evidence: 'saw_the_hedge',
         note: 'Look at the hedge at the end of the lane, after dark',
         progress: 'Go and look at the hedge after dark. It does nothing in daylight — I have '
           + 'stood there checking, repeatedly.',
@@ -200,6 +201,7 @@ export const QUESTS = [
       },
       {
         objective: { type: 'flag', flag: 'read_town_history' },
+        evidence: 'read_town_history',
         note: 'Read about Sir Woofers at the Reading Room in Brambleford',
         progress: 'Read the town history at the Reading Room in Brambleford. Somebody will have '
           + 'written a dead dog down — somebody writes everything down.',
@@ -207,7 +209,12 @@ export const QUESTS = [
           + 'And Saltsouth, according to the margin, is Saltmere.',
       },
       {
+        // The collar is consumed by the very next step, so "are you holding it"
+        // stops being true the moment you hand it over — and then nothing in
+        // the save says you ever did. Without the flag to point at, a player
+        // who got this far could not be moved on or moved back.
         objective: { type: 'item', item: 'golden_collar' },
+        evidence: 'got_collar',
         note: 'Search the mud at the end of Saltmere Pier',
         progress: 'Go to the end of the pier at Saltmere and search the mud under it, not on it.',
         done: 'Two hundred years in the mud, and still bright.',
@@ -226,7 +233,7 @@ export const QUESTS = [
     night: true,
     title: 'Fourteen Species',
     desc: 'Moth counts moths, and has run out of light to count them by.',
-    offer: "You're up. Good. Nobody's ever up.\n\n"
+    offer: "You're up late. Good. Nobody's ever awake this late.\n\n"
       + "I count them, you see. On the lamps. Only the lamps in this town are dreadful and "
       + "half of them are out, and I'm fairly sure I've been counting the same moth eleven times.\n\n"
       + "There's a proper storm lantern to be had at the hardware place up in Hollowdown. "
@@ -725,6 +732,42 @@ export function progressText(q, st) {
  * Only ever moves forward, and only over steps that are genuinely done, so
  * running it on a healthy save changes nothing.
  */
+/**
+ * Has this step been done? Either its objective still reads as satisfied, or a
+ * flag it left behind says so. The second half matters for steps that consume
+ * what they asked for: once the collar is handed over you are not holding it,
+ * and "are you holding the collar" is then false forever.
+ */
+export function stepDone(step, st) {
+  if (step.evidence && st.flags?.[step.evidence]) return true;
+  return stepMet(step.objective, st);
+}
+
+/**
+ * Put back a one-off quest item the player is supposed to have and hasn't.
+ *
+ * Some things exist once in the whole valley — the golden collar is dug out of
+ * the pier and the pier will not do it twice. If the flag says you found it,
+ * the job still wants it, and it is not in your bag, then it went missing to a
+ * bug and the job is unfinishable until it comes back.
+ */
+export function repairLostItems(st, give) {
+  let fixed = 0;
+  for (const q of QUESTS) {
+    if (st.quests[q.id] !== 'active') continue;
+    const steps = questSteps(q);
+    const cur = steps[Math.min(st.questStep?.[q.id] || 0, steps.length - 1)];
+    const o = cur.objective;
+    const want = o.type === 'item' || o.type === 'deliver' ? o.item : null;
+    if (!want || (st.inventory[want] || 0) > 0) continue;
+    const proof = steps.find((s) => s.evidence && s.objective.item === want);
+    if (!proof || !st.flags?.[proof.evidence]) continue;
+    give(want, 1);
+    fixed++;
+  }
+  return fixed;
+}
+
 export function repairStep(q, st) {
   if (st.quests[q.id] !== 'active') return 0;
   const steps = questSteps(q);
@@ -736,7 +779,7 @@ export function repairStep(q, st) {
   // you cannot be holding the collar without having met the dog who wants it.
   let target = 0;
   for (let i = 0; i < steps.length; i++) {
-    if (stepMet(steps[i].objective, st)) target = i + 1;
+    if (stepDone(steps[i], st)) target = i + 1;
   }
   // Never past the last step: finishing a job takes a conversation, and the
   // reward and the closing scene belong to that conversation.

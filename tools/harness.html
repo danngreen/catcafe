@@ -1421,9 +1421,15 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const spots = [...placed];
         const givesFrom = {};
         for (const name of spots) {
+          // A player who is actually on the job: some spots only give a
+          // one-off item up while the quest that wants it is running, which is
+          // correct and would otherwise read as unobtainable.
+          const active = {};
+          for (const qq of QUESTS) active[qq.id] = 'active';
           const probe = {
             clock: { isDark: true },
             flags: { read_town_history: true, saw_the_hedge: true },
+            quests: active,
             has: () => false,
             inventory: {},
           };
@@ -1943,6 +1949,68 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           await wait(4200);
         }
         window.__pass = `showing=${which} deliveries=${st.deliveries.length}`;
+      } else if (SCRIPT === 'hedgestuck') {
+        // The state a real save got into: the collar had been found and handed
+        // over, the step still asked you to go and find it, and the pier would
+        // not give up a second one. Nothing could move it — the only proof the
+        // step had been done was a flag nobody was looking at.
+        const Q = await import('../src/game/quests.js');
+        const { SEARCH_SPOTS } = await import('../src/main.js');
+        const st = g.state;
+
+        st.quests = { lane_end_hedge: 'active' };
+        st.questStep = { lane_end_hedge: 3 };
+        st.flags = { read_town_history: true, got_collar: true, found_pier_mud: true };
+        delete st.inventory.golden_collar;
+        const q = Q.QUESTS.find((x) => x.id === 'lane_end_hedge');
+        const stepOf = () => st.questStep.lane_end_hedge;
+        const said = () => Q.objectiveText(q, st);
+
+        const stuckText = said();
+        const heldBefore = st.inventory.golden_collar || 0;
+        // Without evidence there is nothing to move: prove the old code was
+        // stuck by asking whether the step's own objective reads as done.
+        const objectiveSaysDone = Q.stepMet(q.steps[3].objective, st);
+        const evidenceSaysDone = Q.stepDone(q.steps[3], st);
+
+        // The repair, as the journal runs it.
+        g.repairQuests();
+        await wait(500);
+        const stepAfter = stepOf();
+        const heldAfter = st.inventory.golden_collar || 0;
+        const textAfter = said();
+        const onLastStep = Q.isLastStep(q, st);
+
+        // And the pier is no longer a dead end either: put the state back and
+        // walk up to it, and the mud gives one up.
+        st.questStep.lane_end_hedge = 3;
+        delete st.inventory.golden_collar;
+        const res = SEARCH_SPOTS.pier_mud(st, g);
+        const pierGives = !!(res && res.give && res.give[0] === 'golden_collar');
+        // Once the job is over the mud is just mud again.
+        st.quests.lane_end_hedge = 'done';
+        const doneRes = SEARCH_SPOTS.pier_mud(st, g);
+        const quietAfterwards = !(doneRes && doneRes.give);
+        // And it does not hand out seconds while you are carrying one.
+        st.quests.lane_end_hedge = 'active';
+        st.inventory.golden_collar = 1;
+        const holdingRes = SEARCH_SPOTS.pier_mud(st, g);
+        const noSeconds = !(holdingRes && holdingRes.give);
+
+        window.__hedge = `stuck="${stuckText}" objectiveDone=${objectiveSaysDone}`
+          + ` evidenceDone=${evidenceSaysDone} step ${3}->${stepAfter}`
+          + ` collar ${heldBefore}->${heldAfter} now="${textAfter}" last=${onLastStep}`
+          + ` pierGives=${pierGives} quietAfter=${quietAfterwards} noSeconds=${noSeconds}`;
+        if (!/Search the mud/.test(stuckText)) window.__errors.push('did not reproduce the stuck step: ' + window.__hedge);
+        if (objectiveSaysDone) window.__errors.push('the objective was satisfiable after all: ' + window.__hedge);
+        if (!evidenceSaysDone) window.__errors.push('the flag does not prove the step was done: ' + window.__hedge);
+        if (stepAfter !== 4) window.__errors.push('the repair did not move it on: ' + window.__hedge);
+        if (heldAfter !== 1) window.__errors.push('the lost collar was not put back: ' + window.__hedge);
+        if (!/Sir Woofers/.test(textAfter)) window.__errors.push('the journal still asks for the mud: ' + window.__hedge);
+        if (!onLastStep) window.__errors.push('it is not on the final step: ' + window.__hedge);
+        if (!pierGives) window.__errors.push('the pier still refuses a replacement: ' + window.__hedge);
+        if (!quietAfterwards) window.__errors.push('the pier hands out collars after the job: ' + window.__hedge);
+        if (!noSeconds) window.__errors.push('the pier hands out a second collar: ' + window.__hedge);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -4042,6 +4110,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__voices ? ` ${window.__voices}` : '')
         + (window.__deliv ? ` ${window.__deliv}` : '')
         + (window.__house ? ` ${window.__house}` : '')
+        + (window.__hedge ? ` ${window.__hedge}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')
