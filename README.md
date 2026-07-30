@@ -383,13 +383,29 @@ systemctl status catcafe
 journalctl -u catcafe -f          # what the server is saying
 ```
 
-Check `which node` first and correct `ExecStart` if it is not `/usr/bin/node` —
-a Node installed through nvm lives under your home directory and systemd will
-not find it on `$PATH`.
+**Node 16 or newer**, and check which one you are pointing at:
 
-Two settings are deliberate. `Restart=always` rather than `on-failure`, because
-the server catches SIGTERM to write the valleys out and then exits **0** — a
-clean exit that `on-failure` would not bring back. And there is no
+```bash
+node --version            # the one in your shell
+/usr/bin/node --version   # the one in the service file
+which -a node             # every one you have
+```
+
+These are often not the same version. Distro packages can be years behind, and
+nvm installs under your home where systemd will not look. Whichever you use, put
+its full path in both `ExecStart` and `ExecStartPre`.
+
+The service runs `tools/preflight.cjs` first, which refuses to start on a Node
+too old and says which features are missing. Without it the failure is
+`ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:fs/promises` — true,
+and no help at all. That file is written in the oldest JavaScript here, on
+purpose: it has to run on the Node it is complaining about.
+
+Three settings are deliberate. `Restart=always` rather than `on-failure`,
+because the server catches SIGTERM to write the valleys out and then exits **0**
+— a clean exit that `on-failure` would not bring back. `StartLimitIntervalSec`
+in `[Unit]` and not `[Service]`, which is where older systemd rejects it as an
+unknown key rather than telling you it is in the wrong section. And no
 `ProtectHome`, which most hardening advice suggests and which would hide
 `/home/orangepi` from the service and stop it finding its own code.
 

@@ -4,6 +4,12 @@ Documentation=https://github.com/
 # The server binds every interface, so it does not need to wait for a
 # particular address to come up. network.target is enough.
 After=network.target
+# These two belong in [Unit], not [Service] — systemd will tell you the key is
+# unknown rather than that it is in the wrong section. Keep trying rather than
+# giving up after the default five attempts in ten seconds: a box in the house
+# that retries a bad deploy beats one found quietly dead a week later.
+StartLimitIntervalSec=0
+StartLimitBurst=0
 
 [Service]
 Type=simple
@@ -11,8 +17,15 @@ User=orangepi
 Group=orangepi
 WorkingDirectory=/home/orangepi/catcafe
 
-# Check this with `which node` before trusting it. Node installed through nvm
-# lives under the user's home and systemd will not find it on $PATH.
+# Refuse to start on a Node too old to run this, with a message that says so.
+# Without it the failure is `ERR_UNKNOWN_BUILTIN_MODULE: node:fs/promises`,
+# which is a true statement about an old Node and no help at all.
+ExecStartPre=/usr/bin/node /home/orangepi/catcafe/tools/preflight.cjs
+
+# Check this with `node --version` before trusting the path. The Node in your
+# shell and the Node at /usr/bin/node are often not the same one — a distro
+# package can be years behind, and nvm installs under your home where systemd
+# will not look. Whichever you use, put its full path here and in ExecStartPre.
 ExecStart=/usr/bin/node /home/orangepi/catcafe/server.js
 
 # The port to serve on, and where the valleys are kept. SESSION_SAVE may be an
@@ -28,10 +41,6 @@ Environment=PORT=8080
 # For something meant to stay up, always is the honest setting.
 Restart=always
 RestartSec=5
-# Keep trying rather than giving up after the default five attempts in ten
-# seconds. A bad deploy will loop until it is fixed, which on a box in the
-# house is better than finding it quietly dead a week later.
-StartLimitIntervalSec=0
 
 # Stopping is a save. persist() is synchronous — write to a temp file, rename
 # over the real one — so the handler finishes well inside this.
