@@ -2037,6 +2037,11 @@ class Game {
     return removed;
   }
 
+  /**
+   * Reconcile a save with the world it describes. Only for loading and joining:
+   * in play, a step moving is progress rather than a correction, and saying so
+   * is alarming.
+   */
   repairQuests() {
     const st = this.state;
     // Put back anything one-of-a-kind that has gone astray before working out
@@ -2055,7 +2060,16 @@ class Game {
     this.refreshQuestMarks();
   }
 
-  checkQuestProgress() { this.repairQuests(); this.refreshQuestMarks(); }
+  /**
+   * Something happened in the world that a job might care about. Only the marks
+   * over people's heads change: the step itself moves when you go back and tell
+   * whoever asked, which is where their reply to it lives.
+   *
+   * This used to run the repair, so standing in the stone circle on a brand new
+   * game advanced the step *and* announced that the journal had been out of
+   * date — on a save four minutes old, having done exactly the right thing.
+   */
+  checkQuestProgress() { this.refreshQuestMarks(); }
 
   // ------------------------------------------------------------------ draw
 

@@ -673,7 +673,22 @@ export function objectiveText(q, st) {
   const o = step.objective;
   const n = questSteps(q).length;
   const of = n > 1 ? ` (${stepIndex(q, st) + 1}/${n})` : '';
+  // Done it, but nobody has been told. The step moves when you report back —
+  // their reply to it is half the reason for going — so the journal should ask
+  // for that rather than go on asking for the thing you have already done.
+  if (reportBack(q, st)) return `Go back and tell ${st.villagerName(q.giver)}${of}`;
   return stepText(o, st, step) + of;
+}
+
+/**
+ * Is this step finished and waiting to be handed in? `talk` and `deliver` steps
+ * are finished *by* the conversation, so they are never in this state.
+ */
+export function reportBack(q, st) {
+  if (st.quests[q.id] !== 'active') return false;
+  const o = currentStep(q, st).objective;
+  if (o.type === 'talk' || o.type === 'deliver') return false;
+  return stepMet(o, st);
 }
 
 /** "a piano", "a stone fireplace" — what a `furniture` step is asking for. */
@@ -717,6 +732,9 @@ function stepText(o, st, step) {
 
 /** The line the giver says while you're partway through. */
 export function progressText(q, st) {
+  if (reportBack(q, st)) {
+    return `That part is done. Go and tell ${st.villagerName(q.giver)} about it.`;
+  }
   return currentStep(q, st).progress || q.progress || 'Still on it, then?';
 }
 

@@ -2011,6 +2011,69 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!pierGives) window.__errors.push('the pier still refuses a replacement: ' + window.__hedge);
         if (!quietAfterwards) window.__errors.push('the pier hands out collars after the job: ' + window.__hedge);
         if (!noSeconds) window.__errors.push('the pier hands out a second collar: ' + window.__hedge);
+      } else if (SCRIPT === 'freshstones') {
+        // A brand new game: take Vesper's job, go and stand in the stones, and
+        // the game should not announce that your journal was out of date. It
+        // used to run the repair pass at every flag, so doing the right thing
+        // four minutes into a save read as a correction.
+        const Q = await import('../src/game/quests.js');
+        const { SEARCH_SPOTS } = await import('../src/main.js');
+        const st = g.state;
+        st.quests = { stone_circle: 'active' };
+        st.questStep = { stone_circle: 0 };
+        st.flags = {};
+        st.clock.t = 22 * (1200 / 24);
+        const q = Q.QUESTS.find((x) => x.id === 'stone_circle');
+
+        const before = Q.objectiveText(q, st);
+        g.hud.toasts.length = 0;
+
+        // Stand in the middle of them, exactly as the interact does.
+        g.searchSpot('stones');
+        await wait(600);
+        for (let i = 0; i < 6 && g.dialogue.active; i++) {
+          key('Space', true); await wait(120); key('Space', false); await wait(220);
+        }
+        await wait(400);
+
+        const flagged = !!st.flags.stood_in_stones;
+        const step = st.questStep.stone_circle;
+        const toasts = g.hud.toasts.map((t) => t.text);
+        const criedRepair = toasts.some((t) => /out of date|repair/i.test(t));
+        const after = Q.objectiveText(q, st);
+        const prog = Q.progressText(q, st);
+        const wantsReport = Q.reportBack(q, st);
+
+        // The mark over Vesper's head is how you know to go back.
+        g.refreshQuestMarks();
+        const vesper = g.villagers.find((v) => v.def.id === 'vesper');
+        const marked = !!(vesper && vesper.hasQuestMark);
+
+        // Talking to her is what actually moves it on, and plays her reply.
+        if (vesper) {
+          g.player.x = vesper.x; g.player.y = vesper.y + 8;
+          await wait(200);
+          g.talkTo(vesper);
+          await wait(500);
+          for (let i = 0; i < 8 && g.dialogue.active; i++) {
+            key('Space', true); await wait(120); key('Space', false); await wait(220);
+          }
+        }
+        const stepAfterTalk = st.questStep.stone_circle;
+
+        window.__fresh = `before="${before}" flagged=${flagged} stepAtStones=${step}`
+          + ` repairToast=${criedRepair} toasts=[${toasts.join(' | ')}]`
+          + ` after="${after}" progress="${prog}" wantsReport=${wantsReport}`
+          + ` vesperMarked=${marked} stepAfterTalk=${stepAfterTalk}`;
+        if (!/standing stones/i.test(before)) window.__errors.push('did not start on the stones step: ' + window.__fresh);
+        if (!flagged) window.__errors.push('standing in the stones set no flag: ' + window.__fresh);
+        if (criedRepair) window.__errors.push('a fresh game claimed the journal was out of date: ' + window.__fresh);
+        if (step !== 0) window.__errors.push('the step moved without telling anybody: ' + window.__fresh);
+        if (!wantsReport) window.__errors.push('the step is not waiting to be reported: ' + window.__fresh);
+        if (!/Go back and tell Vesper/.test(after)) window.__errors.push('the journal still asks for what you did: ' + window.__fresh);
+        if (/standing stones/i.test(prog)) window.__errors.push('the progress line still sends you back to the stones: ' + window.__fresh);
+        if (!marked) window.__errors.push('Vesper has no mark to bring you back: ' + window.__fresh);
+        if (stepAfterTalk !== 1) window.__errors.push('telling Vesper did not move it on: ' + window.__fresh);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -4111,6 +4174,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__deliv ? ` ${window.__deliv}` : '')
         + (window.__house ? ` ${window.__house}` : '')
         + (window.__hedge ? ` ${window.__hedge}` : '')
+        + (window.__fresh ? ` ${window.__fresh}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')
