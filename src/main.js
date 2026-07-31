@@ -60,6 +60,19 @@ const RESIDENT_NAMES = [
   'Nettle', 'Havers', 'Muddle', 'Quince', 'Sorrel', 'Pippin', 'Larch',
 ];
 
+/**
+ * Does a job still want this thing, and is it not in the bag?
+ *
+ * Some things exist exactly once in the valley and come from exactly one place.
+ * Gating that place on "you have found it before" turns any loss into a dead
+ * end, because there is nowhere else to go. Gating it on whether the job still
+ * needs it cannot.
+ */
+function stillNeeds(st, questId, item) {
+  if (st.has(item)) return false;                       // one is enough
+  return st.quests?.[questId] !== 'done';               // otherwise it is there
+}
+
 export const SEARCH_SPOTS = {
   bushes: (st) => {
     if (st.clock.isDark) {
@@ -110,12 +123,7 @@ export const SEARCH_SPOTS = {
     };
   },
   pier_mud: (st) => {
-    // The collar is the only one in the valley and this is the only place it
-    // comes from, so the mud gives it up again to anybody who still needs it.
-    // Refusing on the strength of "you found it once" leaves a player who has
-    // lost it with nowhere left to look.
-    const stillWanted = st.quests?.lane_end_hedge === 'active' && !st.has('golden_collar');
-    if (!stillWanted) {
+    if (!stillNeeds(st, 'lane_end_hedge', 'golden_collar')) {
       return { text: 'Mud, rope, and the ribs of a boat nobody has thought about in a long time.', sfx: 'splash' };
     }
     if (!st.flags.read_town_history) {
@@ -139,7 +147,11 @@ export const SEARCH_SPOTS = {
   // nothing that let you pick it up, so the errand that asks for one could
   // never be finished — the same dead end the shell used to be.
   keepers_table: (st) => {
-    if (st.has('logbook') || st.flags.took_logbook) {
+    // Same rule as the pier: the logbook exists once and this is the only
+    // place it comes from, so it is there for anybody who still needs it.
+    // "You took it once" is not a reason to leave somebody with nowhere left
+    // to look — which is exactly how the collar became unfinishable.
+    if (!stillNeeds(st, 'lighthouse_log', 'logbook')) {
       return {
         text: 'The cold cup of tea is still there. Somebody should throw it away. '
           + 'Nobody is going to be the one who does.',

@@ -2011,6 +2011,36 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!pierGives) window.__errors.push('the pier still refuses a replacement: ' + window.__hedge);
         if (!quietAfterwards) window.__errors.push('the pier hands out collars after the job: ' + window.__hedge);
         if (!noSeconds) window.__errors.push('the pier hands out a second collar: ' + window.__hedge);
+
+        // The same rule for every spot that hands over a one-off item: while
+        // the job that wants it is running and your bag has not got it, the
+        // spot gives it up. Anything else is a dead end waiting to happen.
+        const oneOffs = [];
+        for (const [name, fn] of Object.entries(SEARCH_SPOTS)) {
+          // What does this spot give, in the most generous conditions?
+          const open = { clock: { isDark: true }, flags: {}, inventory: {},
+            has: () => false, quests: {} };
+          for (const qq of Q.QUESTS) open.quests[qq.id] = 'active';
+          open.flags = { read_town_history: true, saw_the_hedge: true };
+          const gift = fn(open, g);
+          if (!gift || !gift.give) continue;
+          const item = gift.give[0];
+          const owner = Q.QUESTS.find((qq) => Q.questSteps(qq).some((s2) => s2.objective.item === item));
+          if (!owner) { oneOffs.push(`${name} gives ${item} that no job wants`); continue; }
+          // Having found it before must not be enough to refuse it.
+          const lost = { clock: { isDark: true },
+            flags: { read_town_history: true, saw_the_hedge: true, [`found_${name}`]: true,
+              got_collar: true, took_logbook: true },
+            inventory: {}, has: () => false, quests: { [owner.id]: 'active' } };
+          const again = fn(lost, g);
+          if (!again || !again.give) oneOffs.push(`${name} refuses a replacement ${item}`);
+          // And it must not hand out seconds to somebody carrying one.
+          const holding = { ...lost, has: (id) => id === item, inventory: { [item]: 1 } };
+          const extra = fn(holding, g);
+          if (extra && extra.give) oneOffs.push(`${name} hands out a second ${item}`);
+        }
+        window.__hedge += ` oneOffSpots=[${oneOffs.join(' | ') || 'all sound'}]`;
+        if (oneOffs.length) window.__errors.push('a one-off item can be lost for good: ' + window.__hedge);
       } else if (SCRIPT === 'freshstones') {
         // A brand new game: take Vesper's job, go and stand in the stones, and
         // the game should not announce that your journal was out of date. It
@@ -2074,6 +2104,87 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (/standing stones/i.test(prog)) window.__errors.push('the progress line still sends you back to the stones: ' + window.__fresh);
         if (!marked) window.__errors.push('Vesper has no mark to bring you back: ' + window.__fresh);
         if (stepAfterTalk !== 1) window.__errors.push('telling Vesper did not move it on: ' + window.__fresh);
+      } else if (SCRIPT === 'questwalk') {
+        // Walk every quest from offer to reward at the state level, satisfying
+        // each step the way the world would. Steps that are met passively now
+        // wait to be reported to whoever asked, so this also checks there is
+        // somebody to report to and that they can be got at.
+        const Q = await import('../src/game/quests.js');
+        const { REGULARS } = await import('../src/game/regulars.js');
+        const { VILLAGERS } = await import('../src/world/places.js');
+        const { ITEMS } = await import('../src/game/items.js');
+        const st = g.state;
+        const regulars = new Set(REGULARS.map((r) => r.id));
+
+        // Make the objective true, however the world would have done it.
+        const satisfy = (o) => {
+          switch (o.type) {
+            case 'flag': st.flags[o.flag] = true; return true;
+            case 'item': st.inventory[o.item] = (st.inventory[o.item] || 0) + (o.count || 1); return true;
+            case 'stock': for (const id of o.any) st.cafeSim.addStock(id, o.count, st.clock.day); return true;
+            case 'cats': while (st.cats.length < o.count) st.adoptCat('tabby'); return true;
+            case 'coat': if (!st.cats.length) st.adoptCat('tabby');
+              st.cats.forEach((c) => { c.coatQuality = o.quality; }); return true;
+            case 'rooms': while (st.cafe.rooms.length < o.count) {
+              st.cafe.rooms.push({ x: 40 + st.cafe.rooms.length * 6, y: 0, w: 4, h: 4, name: 'x' });
+            } st.rebuildCafe(); return true;
+            case 'profit': st.bestDayProfit = o.amount; return true;
+            case 'gross': st.bestDayGross = o.amount; return true;
+            case 'money': st.money = o.amount; return true;
+            case 'seatsEver': st.flags.most_seats = o.count; return true;
+            case 'rarecat': st.adoptCat('siamese'); return true;
+            case 'furniture': st.cafe.furniture.push({ type: o.place, x: 2, y: 2, variant: 0 });
+              st.rebuildCafe(); return true;
+            case 'talk': case 'deliver': return true;   // done by conversation
+            default: return false;
+          }
+        };
+
+        const bad = [];
+        const unreachable = [];
+        for (const q of Q.QUESTS) {
+          // A clean slate per quest, so one does not satisfy another by accident.
+          st.quests = {}; st.questStep = {}; st.flags = {}; st.inventory = {};
+          st.stock = {}; st.cats = []; st.money = 5000;
+          st.bestDayProfit = 0; st.bestDayGross = 0;
+          st.cafe.rooms = st.cafe.rooms.slice(0, 1);
+          st.cafe.furniture = st.cafe.furniture.filter((f) => f.type === 'counter');
+          st.rebuildCafe();
+          st.quests[q.id] = 'active';
+          st.questStep[q.id] = 0;
+
+          const steps = Q.questSteps(q);
+          for (let i = 0; i < steps.length; i++) {
+            const o = steps[i].objective;
+            if (!satisfy(o)) { bad.push(`${q.id}[${i}] no way to satisfy ${o.type}`); break; }
+            const cur = st.questStep[q.id] || 0;
+            if (cur !== i) { bad.push(`${q.id}[${i}] step is ${cur}, not ${i}`); break; }
+            const passive = o.type !== 'talk' && o.type !== 'deliver';
+            if (passive && !Q.reportBack(q, st)) {
+              bad.push(`${q.id}[${i}] met but not asking to be reported`);
+              break;
+            }
+            // Whoever you report to has to exist and be gettable at.
+            const who = passive ? q.giver : o.to;
+            const def = VILLAGERS.find((v) => v.id === who);
+            if (!def) { unreachable.push(`${q.id}[${i}] no such person: ${who}`); break; }
+            if (regulars.has(who) && !g.waitingOn(who)) {
+              unreachable.push(`${q.id}[${i}] ${who} is a regular who will not be summoned`);
+            }
+            // The conversation moves it on.
+            if (i === steps.length - 1) st.finishQuest(q.id);
+            else st.setQuestStep(q.id, i + 1);
+          }
+          if (st.quests[q.id] !== 'done' && !bad.some((b) => b.startsWith(q.id))
+            && !unreachable.some((b) => b.startsWith(q.id))) {
+            bad.push(`${q.id} never reached done`);
+          }
+        }
+
+        window.__walk = `quests=${Q.QUESTS.length} stuck=[${bad.join(' | ')}]`
+          + ` unreachable=[${unreachable.join(' | ')}]`;
+        if (bad.length) window.__errors.push('a quest cannot be walked to the end: ' + window.__walk);
+        if (unreachable.length) window.__errors.push('a quest reports to somebody you cannot get at: ' + window.__walk);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -4175,6 +4286,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__house ? ` ${window.__house}` : '')
         + (window.__hedge ? ` ${window.__hedge}` : '')
         + (window.__fresh ? ` ${window.__fresh}` : '')
+        + (window.__walk ? ` ${window.__walk}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')
