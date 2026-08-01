@@ -1,6 +1,6 @@
 [Unit]
 Description=Cat Cafe
-Documentation=https://github.com/
+Documentation=https://github.com/danngreen/catcafe
 # The server binds every interface, so it does not need to wait for a
 # particular address to come up. network.target is enough.
 After=network.target
@@ -17,16 +17,21 @@ User=orangepi
 Group=orangepi
 WorkingDirectory=/home/orangepi/catcafe
 
-# Refuse to start on a Node too old to run this, with a message that says so.
-# Without it the failure is `ERR_UNKNOWN_BUILTIN_MODULE: node:fs/promises`,
-# which is a true statement about an old Node and no help at all.
-ExecStartPre=/usr/bin/node /home/orangepi/catcafe/tools/preflight.cjs
-
-# Check this with `node --version` before trusting the path. The Node in your
-# shell and the Node at /usr/bin/node are often not the same one — a distro
-# package can be years behind, and nvm installs under your home where systemd
-# will not look. Whichever you use, put its full path here and in ExecStartPre.
-ExecStart=/usr/bin/node /home/orangepi/catcafe/server.js
+# Both lines below name the same Node on purpose: the check is only worth
+# anything if it runs on the interpreter the server is about to use.
+#
+# This is nvm's copy, not /usr/bin/node. On orangepi4a /usr/bin/node is 12.22.9,
+# which cannot run this server at all — the distro package is years behind and
+# systemd does not read your shell profile, so it never sees the nvm one unless
+# you spell it out. Find the right path with:
+#
+#   ssh orangepi@… 'readlink -f "$(source ~/.nvm/nvm.sh; nvm which default)"'
+#
+# and note that it has the version number in it: upgrading Node through nvm
+# moves the binary and both of these lines have to move with it. The failure if
+# you forget is `status=203/EXEC`, which does not mention Node at all.
+ExecStartPre=/home/orangepi/.nvm/versions/node/v24.18.0/bin/node /home/orangepi/catcafe/tools/preflight.cjs
+ExecStart=/home/orangepi/.nvm/versions/node/v24.18.0/bin/node /home/orangepi/catcafe/server.js
 
 # The port to serve on, and where the valleys are kept. SESSION_SAVE may be an
 # absolute path or one relative to the repository; leave it unset for
@@ -39,6 +44,12 @@ Environment=PORT=8080
 # `on-failure` would not bring it back from a clean exit, and this server exits
 # 0 on SIGTERM — it catches the signal to write the valleys out before it goes.
 # For something meant to stay up, always is the honest setting.
+#
+# It is also how deploy/push.sh restarts the game without being root. The
+# service runs as orangepi, so an ssh session as orangepi may signal it; the
+# server saves and exits 0, and this line brings it straight back on the new
+# code. If you ever change Restart=, push.sh stops working and the failure is
+# a server that went away and did not come back.
 Restart=always
 RestartSec=5
 
