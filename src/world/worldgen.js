@@ -722,29 +722,45 @@ function placeLandmarks(map, elev, reserved, inland, rng) {
   {
     const wet = (tx, ty) => map.inBounds(tx, ty) && isWater(map.ground[ty * WORLD_W + tx]);
     const DIRS = [[0, 1], [-1, 0], [1, 0], [0, -1]];
+    // How far a pier could run from here in this direction. A three-wide deck
+    // is what we want, so measure that first and fall back to a single file:
+    // a narrow jetty is better than no pier, and no pier means the collar is
+    // buried somewhere that does not exist.
+    const runFrom = (tx, ty, dx, dy, wide) => {
+      let run = 0;
+      while (run < 13) {
+        const nx = tx + dx * (run + 1), ny = ty + dy * (run + 1);
+        if (!wet(nx, ny)) break;
+        if (wide && (!wet(nx - dy, ny + dx) || !wet(nx + dy, ny - dx))) break;
+        run++;
+      }
+      return run;
+    };
+    // Take the best shore in range rather than the first that clears a bar.
+    // Nearly a fifth of valleys had no straight ten-tile channel anywhere near
+    // Saltmere, and got no pier at all — and with it no way to finish the job
+    // that sends you there.
     let best = null;
-    for (let ty = 248; ty < 282 && !best; ty++) {
-      for (let tx = 64; tx < 102 && !best; tx++) {
-        if (wet(tx, ty) || map.blocked[ty * WORLD_W + tx]) continue;
-        for (const [dx, dy] of DIRS) {
-          // Open water, straight out: ten clear tiles with room either side, so
-          // the deck never clips a headland on its way past.
-          let run = 0;
-          while (run < 13
-            && wet(tx + dx * (run + 1), ty + dy * (run + 1))
-            && wet(tx + dx * (run + 1) - dy, ty + dy * (run + 1) + dx)
-            && wet(tx + dx * (run + 1) + dy, ty + dy * (run + 1) - dx)) run++;
-          if (run >= 10) { best = { x: tx, y: ty, dx, dy }; break; }
+    for (const wide of [true, false]) {
+      for (let ty = 244; ty < 292; ty++) {
+        for (let tx = 56; tx < 112; tx++) {
+          if (wet(tx, ty) || map.blocked[ty * WORLD_W + tx]) continue;
+          for (const [dx, dy] of DIRS) {
+            const run = runFrom(tx, ty, dx, dy, wide);
+            if (run < 5) continue;
+            if (!best || run > best.run) best = { x: tx, y: ty, dx, dy, run, wide };
+          }
         }
       }
+      if (best) break;                       // a wide berth beats a long narrow one
     }
     if (best) {
-      const { x, y, dx, dy } = best;
+      const { x, y, dx, dy, wide } = best;
       const px = -dy, py = dx;                    // across the pier
-      const len = 10;
+      const len = Math.min(10, best.run);
       for (let i = 0; i <= len; i++) {
         const tx = x + dx * i, ty = y + dy * i;
-        for (let k = -1; k <= 1; k++) {
+        for (let k = wide ? -1 : 0; k <= (wide ? 1 : 0); k++) {
           const cx = tx + px * k, cy = ty + py * k;
           if (!map.inBounds(cx, cy)) continue;
           const idx = cy * WORLD_W + cx;

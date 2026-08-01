@@ -106,6 +106,11 @@ const BUDGET = {
   hedgestuck: 12000,
   freshstones: 16000,
   questwalk: 16000,
+  piercheck: 90000,
+  hedgewalk: 22000,
+  spotcheck: 60000,
+  coatgoal: 15000,
+  shellchain: 16000,
   delivshot: 14000,
   patioshot: 12000,
   skyshot: 6000,
@@ -127,7 +132,7 @@ const BUDGET = {
 // have broken without running everything. `all` is what to run before a commit.
 const GROUPS = {
   quests: ['ghostquest', 'deliverquest', 'journalstep', 'questrepair', 'ghoststuck',
-    'barriers', 'nightfolk', 'nightplaces', 'questchain', 'logbook', 'hedgestuck', 'freshstones', 'questwalk', 'regular', 'barstool'],
+    'barriers', 'nightfolk', 'nightplaces', 'questchain', 'logbook', 'hedgestuck', 'freshstones', 'questwalk', 'piercheck', 'hedgewalk', 'shellchain', 'spotcheck', 'coatgoal', 'regular', 'barstool'],
   cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers', 'employee',
     'weathercafe', 'hourly'],
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',

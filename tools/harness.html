@@ -2123,8 +2123,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             case 'item': st.inventory[o.item] = (st.inventory[o.item] || 0) + (o.count || 1); return true;
             case 'stock': for (const id of o.any) st.cafeSim.addStock(id, o.count, st.clock.day); return true;
             case 'cats': while (st.cats.length < o.count) st.adoptCat('tabby'); return true;
+            // Comfortably over the bar, not exactly on it: a day rolling over
+            // mid-audit knocks 0.12 off a coat and would fail this for nothing.
             case 'coat': if (!st.cats.length) st.adoptCat('tabby');
-              st.cats.forEach((c) => { c.coatQuality = o.quality; }); return true;
+              st.cats.forEach((c) => { c.coatQuality = o.quality + 0.3; }); return true;
             case 'rooms': while (st.cafe.rooms.length < o.count) {
               st.cafe.rooms.push({ x: 40 + st.cafe.rooms.length * 6, y: 0, w: 4, h: 4, name: 'x' });
             } st.rebuildCafe(); return true;
@@ -2185,6 +2187,229 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           + ` unreachable=[${unreachable.join(' | ')}]`;
         if (bad.length) window.__errors.push('a quest cannot be walked to the end: ' + window.__walk);
         if (unreachable.length) window.__errors.push('a quest reports to somebody you cannot get at: ' + window.__walk);
+      } else if (SCRIPT.startsWith('piercheck')) {
+        // Does every valley get a pier? The collar is buried in its mud, so a
+        // seed without one has a quest that cannot be finished.
+        const { generateWorld } = await import('../src/world/worldgen.js');
+        const seeds = (SCRIPT.split(':')[1] || '').split(',').filter(Boolean).map(Number);
+        const list = seeds.length ? seeds : Array.from({ length: 120 }, (_, i) => 1000 + i * 7919);
+        const missing = [];
+        const unusable = [];
+        const found = [];
+        for (const seed of list) {
+          await wait(0);            // let the page breathe between valleys
+          const w = generateWorld(seed);
+          const pier = w.landmarks.find((l) => l.id === 'pier');
+          if (!pier) { missing.push(seed); continue; }
+          // Present is not enough: you have to be able to stand somewhere and
+          // reach the mud, and the deck has to run out over water.
+          const mud = [...w.map.interacts].filter(([, v]) => v.spot === 'pier_mud');
+          const standable = mud.some(([k]) => {
+            const [mx, my] = k.split(',').map(Number);
+            return [[1, 0], [-1, 0], [0, 1], [0, -1], [0, 0]].some(([dx, dy]) =>
+              w.map.inBounds(mx + dx, my + dy) && !w.map.solid(mx + dx, my + dy));
+          });
+          if (!mud.length) unusable.push(`${seed}:no mud`);
+          else if (!standable) unusable.push(`${seed}:cannot reach the mud`);
+          else found.push(seed);
+        }
+        window.__pier = `checked=${list.length} usable=${found.length}`
+          + ` missing=${missing.length}[${missing.slice(0, 6).join(' ')}]`
+          + ` unusable=${unusable.length}[${unusable.slice(0, 6).join(' ')}]`;
+        if (missing.length) window.__errors.push('some valleys have no pier: ' + window.__pier);
+        if (unusable.length) window.__errors.push('some piers cannot be used: ' + window.__pier);
+      } else if (SCRIPT === 'hedgewalk') {
+        // The hedge, in the world rather than on paper. The ghost stands at it,
+        // and used to swallow every keypress meant for the bushes — so the very
+        // first step of his own errand could not be done.
+        const Q = await import('../src/game/quests.js');
+        const st = g.state;
+        st.quests = { lane_end_hedge: 'active' };
+        st.questStep = { lane_end_hedge: 0 };
+        st.flags = {};
+        st.clock.t = 22 * (1200 / 24);
+        await wait(600);
+
+        const hedge = g.landmarks.find((l) => l.id === 'bushes');
+        const ghost = g.villagers.find((v) => v.def.id === 'woofers');
+        // Where are the bushes searchable from, and is he sitting on one?
+        const spots = [];
+        for (const [k, v] of g.overworld.interacts) {
+          if (v.spot === 'bushes') spots.push(k.split(',').map(Number));
+        }
+        const ghostOnSpot = ghost && spots.some(([sx, sy]) => ghost.tx === sx && ghost.ty === sy);
+        const ghostNear = ghost && spots.some(([sx, sy]) =>
+          Math.hypot(ghost.x - (sx * 16 + 8), ghost.y - ((sy + 1) * 16)) < 26);
+
+        // Walk up and press space at the hedge, the way a player does — with
+        // the ghost stood right at it, which is where he is in most valleys and
+        // where he used to swallow the keypress.
+        const [tx, ty] = spots[0];
+
+        g.player.x = tx * 16 + 8;
+        g.player.y = (ty + 1) * 16 + 8;      // stood on the tile below, looking at it
+        g.player.dir = 'up';
+        g.cam.follow(g.overworld, g.player.x, g.player.y, true);
+        await wait(400);
+        const trace = [];
+        const _talk = g.talkTo.bind(g), _search = g.searchSpot.bind(g);
+        g.talkTo = (v) => { trace.push('talk:' + (v.def ? v.def.id : '?')); return _talk(v); };
+        g.searchSpot = (sp) => { trace.push('search:' + sp); return _search(sp); };
+        // He fades in on his shift; pressing while he is still arriving would
+        // test nothing, because an arriving villager is not a talk target.
+        for (let i = 0; i < 90 && ghost && ghost.shift !== 'here'; i++) await wait(100);
+        // Beside the hedge, not on it — which is where he stands in a real
+        // valley, and near enough to have swallowed every press meant for it.
+        if (ghost) { ghost.x = (tx + 1) * 16 + 8; ghost.y = ty * 16 + 14; }
+        await wait(100);
+        const near = g.villagers.filter((v) => v.shift === 'here'
+          && Math.hypot(v.x - g.player.x, v.y - g.player.y) < 26).map((v) => v.def.id);
+        const inList = g.villagers.indexOf(ghost);
+        const atPress = ghost ? Math.round(Math.hypot(ghost.x - g.player.x, ghost.y - g.player.y)) : -1;
+        g.interact();
+        await wait(600);
+        const spokeTo = g.dialogue.active ? (g.dialogue.speaker || 'nobody') : 'the hedge';
+        for (let i = 0; i < 6 && g.dialogue.active; i++) {
+          key('Space', true); await wait(120); key('Space', false); await wait(200);
+        }
+        const looked = !!st.flags.saw_the_hedge;
+        const nowSays = Q.objectiveText(Q.QUESTS.find((x) => x.id === 'lane_end_hedge'), st);
+
+        g.talkTo = _talk; g.searchSpot = _search;
+        // Report to Button, then the ghost is the next step.
+        const button = g.villagers.find((v) => v.def.id === 'button');
+        if (button) {
+          g.player.x = button.x; g.player.y = button.y + 10;
+          await wait(200);
+          g.talkTo(button);
+          await wait(500);
+          for (let i = 0; i < 8 && g.dialogue.active; i++) {
+            key('Space', true); await wait(120); key('Space', false); await wait(200);
+          }
+        }
+        const afterButton = st.questStep.lane_end_hedge;
+
+        // Now talking to the ghost has to move it on.
+        if (ghost) {
+          g.player.x = ghost.x; g.player.y = ghost.y + 10;
+          await wait(200);
+          g.talkTo(ghost);
+          await wait(500);
+          for (let i = 0; i < 8 && g.dialogue.active; i++) {
+            key('Space', true); await wait(120); key('Space', false); await wait(200);
+          }
+        }
+        const afterGhost = st.questStep.lane_end_hedge;
+
+        window.__hwalk = `spots=${spots.length} ghostAtPress=${atPress} ghostShift=${ghost && ghost.shift} press=[${trace.join("|")}] near=[${near}] idx=${inList} mapId=${g.state.mapId} ghostOnSpot=${ghostOnSpot} ghostNear=${ghostNear}`
+          + ` pressedAndGot="${spokeTo || 'the hedge'}" looked=${looked} says="${nowSays}"`
+          + ` afterButton=${afterButton} afterGhost=${afterGhost}`;
+        if (!spots.length) window.__errors.push('there is no hedge to search: ' + window.__hwalk);
+        if (ghostOnSpot) window.__errors.push('the ghost is stood on the hedge itself: ' + window.__hwalk);
+        if (!looked) window.__errors.push('pressing at the hedge did not look at it: ' + window.__hwalk);
+        if (!/Go back and tell/.test(nowSays)) window.__errors.push('the journal did not ask you to report back: ' + window.__hwalk);
+        if (afterButton !== 1) window.__errors.push('telling Button did not move it on: ' + window.__hwalk);
+        if (afterGhost !== 2) window.__errors.push('talking to the ghost did not move it on: ' + window.__hwalk);
+      } else if (SCRIPT === 'shellchain') {
+        // Shrimp knows where the shell went. Until he has said so out loud,
+        // Moth will not offer the job that ends in one — so his first words
+        // have to be the useful ones.
+        const Q = await import('../src/game/quests.js');
+        const st = g.state;
+        st.quests = {}; st.questStep = {}; st.flags = {};
+        st.clock.t = 22 * (1200 / 24);
+        await wait(500);
+        const moth = Q.QUESTS.find((q) => q.id === 'moth_count');
+        const beforeHearing = g.questAvailable(moth);
+        const shrimp = g.villagers.find((v) => v.def.id === 'shrimp');
+        const said = [];
+        let firstHeard = false, firstOffers = false;
+        for (let n = 0; n < 2 && shrimp; n++) {
+          g.player.x = shrimp.x; g.player.y = shrimp.y + 10;
+          await wait(200);
+          g.talkTo(shrimp);
+          await wait(450);
+          said.push((g.dialogue.pages || []).flat().join(' ').slice(0, 60));
+          for (let i = 0; i < 6 && g.dialogue.active; i++) {
+            key('Space', true); await wait(110); key('Space', false); await wait(180);
+          }
+          if (n === 0) { firstHeard = !!st.flags.heard_hint_shrimp; firstOffers = g.questAvailable(moth); }
+        }
+        const heard = !!st.flags.heard_hint_shrimp;
+        const afterHearing = g.questAvailable(moth);
+        window.__shell = `firstWords="${said[0] || ''}" afterOne heard=${firstHeard} offers=${firstOffers}`
+          + ` afterTwo heard=${heard} mothOffers ${beforeHearing}->${afterHearing}`;
+        if (!shrimp) window.__errors.push('Shrimp is not in the valley: ' + window.__shell);
+        if (beforeHearing) window.__errors.push('Moth offers before Shrimp has said anything: ' + window.__shell);
+        if (!firstHeard) window.__errors.push('one conversation and Shrimp still has not said where it went: ' + window.__shell);
+        if (!firstOffers) window.__errors.push('after asking around, Moth still will not offer his job: ' + window.__shell);
+        if (!/Moth/.test(said[0] || '')) window.__errors.push('Shrimp does not lead with the useful part: ' + window.__shell);
+        if (!afterHearing) window.__errors.push('Moth still will not offer his job: ' + window.__shell);
+      } else if (SCRIPT === 'spotcheck') {
+        // Anybody who belongs at a landmark has to stand *beside* it. Standing
+        // on the tile you press is a lid on it, and the thing they are standing
+        // on is usually the first step of their own errand.
+        const M = await import('../src/main.js');
+        const W = await import('../src/world/worldgen.js');
+        const P = await import('../src/world/places.js');
+        const spotted = P.VILLAGERS.filter((v) => v.spot);
+        const bad = [];
+        let checked = 0, shadowed = 0;
+        for (let n = 0; n < 60; n++) {
+          const seed = 1727014200 + n * 7919;
+          const w = W.generateWorld(seed);
+          for (const def of spotted) {
+            const l = w.landmarks.find((k) => k.id === def.spot);
+            if (!l) continue;
+            checked++;
+            const at = M.spotBeside(w.map, l);
+            if (!at) { bad.push(`${def.id}@${seed}:nowhere`); continue; }
+            if (w.map.interactAt(at.x, at.y)) bad.push(`${def.id}@${seed}:on-a-trigger`);
+            if (w.map.solid(at.x, at.y)) bad.push(`${def.id}@${seed}:in-a-wall`);
+            // How often are they close enough to have stolen the keypress?
+            for (const [k, v] of w.map.interacts) {
+              if (v.spot !== def.spot) continue;
+              const [ix, iy] = k.split(',').map(Number);
+              const px = ix * 16 + 8, py = (iy + 2) * 16 - 2;   // where you would stand
+              if (Math.hypot((at.x * 16 + 8) - px, ((at.y + 1) * 16 - 2) - py) < 26) { shadowed++; break; }
+            }
+          }
+          await wait(0);
+        }
+        window.__spot = `placed=${checked} inTheWay=${shadowed} bad=${bad.length}[${bad.slice(0, 4)}]`;
+        if (!checked) window.__errors.push('nobody has a landmark to stand at: ' + window.__spot);
+        if (bad.length) window.__errors.push('somebody is stood on what they want you to press: ' + window.__spot);
+      } else if (SCRIPT === 'coatgoal') {
+        // A coat you cannot grow is a quest you cannot finish. Feed a cat on
+        // each tier for a month using the real nightly upkeep, and see how
+        // glossy it can actually get.
+        const E = await import('../src/game/entities.js');
+        const I = await import('../src/game/items.js');
+        const Q = await import('../src/game/quests.js');
+        const tiers = Object.entries(I.ITEMS)
+          .filter(([, it]) => it.quality && it.portions)
+          .map(([id, it]) => [id, it.quality]);
+        const ceiling = {};
+        for (const [id, q] of tiers) {
+          const c = new E.Cat({ breed: 'tabby', name: 't' });
+          for (let d = 0; d < 30; d++) c.advanceDay(q, false);
+          ceiling[id] = Math.round(c.coatQuality * 100) / 100;
+        }
+        const best = Math.max(...Object.values(ceiling));
+        const bad = [];
+        for (const q of Q.QUESTS) {
+          for (const step of Q.questSteps(q)) {
+            const o = step.objective;
+            if (o.type !== 'coat') continue;
+            if (o.quality > best) bad.push(`${q.id} wants ${o.quality}, best food gives ${best}`);
+            // And the note has to name a food that can do it.
+            const named = Object.entries(ceiling).filter(([id, v]) =>
+              v >= o.quality && new RegExp(I.ITEMS[id].name.split(' ').pop(), 'i').test(q.progress || ''));
+            if (!named.length) bad.push(`${q.id} does not name a food that reaches ${o.quality}`);
+          }
+        }
+        window.__coat = `ceilings=${JSON.stringify(ceiling)} bad=${bad.length}[${bad}]`;
+        if (bad.length) window.__errors.push('a coat cannot be grown that far: ' + window.__coat);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -4287,6 +4512,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__hedge ? ` ${window.__hedge}` : '')
         + (window.__fresh ? ` ${window.__fresh}` : '')
         + (window.__walk ? ` ${window.__walk}` : '')
+        + (window.__pier ? ` ${window.__pier}` : '')
+        + (window.__hwalk ? ` ${window.__hwalk}` : '')
+        + (window.__shell ? ` ${window.__shell}` : '')
+        + (window.__spot ? ` ${window.__spot}` : '')
+        + (window.__coat ? ` ${window.__coat}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

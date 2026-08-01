@@ -33,7 +33,7 @@ const PAIRS = [
 const SETUP = {
   // Ask the server for another valley, so there is a 002 to point at.
   async newgame() {
-    const res = await fetch(`http://localhost:${process.env.PORT || 8080}/games/new`, { method: 'POST' });
+    const res = await fetch(`http://localhost:${PORT}/games/new`, { method: 'POST' });
     return res.json();
   },
 };
@@ -58,6 +58,27 @@ function run(scenario, hold = 0, game = null) {
     p.on('close', () => resolve(out));
   });
 }
+
+// Every pair starts its own server on this port, with saving off, so each one
+// begins in an empty valley. If something is already listening there we would
+// silently test against *that* instead — a server that has been up all evening
+// full of somebody's money, which fails these checks in a way that reads like a
+// bug in the game. Say so instead of spending an hour on it.
+const PORT = Number(process.env.PORT || 8080);
+try {
+  const res = await fetch(`http://localhost:${PORT}/games`, { signal: AbortSignal.timeout(1500) });
+  if (res.ok) {
+    console.error(`Something is already serving on port ${PORT}.
+
+These checks need a server of their own — one with no saved valleys in it. The
+one that is up has whatever state it has accumulated, and the money and player
+counts these pairs assert on will not match.
+
+  lsof -nP -iTCP:${PORT} -sTCP:LISTEN     # what it is
+  PORT=8137 BASE=http://localhost:8137 node tools/pairs.js   # or just move`);
+    process.exit(2);
+  }
+} catch { /* nothing there: exactly what we want */ }
 
 let failed = 0;
 for (const pair of pairs) {

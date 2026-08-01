@@ -73,6 +73,26 @@ function stillNeeds(st, questId, item) {
   return st.quests?.[questId] !== 'done';               // otherwise it is there
 }
 
+/**
+ * Where to stand somebody who belongs at a landmark.
+ *
+ * Beside the thing, not on it — a hedge is solid, and standing somebody inside
+ * one leaves them unable to reach their own spot ever again. And not on top of
+ * anything you might want to press: somebody standing on an interact tile is a
+ * lid on it, which is how the ghost at the hedge spent a release making the
+ * first step of his own errand impossible to do.
+ */
+export function spotBeside(map, l) {
+  for (const [ox, oy] of [[1, 1], [-1, 1], [2, 0], [-2, 0], [1, 0], [-1, 0], [0, 1], [0, 0]]) {
+    const nx = l.x + ox, ny = l.y + oy;
+    if (map.solid(nx, ny)) continue;
+    if (map.interactAt(nx, ny)) continue;
+
+    return { x: nx, y: ny };
+  }
+  return null;
+}
+
 export const SEARCH_SPOTS = {
   bushes: (st) => {
     if (st.clock.isDark) {
@@ -462,14 +482,9 @@ class Game {
       // Some of the cast belong somewhere in particular — a ghost is only
       // interesting if it is haunting the hedge somebody complained about.
       if (def.spot) {
-        // Beside the thing, not on it. A hedge is solid, and standing somebody
-        // inside one leaves them unable to reach their own spot ever again.
         const l = this.landmarks.find((k) => k.id === def.spot);
-        if (l) {
-          for (const [ox, oy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [1, 1], [-1, 1], [2, 0], [-2, 0]]) {
-            if (!this.overworld.solid(l.x + ox, l.y + oy)) { x = l.x + ox; y = l.y + oy; break; }
-          }
-        }
+        const at = l && spotBeside(this.overworld, l);
+        if (at) { x = at.x; y = at.y; }
       }
       if (x === undefined && def.town && this.towns[def.town]) {
         const tw = this.towns[def.town];
@@ -1429,13 +1444,19 @@ class Game {
       const d = Math.hypot(v.x - this.player.x, v.y - this.player.y);
       if (d < bestD) { bestD = d; best = v; }
     }
-    if (best) { this.talkTo(best); return; }
+    // Whatever you are pointed at beats whoever happens to be standing nearby.
+    // The ghost at the hedge stands close enough to the bushes to win every
+    // press, which made the hedge — the first step of his own errand —
+    // unreachable, so his quest could never start.
+    const facing = map.interactAt(f.x, f.y);
+    const onIt = best && best.tx === f.x && best.ty === f.y;
+    if (best && (!facing || onIt)) { this.talkTo(best); return; }
 
     // Then whatever tile we're facing, or the one we're standing on. Pass the
     // tile the trigger was actually found on — doors record it as the spot to
     // put you back on when you come out, and the facing tile is the wall.
     let tile = f;
-    let it = map.interactAt(f.x, f.y);
+    let it = facing;
     if (!it) {
       tile = { x: this.player.tx, y: this.player.ty };
       it = map.interactAt(tile.x, tile.y);
@@ -1909,7 +1930,12 @@ class Game {
     let line;
     const roll = Math.random();
     const heardHint = st.flags[`heard_hint_${def.id}`];
-    if (def.hint && !heardHint && v.lineIndex >= 1) {
+    // Somebody whose hint is the only way on gets it out at once. Shrimp knows
+    // where the shell went, and until he has said so Moth will not raise the
+    // job that ends in it — so hearing his chatter first and his hint second
+    // left the errand looking broken from both ends.
+    const gating = QUESTS.some((q) => q.needsHint === def.id && !st.quests[q.id]);
+    if (def.hint && !heardHint && (gating || v.lineIndex >= 1)) {
       // Anyone with something genuinely useful to say gets it out by the second
       // conversation, rather than hiding it behind an invisible friendship roll.
       line = def.hint;
@@ -1942,7 +1968,7 @@ class Game {
     // unaided — you have to have heard from Shrimp that it went to him. Without
     // this the shell errand sends you to a beach that has not had a shell on it
     // in years, which is where it used to end.
-    if (q.id === 'moth_count' && !st.flags.heard_hint_shrimp) return false;
+    if (q.needsHint && !st.flags[`heard_hint_${q.needsHint}`]) return false;
     return true;
   }
 

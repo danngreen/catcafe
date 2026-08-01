@@ -115,10 +115,10 @@ export const QUESTS = [
     giver: 'suds',
     title: 'Show Me a Silky Coat',
     desc: 'Suds wants to see what proper food does to a cat, not just grooming.',
-    objective: { type: 'coat', quality: 1.35 },
+    objective: { type: 'coat', quality: 1.12 },
     reward: { money: 240, items: [['brush', 1]], hint: 'fish' },
-    offer: "Everyone thinks grooming is the whole story. It isn't. Food's half of it.\n\nFeed your cats properly for a few days — real food, not kibble — and bring one back to me.",
-    progress: 'Feed a cat good food or fresh fish for a few days running. Kibble will not do it.',
+    offer: "Everyone thinks grooming is the whole story. It isn't. Food's half of it.\n\nFeed your cats fish or the gourmet tins for a few days — the cheap stuff will not show — and bring one back to me.",
+    progress: 'Feed a cat fresh fish or gourmet tins for a few days running. Kibble and good food will not do it.',
     complete: "*Now* look at that. That's what I'm talking about.\n\nTake a brush — do them between visits. And go and see Kelp in Saltmere about fish. Before noon, mind.",
   },
   {
@@ -231,6 +231,10 @@ export const QUESTS = [
     id: 'moth_count',
     giver: 'moth',
     night: true,
+    // Moth will not raise this until Shrimp has said where the shell went —
+    // otherwise the shell errand sends you to a beach that has not had one on
+    // it in years.
+    needsHint: 'shrimp',
     title: 'Fourteen Species',
     desc: 'Moth counts moths, and has run out of light to count them by.',
     offer: "You're up late. Good. Nobody's ever awake this late.\n\n"
