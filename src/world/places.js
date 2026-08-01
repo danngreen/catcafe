@@ -437,6 +437,13 @@ export const VILLAGERS = [
       'Careful down by the hedges after midnight. No reason.'] },
   { id: 'woofers', name: 'Sir Woofers', town: 'brambleford', species: 'dog', coat: 'white',
     cloth: '#a8c8e8', role: 'ghost', when: 'night', ghost: true, spot: 'bushes',
+    // Nobody sees him until they have looked in the hedge and told Button what
+    // they saw. A ghost dog ambling up the lane every night in plain view is
+    // not something anybody needs to discover, and an errand that has you find
+    // one after a fortnight of waving at it reads as nonsense. Until then the
+    // hedge just moves.
+    secret: (st) => (st.questStep?.lane_end_hedge || 0) >= 1
+      || st.quests?.lane_end_hedge === 'done',
     lines: ['*an extremely old dog, made mostly of moonlight, snuffling along the hedge*',
       'I have lost something. I have been losing it for rather a long time.',
       'It was gold. It was mine. They put my name on it.'] },

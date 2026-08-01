@@ -61,7 +61,14 @@ export const QUESTS = [
     offer: "Your place needs a *thing*. An object. Something with a story.\n\n"
       + "A big spiral shell, that's what. There was one down at Saltmere — I'd ask about "
       + "rather than go looking, mind. That beach has been picked over since before I was born.",
-    progress: 'Ask around Saltmere about a big spiral shell. Somebody down there had one.',
+    // Asking around *is* the job until somebody answers. Shrimp is the one who
+    // knows, and once he has said so the note has to say where the shell went —
+    // it is a whole errand away by then, and nobody remembers a line of
+    // dialogue from two towns ago.
+    progress: (st) => (st.flags.heard_hint_shrimp
+      ? 'Shrimp says Moth has the shell. Moth is a small grey mouse in Brambleford, '
+        + 'out after dark counting moths on the lamps. Go and see what he wants for it.'
+      : 'Ask around Saltmere about a big spiral shell. Somebody down there had one.'),
     complete: "Perfect. Absolutely perfect.\n\nHere, have this fern too. Trust me on the fern.",
   },
   {
@@ -739,7 +746,11 @@ export function progressText(q, st) {
   if (reportBack(q, st)) {
     return `That part is done. Go and tell ${st.villagerName(q.giver)} about it.`;
   }
-  return currentStep(q, st).progress || q.progress || 'Still on it, then?';
+  // A note may be written as a function of the world, for jobs whose next move
+  // depends on something you have been told. "Ask around Saltmere" is the right
+  // note until somebody down there answers, and quite the wrong one afterwards.
+  const p = currentStep(q, st).progress || q.progress;
+  return (typeof p === 'function' ? p(st) : p) || 'Still on it, then?';
 }
 
 /**

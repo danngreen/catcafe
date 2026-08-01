@@ -511,14 +511,44 @@ class Game {
       v.burrow = this.burrowFor(x, y);
       this.villagers.push(v);
     }
+    this.secretVillagers = this.villagers.filter((v) => v.def.secret);
     // Start the right crowd out, without walking anybody anywhere.
     const dark = this.state.clock.isDark;
     for (const v of this.villagers) {
-      const on = v.when === 'always' || (v.when === 'night') === dark;
+      const on = (v.when === 'always' || (v.when === 'night') === dark) && this.found(v);
       v.shift = on ? 'here' : 'away';
       v.alpha = on ? 1 : 0;
     }
     this.wasDark = dark;
+  }
+
+  /**
+   * Is this one of the cast the player has actually found yet?
+   *
+   * Most people are simply in the valley. A few are not there at all until
+   * something has happened — see the ghost in places.js. `away` is how the
+   * shift machinery already says "not in the valley right now", so a villager
+   * nobody has found is held in exactly that state: not drawn, not talked to,
+   * not walking about in front of the quest that has you find them.
+   */
+  found(v) {
+    return !v.def.secret || !!v.def.secret(this.state);
+  }
+
+  /**
+   * Somebody may become findable at any moment — the ghost the instant you tell
+   * Button what you saw. Shifts only turn over at dusk and dawn, which would
+   * leave him missing from his own hedge for the rest of the night.
+   */
+  updateFound() {
+    for (const v of this.secretVillagers || []) {
+      const out = this.found(v);
+      if (!out) {
+        if (v.shift !== 'away') { v.shift = 'away'; v.alpha = 0; v.target = null; }
+      } else if (v.shift === 'away' && (v.when === 'night') === this.state.clock.isDark) {
+        v.setShift(true);                      // walks in from the treeline
+      }
+    }
   }
 
   /**
@@ -551,10 +581,12 @@ class Game {
    * sleeping through a night or having the day rolled by somebody else.
    */
   updateVillagerShift() {
+    this.updateFound();
     const dark = this.state.clock.isDark;
     if (dark === this.wasDark) return;
     this.wasDark = dark;
     for (const v of this.villagers) {
+      if (!this.found(v)) continue;
       if (v.when === 'always') continue;
       v.setShift((v.when === 'night') === dark);
     }
@@ -1858,6 +1890,31 @@ class Game {
 
   // ------------------------------------------------------------- dialogue
 
+  /**
+   * Write down that somebody has told us their one useful thing.
+   *
+   * A hint is not just a line of dialogue: quests read these flags, and some
+   * jobs will not be offered until the hint that explains them has been heard.
+   * A player who hears it and then forgets is left with a journal that still
+   * says "ask around" — so if the note changed, say so, because the journal is
+   * where you look when you have forgotten what somebody said.
+   */
+  recordHint(id) {
+    const st = this.state;
+    const before = this.journalLines();
+    st.flags[`heard_hint_${id}`] = true;
+    st.touch('flags');
+    if (this.journalLines() !== before) {
+      this.hud.toast('Your journal is updated.', 'good', 5);
+    }
+  }
+
+  /** Every active job's note, as one string — for telling whether one moved. */
+  journalLines() {
+    return QUESTS.filter((q) => this.state.quests[q.id] === 'active')
+      .map((q) => progressText(q, this.state)).join('|');
+  }
+
   talkTo(v) {
     const st = this.state;
     const def = v.def;
@@ -1935,14 +1992,17 @@ class Game {
     // job that ends in it — so hearing his chatter first and his hint second
     // left the errand looking broken from both ends.
     const gating = QUESTS.some((q) => q.needsHint === def.id && !st.quests[q.id]);
-    if (def.hint && !heardHint && (gating || v.lineIndex >= 1)) {
+    if (def.hint && (!heardHint && (gating || v.lineIndex >= 1) || roll < 0.2)) {
       // Anyone with something genuinely useful to say gets it out by the second
       // conversation, rather than hiding it behind an invisible friendship roll.
+      //
+      // Every telling counts, including the ones that come up by chance. The
+      // second branch used to speak the hint without recording it, so a player
+      // could be told in as many words where the shell went and have the world
+      // still hold that they had never asked.
       line = def.hint;
-      st.flags[`heard_hint_${def.id}`] = true;
-      st.touch('flags');
-    } else if (def.hint && roll < 0.2) line = def.hint;
-    else if (roll < 0.16) line = GOSSIP[Math.floor(Math.random() * GOSSIP.length)];
+      if (!heardHint) this.recordHint(def.id);
+    } else if (roll < 0.16) line = GOSSIP[Math.floor(Math.random() * GOSSIP.length)];
     else {
       line = def.lines[v.lineIndex % def.lines.length];
       v.lineIndex++;
