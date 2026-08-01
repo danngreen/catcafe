@@ -2763,6 +2763,48 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           key('KeyX', true); await wait(160); key('KeyX', false);
         }
         await wait(900);
+      } else if (SCRIPT === 'netnewvalley') {
+        // Make a valley, play it a little, then make another one. The second
+        // must not offer to continue the first: they share a browser and a
+        // single save slot, and "Continue" used to mean "pour whatever is in
+        // that slot into whichever valley you are stood in" — which handed a
+        // brand new seed an old cafe's money, cats and quest log.
+        const { NetClient } = await import('../src/net/client.js');
+        const { GameState } = await import('../src/game/state.js');
+
+        // A save belonging to some other valley, which is the state a player is
+        // in the moment they have played anything at all.
+        g.state.worldSeed = 111222333;
+        g.state.money = 9999;
+        g.state.save();
+        const savedSeed = JSON.parse(localStorage.getItem('catcafe.save.v1')).seed;
+
+        const made = await NetClient.newGame();
+        const ok = await g.enterGame(made.id);
+        await wait(700);
+        const scr = g.screens[g.screens.length - 1];
+        const opts = (scr && scr.options) || [];
+        const freshSeed = g.worldSeed;
+
+        // And the case worth keeping: this browser's save *is* this valley's,
+        // which is what a server that forgot a valley looks like from here.
+        g.state.worldSeed = g.worldSeed;
+        g.state.save();
+        const again = new (scr.constructor)(g);
+        const optsSame = again.options || [];
+
+        window.__newv = `joined=${ok} savedSeed=${savedSeed} valleySeed=${freshSeed}`
+          + ` offers=[${opts}] whenItIsOurs=[${optsSame}]`;
+        if (!ok) window.__errors.push('could not join the new valley: ' + window.__newv);
+        if (savedSeed !== 111222333) window.__errors.push('the save does not say which valley it is: ' + window.__newv);
+        if (freshSeed === savedSeed) window.__errors.push('the new valley is the old one: ' + window.__newv);
+        if (opts.includes('Continue')) {
+          window.__errors.push('a brand new valley offers to continue an old one: ' + window.__newv);
+        }
+        if (!opts.includes('New game')) window.__errors.push('nothing to do in a new valley: ' + window.__newv);
+        if (!optsSame.includes('Continue')) {
+          window.__errors.push('will not pick up a valley this browser saved: ' + window.__newv);
+        }
       } else if (SCRIPT === 'netlobby') {
         // With more than one valley on the server you get asked which. The
         // stats belong to the highlighted row and are always on show, because
@@ -4517,6 +4559,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__shell ? ` ${window.__shell}` : '')
         + (window.__spot ? ` ${window.__spot}` : '')
         + (window.__coat ? ` ${window.__coat}` : '')
+        + (window.__newv ? ` ${window.__newv}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

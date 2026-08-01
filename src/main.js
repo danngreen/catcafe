@@ -2598,7 +2598,15 @@ class TitleScreen extends Screen {
     this.game = game;
     this.stage = 'title';
     this.index = 0;
-    this.options = GameState.hasSave() ? ['Continue', 'New game'] : ['New game'];
+    // Continue means "pick this valley back up", not "pour in whatever this
+    // browser played last". In a session the valley has a seed and the save has
+    // to match it: a new valley is new, and the only thing to do in one is
+    // start. The one case this keeps is the useful one — a valley the server
+    // has forgotten but this browser has not, where Continue hands it back.
+    const mine = game.net.connected
+      ? GameState.hasSave(game.worldSeed)
+      : GameState.hasSave();
+    this.options = mine ? ['Continue', 'New game'] : ['New game'];
     // Whatever this browser played as last time, so the usual answer is just
     // to press Space.
     const me = loadMe();

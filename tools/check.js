@@ -110,6 +110,7 @@ const BUDGET = {
   hedgewalk: 22000,
   spotcheck: 60000,
   coatgoal: 15000,
+  netnewvalley: 20000,
   shellchain: 16000,
   delivshot: 14000,
   patioshot: 12000,
@@ -144,7 +145,7 @@ const GROUPS = {
   // Single-process networked runs. The paired ones need two browsers at once
   // and are listed in the README rather than here.
   net: ['net', 'netmobile', 'netbooks', 'netclock', 'netdrop', 'netforget',
-    'netpollbooks', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbydel', 'netlobbyone', 'solo'],
+    'netpollbooks', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbydel', 'netlobbyone', 'netnewvalley', 'solo'],
   slow: ['netidle', 'netping', 'netmute', 'netpollquiet', 'netidletitle'],
 };
 GROUPS.all = [...new Set([

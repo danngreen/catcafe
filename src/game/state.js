@@ -422,6 +422,12 @@ export class GameState {
   save() {
     const data = {
       v: 1,
+      // Which valley this is a save of. A browser has one slot and a server can
+      // have half a dozen valleys, so without this the slot means no more than
+      // "whatever was played last on this machine" — and Continue means "paste
+      // that into whichever valley you are standing in", which is how a brand
+      // new valley used to open with an old cafe's money, cats and quests in it.
+      seed: this.worldSeed,
       clock: this.clock.save(),
       money: this.money,
       reputation: this.reputation,
@@ -457,8 +463,20 @@ export class GameState {
     }
   }
 
-  static hasSave() {
-    try { return !!localStorage.getItem(SAVE_KEY); } catch { return false; }
+  /**
+   * Is there a save worth offering to continue?
+   *
+   * Called with a seed, the answer is only yes if the save is of *that* valley.
+   * Called without one — solo play, where there is only ever the one world —
+   * any save will do, including saves written before they carried a seed.
+   */
+  static hasSave(seed) {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return false;
+      if (seed === undefined) return true;
+      return JSON.parse(raw).seed === seed;
+    } catch { return false; }
   }
 
   static clearSave() {
