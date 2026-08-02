@@ -21,10 +21,13 @@ import { buildShopInterior, buildSpecialInterior, buildHouseInterior } from './w
 import { SHOPS, VILLAGERS, TOWNS, GOSSIP, PLAYER_NAMES } from './world/places.js';
 
 import { GameState, seedStartingInventory } from './game/state.js';
-import { Player, Villager, RemotePlayer, Employee, canStand } from './game/entities.js';
+import { Player, Villager, RemotePlayer, Employee, canStand, Bear, riderOffset,
+  WALK_SPEED, RUN_SPEED } from './game/entities.js';
 import { HIRE_BY_ID } from './game/cafe.js';
 import { ITEMS, STOCK, FLEA_POOL, baseId } from './game/items.js';
 import { shopOpen, hoursText, HOUR_SECONDS, DAY_FULL } from './game/time.js';
+import { BEAR_PRICE, BEAR_AFTER_DELIVERIES, BEAR_FOOD, BEAR_SPEED, BEAR_RUN,
+  fedToday, rideable, deliverySpot, bearPrompt } from './game/bear.js';
 import { weatherNow, weatherAmbience, weatherLight, weatherLine, WeatherFx } from './game/weather.js';
 import { REGULARS, REGULAR_BY_ID, dueNow } from './game/regulars.js';
 import {
@@ -39,7 +42,7 @@ import { Dialogue, Hud, Fader, panel, panelTitle, dim, cursor } from './ui/core.
 import { SAFE, safeCenterX } from './engine/safe.js';
 import {
   Screen, ShopScreen, CatShopScreen, ServiceScreen, BuilderScreen,
-  CafeScreen, JournalScreen, BagScreen, MapScreen, SummaryScreen, PauseScreen,
+  CafeScreen, JournalScreen, BagScreen, MapScreen, SummaryScreen, PauseScreen, ConfirmScreen,
 } from './ui/menus.js';
 import { BuildScreen } from './ui/build.js';
 import { TaxiFlight, StairWalk } from './ui/cutscene.js';
@@ -227,6 +230,8 @@ class Game {
 
     this.safe = SAFE;   // measured control insets, handy when debugging layout
     this.net = net;
+    this.bear = null;         // the actor, built from the books when she exists
+    this.riding = false;
     this.remotes = new Map();
     // Boot is async now (it waits for the session's seed), so anything that
     // wants a built world has something to await.
@@ -766,6 +771,192 @@ class Game {
     setTimeout(() => this.reloadPage(), 250);
   }
 
+
+
+  /**
+   * Drover Bell, and the only five-thousand-pound decision in the game.
+   *
+   * Sold once, ever: there is one bear, and buying her a second time would be
+   * buying the one you are already standing next to. Afterwards he asks after
+   * her instead, which is the only thing he actually cares about.
+   */
+  offerBear(def, v, finish) {
+    const st = this.state;
+    if (st.bear) {
+      const lines = def.sold || ['She is yours now.'];
+      this.dialogue.say(lines[v.lineIndex++ % lines.length], { speaker: def.name, onDone: finish });
+      return;
+    }
+    const canPay = st.money >= BEAR_PRICE;
+    const pitch = 'That is her. She is nine years old, she is entirely reliable, and she has '
+      + 'never once been in a hurry.\n\n'
+      + `${money(BEAR_PRICE)}. One fresh fish a day and she will carry you anywhere in this `
+      + 'valley, water included.'
+      + (canPay ? '' : `\n\nYou have ${money(st.money)}. Come back when you have the rest.`);
+    this.dialogue.say(pitch, {
+      speaker: def.name,
+      onDone: () => {
+        finish();
+        if (!canPay) { audio.sfx('error'); return; }
+        this.push(new ConfirmScreen({
+          title: 'Buy the riding bear?',
+          lines: [`${money(BEAR_PRICE)} — you have ${money(st.money)}`,
+            'There is only one of her.'],
+          yes: 'Buy her',
+          no: 'Not today',
+          onYes: () => this.completeBearSale(def),
+        }));
+      },
+    });
+  }
+
+  /** Paid for. He walks her over while you walk home. */
+  completeBearSale(def) {
+    const st = this.state;
+    if (st.bear || st.money < BEAR_PRICE) { audio.sfx('error'); return; }
+    st.spend(BEAR_PRICE);
+    const door = this.homeDoor || { x: 100, y: 180 };
+    const at = deliverySpot(door);
+    st.buyBear(at.x * TILE + TILE / 2, (at.y + 1) * TILE - 2, 'overworld');
+    audio.sfx('levelup', { gain: 0.7 });
+    this.dialogue.say('Right. I will walk her over myself — she does not like carts.\n\n'
+      + 'She will be outside your place by the time you get back. Do not run home. '
+      + 'She will be there.',
+    { speaker: def.name });
+    this.hud.toast('Drover Bell is walking the bear to your cafe.', 'good', 7);
+  }
+
+  // ------------------------------------------------------------- the bear
+  //
+  // One bear, one valley. She is kept in the shared books as a position and a
+  // feeding day; the actor that ambles about is built from that whenever the
+  // books say she exists, and put back into them whenever she is left
+  // somewhere new. Riding is local — the rider is a player, and players are
+  // already synchronised — so the only thing co-op has to agree about is where
+  // she was last put down.
+
+  updateBear(dt) {
+    const st = this.state;
+    if (!st.bear) { this.bear = null; return; }
+    if (!this.bear) {
+      this.bear = new Bear(st.bear.x, st.bear.y);
+      this.bear.moveTo(st.bear.x, st.bear.y);
+    }
+    // Somebody else rode her across the valley: she is where their books say.
+    if (!this.riding && !this.bear.ridden
+      && (Math.abs(this.bear.home.x - st.bear.x) > 24 || Math.abs(this.bear.home.y - st.bear.y) > 24)) {
+      this.bear.moveTo(st.bear.x, st.bear.y);
+    }
+    // While she is being ridden her position is the rider's, and Actor.draw
+    // keeps the two in step — there is nothing to update here.
+    if (this.riding) return;
+    if (st.mapId !== (st.bear.map || 'overworld')) return;
+    const pan = clamp((this.bear.x - this.cam.x - VIEW_W / 2) / (VIEW_W / 2), -1, 1);
+    this.bear.update(dt, this.overworld, { pan });
+  }
+
+  /** Near enough to talk to her, and on the same map. */
+  bearInReach() {
+    const st = this.state;
+    if (!this.bear || this.riding || !st.bear) return false;
+    if (st.mapId !== (st.bear.map || 'overworld')) return false;
+    return Math.hypot(this.bear.x - this.player.x, this.bear.y - this.player.y) < 30;
+  }
+
+  /** Fish about your person or on the pantry shelf — either will do. */
+  fishToHand() {
+    const st = this.state;
+    return (st.inventory[BEAR_FOOD] || 0) + st.cafeSim.stockCount(BEAR_FOOD);
+  }
+
+  takeFish() {
+    const st = this.state;
+    if ((st.inventory[BEAR_FOOD] || 0) > 0) { st.take(BEAR_FOOD, 1); return true; }
+    if (st.cafeSim.stockCount(BEAR_FOOD) > 0) { st.cafeSim.takeStock(BEAR_FOOD, 1); return true; }
+    return false;
+  }
+
+  /**
+   * Space, next to the bear. Feeds her if she has not eaten, gets on if she
+   * has, and says so if there is no fish anywhere.
+   */
+  useBear() {
+    const st = this.state;
+    if (fedToday(st.bear, st.clock)) { this.mountBear(); return; }
+    if (!this.takeFish()) {
+      this.hud.toast('She looks at you, then at your empty hands. Fresh fish.', 'info', 5);
+      audio.sfx('ui_back');
+      return;
+    }
+    st.feedBear(st.clock.day);
+    audio.sfx('rasp', { gain: 0.6, pitch: 0.5 });
+    this.bear.pose = 'sniff';
+    this.bear.stateT = 3;
+    this.hud.toast('She takes the whole fish in one go. That will do until morning.', 'good', 5);
+    this.mountBear();
+  }
+
+  mountBear() {
+    const st = this.state;
+    this.riding = true;
+    this.bear.ridden = true;
+    this.player.mounted = true;
+    this.player.mount = this.bear;
+    this.player.swims = true;               // she does; you are only cargo
+    this.player.speed = BEAR_SPEED;
+    this.player.runSpeed = BEAR_RUN;
+    // Start from her feet rather than yours, so you do not mount from two
+    // tiles away and appear to be riding the air beside her.
+    this.player.x = this.bear.x;
+    this.player.y = this.bear.y;
+    audio.sfx('rasp', { gain: 0.5, pitch: 0.4 });
+    this.hud.toast('Up you get. Space to get down again.', 'good', 5);
+  }
+
+  dismountBear() {
+    const st = this.state;
+    if (!this.riding) return;
+    this.riding = false;
+    this.player.mounted = false;
+    this.player.mount = null;
+    this.player.swims = false;
+    this.player.speed = WALK_SPEED;
+    this.player.runSpeed = RUN_SPEED;
+    // Get off onto something you can stand on. In the middle of the river
+    // there is nowhere, so she carries you to the nearest bank first.
+    const spot = this.dryLandNear(this.player.x, this.player.y);
+    this.player.x = spot.x;
+    this.player.y = spot.y;
+    this.bear.ridden = false;
+    this.bear.moveTo(spot.x, spot.y);
+    this.state.parkBear(spot.x, spot.y, this.state.mapId);
+    audio.sfx('step', { gain: 0.6 });
+    if (spot.swam) this.hud.toast('She wades out and lets you off on the bank.', 'info', 4);
+  }
+
+  /**
+   * The nearest place a person could be left standing. Getting off in the
+   * middle of deep water would strand you inside a tile you cannot walk out
+   * of — the one way this bear could genuinely break a game.
+   */
+  dryLandNear(x, y) {
+    if (canStand(this.currentMap, x, y, false)) return { x, y, swam: false };
+    for (let r = TILE; r <= TILE * 12; r += TILE / 2) {
+      for (let a = 0; a < 16; a++) {
+        const t = (a / 16) * Math.PI * 2;
+        const nx = x + Math.cos(t) * r, ny = y + Math.sin(t) * r;
+        if (canStand(this.currentMap, nx, ny, false)) return { x: nx, y: ny, swam: true };
+      }
+    }
+    return { x, y, swam: false };
+  }
+
+  /** Draw her under the rider, and the rider on top, as one animal. */
+  drawRiddenBear(ctx) {
+    if (!this.riding || !this.bear) return;
+    this.bear.draw(ctx, this.cam.ox, this.cam.oy);
+  }
+
   // ---------------------------------------------------------------- loop
 
   frame(ts) {
@@ -841,6 +1032,7 @@ class Game {
     this.updateCafeSim(dt);
     this.updateEmployee(dt);
     this.updateRegulars(dt);
+    this.updateBear(dt);
     this.updatePhone(dt);
     this.updateDeliveries(dt);
     this.updateWeather(dt);
@@ -985,6 +1177,9 @@ class Game {
   regularWelcome(def) {
     const st = this.state;
     if (!st.inCafe) return false;
+    // Somebody who comes with news comes when there is news, once, and stops
+    // coming when they have delivered it — not on the visiting rota.
+    if (def.arrives) return !!def.arrives(st);
     return dueNow(def, this.worldSeed, st.clock, this.waitingOn(def.id));
   }
 
@@ -1157,6 +1352,8 @@ class Game {
     const s = settle(d, (id) => st.cafeSim.stockCount(id));
     for (const id of s.brought) st.cafeSim.takeStock(id, 1);
     if (s.total) st.earn(s.total);
+    // Turning up empty-handed is not a delivery, whatever the journal says.
+    if (s.brought.length) st.countDelivery();
     st.clearDelivery(d.id);
     // Take them out of the room, so the front room is empty on the way back.
     const map = this.currentMap;
@@ -1490,6 +1687,14 @@ class Game {
     const map = this.currentMap;
     const f = this.player.facingTile();
 
+    // Getting off takes priority over everything: it is the same key that got
+    // you on, and while you are up there nothing else is in reach anyway.
+    if (this.riding) { this.dismountBear(); return; }
+    // She is put down beside your own front door, so she must not swallow the
+    // press meant for it: whatever you are pointed at wins, exactly as it does
+    // for people standing in front of things.
+    if (this.bearInReach() && !map.interactAt(f.x, f.y)) { this.useBear(); return; }
+
     // Serving a waiting customer takes priority — it's time-sensitive.
     // No confirmation blip here. Answering an ask has two outcomes and they
     // are supposed to sound different; a cheerful "click" on the way in made
@@ -1714,6 +1919,10 @@ class Game {
   }
 
   openDoor(it, tile) {
+    // Nobody takes a bear indoors. She waits outside, which is also where you
+    // will want her when you come back out.
+    if (this.riding) this.dismountBear();
+
     const st = this.state;
     // Somebody's front door. Every cottage opens; the only ones with anything
     // in them are the ones expecting a delivery.
@@ -2011,6 +2220,10 @@ class Game {
       }
     }
 
+    // 4b. The one thing in the valley that is sold by a person rather than a
+    // counter. Too big for a shop and too singular for a stock list.
+    if (def.sells === 'bear') { this.offerBear(def, v, finish); return; }
+
     // 5. Ordinary chatter, with the odd hint or piece of gossip.
     let line;
     const roll = Math.random();
@@ -2019,7 +2232,8 @@ class Game {
     // where the shell went, and until he has said so Moth will not raise the
     // job that ends in it — so hearing his chatter first and his hint second
     // left the errand looking broken from both ends.
-    const gating = QUESTS.some((q) => q.needsHint === def.id && !st.quests[q.id]);
+    const gating = QUESTS.some((q) => q.needsHint === def.id && !st.quests[q.id])
+      || def.tellsFirst;
     if (def.hint && (!heardHint && (gating || v.lineIndex >= 1) || roll < 0.2)) {
       // Anyone with something genuinely useful to say gets it out by the second
       // conversation, rather than hiding it behind an invisible friendship roll.
@@ -2238,6 +2452,12 @@ class Game {
     for (const r of this.remotes.values()) {
       if (r.mapId === st.mapId) actors.push(r);
     }
+    // She sorts with everything else when she is lounging about. When she is
+    // being ridden she is drawn as part of the rider instead — see Renderer,
+    // which asks an actor for what goes underneath it.
+    if (this.bear && !this.riding && st.mapId === (st.bear?.map || 'overworld')) {
+      actors.push(this.bear);
+    }
 
     // Weather takes light out of the day on top of the hour, and colours what
     // is left: fog goes pale, rain and snow go blue.
@@ -2302,6 +2522,10 @@ class Game {
           : st.cafeSim.stockCount(c.order) > 0 ? `Serve ${want}` : `Out of ${want}`;
         break;
       }
+    }
+    if (!label && this.riding) label = 'Get down';
+    if (!label && this.bearInReach() && !map.interactAt(f.x, f.y)) {
+      label = bearPrompt(st.bear, st.clock, this.fishToHand());
     }
     if (!label) {
       const list = st.mapId === 'overworld' ? this.villagers : (map.villagers || []);

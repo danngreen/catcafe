@@ -41,7 +41,7 @@ export class Room {
 
   /** Public view of a player, as sent to clients. */
   static describe(p) {
-    return { id: p.id, n: p.name, look: p.look, x: p.x, y: p.y, dir: p.dir, map: p.map };
+    return { id: p.id, n: p.name, look: p.look, x: p.x, y: p.y, dir: p.dir, map: p.map, up: !!p.up };
   }
 
   attach(ws) {
@@ -50,7 +50,7 @@ export class Room {
       number: this.nextNumber++,
       name: null,                 // set by the join message
       look: null,
-      x: 0, y: 0, dir: 'down', frame: 0, map: 'overworld',
+      x: 0, y: 0, dir: 'down', frame: 0, map: 'overworld', up: false,
       joined: false,
       lastSeen: Date.now(),
       ws,
@@ -129,6 +129,7 @@ export class Room {
         player.dir = msg.dir || 'down';
         player.frame = msg.frame | 0;
         player.map = String(msg.map || 'overworld');
+        player.up = !!msg.up;                 // riding the bear
         break;
       }
       // The first player to start play hands us the world they built. Later
@@ -319,13 +320,13 @@ export class Room {
     // Only people who have actually moved. Standing about is the common case,
     // and it used to cost fifteen messages a second per player to say so.
     const moved = joined.filter((p) => {
-      const key = `${Math.round(p.x)},${Math.round(p.y)},${p.dir},${p.frame},${p.map}`;
+      const key = `${Math.round(p.x)},${Math.round(p.y)},${p.dir},${p.frame},${p.map},${p.up ? 1 : 0}`;
       if (p.lastPos === key) return false;
       p.lastPos = key;
       return true;
     });
     if (!moved.length) return;
-    const pos = moved.map((p) => [p.id, Math.round(p.x), Math.round(p.y), p.dir, p.frame, p.map]);
+    const pos = moved.map((p) => [p.id, Math.round(p.x), Math.round(p.y), p.dir, p.frame, p.map, p.up ? 1 : 0]);
     const text = JSON.stringify({ t: 'pos', p: pos });
     for (const p of joined) p.ws.send(text);
   }

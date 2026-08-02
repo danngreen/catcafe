@@ -42,6 +42,11 @@ export class GameState {
     this.mapId = 'overworld';
     this.visited = {};          // place id -> true
     this.deliveries = [];       // orders taken over the phone, not yet run
+    this.deliveriesRun = 0;     // how many have actually been carried somewhere
+    // The riding bear, once she has been bought: where she was last left, and
+    // which day she was last fed. Shared, because there is one of her and a
+    // valley can have two players — whoever rides her last is where she is.
+    this.bear = null;
     this.bestDayProfit = 0;
     this.bestDayGross = 0;      // best day's takings before costs
     this.totalCustomers = 0;
@@ -161,6 +166,8 @@ export class GameState {
       workers: this.workers, materials: this.materials, employee: this.employee,
       shopOpen: this.shopOpen, shopHours: this.shopHours, visited: this.visited,
       deliveries: this.deliveries,
+      deliveriesRun: this.deliveriesRun,
+      bear: this.bear,
       mail: this.mail, pendingLetters: this.pendingLetters,
       bestDayProfit: this.bestDayProfit, bestDayGross: this.bestDayGross,
       totalCustomers: this.totalCustomers,
@@ -417,6 +424,43 @@ export class GameState {
     return summary;
   }
 
+
+  // ---------------------------------------------------------------- the bear
+
+  /**
+   * She has been bought and walked over. One bear per valley, ever — the
+   * drover only has the one, and 5000 is a lot of money to spend twice.
+   */
+  buyBear(x, y, mapId = 'overworld') {
+    if (this.bear) return false;
+
+    this.bear = { x, y, map: mapId, fedDay: -1 };
+    this.flags.bought_the_bear = true;
+    this.touch('bear');
+    this.touch('flags');
+    return true;
+  }
+
+  /** Where she was left standing, so she is there tomorrow and for everyone. */
+  parkBear(x, y, mapId = 'overworld') {
+    if (!this.bear) return;
+    this.bear = { ...this.bear, x: Math.round(x), y: Math.round(y), map: mapId };
+    this.touch('bear');
+  }
+
+  /** One fish, one day, and she will carry you until morning. */
+  feedBear(day) {
+    if (!this.bear) return;
+    this.bear = { ...this.bear, fedDay: day };
+    this.touch('bear');
+  }
+
+  /** A delivery actually carried somewhere, which is what the drover counts. */
+  countDelivery() {
+    this.deliveriesRun++;
+    this.touch('deliveriesRun');
+  }
+
   // ------------------------------------------------------------ save/load
 
   save() {
@@ -445,6 +489,8 @@ export class GameState {
       shopOpen: this.shopOpen,
       shopHours: this.shopHours,
       visited: this.visited,
+      deliveriesRun: this.deliveriesRun,
+      bear: this.bear,
       bestDayProfit: this.bestDayProfit,
       totalCustomers: this.totalCustomers,
       daysPlayed: this.daysPlayed,
@@ -506,6 +552,8 @@ export class GameState {
     this.shopHours = data.shopHours || [8, 18];
     this.visited = data.visited || {};
     this.deliveries = data.deliveries || [];
+    this.deliveriesRun = data.deliveriesRun || 0;
+    this.bear = data.bear || null;
     this.bestDayProfit = data.bestDayProfit || 0;
     this.bestDayGross = data.bestDayGross || 0;
     this.totalCustomers = data.totalCustomers || 0;

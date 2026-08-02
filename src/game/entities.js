@@ -1,8 +1,8 @@
 // Actors. Positions are in pixels with the origin at the character's feet, so
 // the y coordinate doubles as the sort key for overlapping.
 
-import { TILE, T } from '../art/tiles.js';
-import { charSprite, catSprite, emoteSprite, orderBubble, CHAR_W, CHAR_H, CAT_W, CAT_H, villagerLook, CAT_BREEDS } from '../art/chars.js';
+import { TILE, T, isLiquid } from '../art/tiles.js';
+import { charSprite, catSprite, emoteSprite, orderBubble, bearSprite, bearSaddle, CHAR_W, CHAR_H, CAT_W, CAT_H, BEAR_W, BEAR_H, villagerLook, CAT_BREEDS } from '../art/chars.js';
 import { makeRng, clamp } from '../engine/util.js';
 import { audio } from '../engine/audio.js';
 import { drawTextCentered } from '../engine/font.js';
@@ -16,29 +16,44 @@ const rng = makeRng(0x51a7);
 const HALF_W = 5;
 const FOOT_H = 6;
 
-function tileFree(map, px, py) {
+/** On your own two feet. Named because getting off a bear has to restore them. */
+export const WALK_SPEED = 62;
+export const RUN_SPEED = 104;
+
+function tileFree(map, px, py, swims) {
   const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
-  return !map.solid(tx, ty);
+  if (!map.solid(tx, ty)) return true;
+  // A bear treats the river as ground. Only the water, mind: the pier posts and
+  // the rocks in it are blocked separately and stay blocked, or she would swim
+  // through the harbour wall.
+  return !!swims && !map.blockedAt?.(tx, ty) && isLiquid(map.get(tx, ty));
 }
 
-/** Can a body with our footprint stand centred on these pixel coords? */
-export function canStand(map, x, y) {
-  return tileFree(map, x - HALF_W, y - FOOT_H)
-    && tileFree(map, x + HALF_W, y - FOOT_H)
-    && tileFree(map, x - HALF_W, y - 1)
-    && tileFree(map, x + HALF_W, y - 1);
+/**
+ * Can a body with our footprint stand centred on these pixel coords?
+ *
+ * `swims` is carried on the actor rather than passed around, because the one
+ * thing that swims is also the thing being ridden, and the rider's movement
+ * code has no idea it is on a bear.
+ */
+export function canStand(map, x, y, swims = false) {
+  return tileFree(map, x - HALF_W, y - FOOT_H, swims)
+    && tileFree(map, x + HALF_W, y - FOOT_H, swims)
+    && tileFree(map, x - HALF_W, y - 1, swims)
+    && tileFree(map, x + HALF_W, y - 1, swims);
 }
 
 /** Move with axis separation so you slide along walls instead of sticking. */
 export function moveActor(map, a, dx, dy) {
   let moved = false;
+  const sw = !!a.swims;
   if (dx !== 0) {
     const nx = a.x + dx;
-    if (canStand(map, nx, a.y)) { a.x = nx; moved = true; }
+    if (canStand(map, nx, a.y, sw)) { a.x = nx; moved = true; }
     else {
       // Nudge round shallow corners — makes doorways feel forgiving.
       for (const slip of [-3, 3]) {
-        if (canStand(map, nx, a.y + slip) && canStand(map, a.x, a.y + slip)) {
+        if (canStand(map, nx, a.y + slip, sw) && canStand(map, a.x, a.y + slip, sw)) {
           a.x = nx; a.y += slip * 0.35; moved = true; break;
         }
       }
@@ -46,10 +61,10 @@ export function moveActor(map, a, dx, dy) {
   }
   if (dy !== 0) {
     const ny = a.y + dy;
-    if (canStand(map, a.x, ny)) { a.y = ny; moved = true; }
+    if (canStand(map, a.x, ny, sw)) { a.y = ny; moved = true; }
     else {
       for (const slip of [-3, 3]) {
-        if (canStand(map, a.x + slip, ny) && canStand(map, a.x + slip, a.y)) {
+        if (canStand(map, a.x + slip, ny, sw) && canStand(map, a.x + slip, a.y, sw)) {
           a.y = ny; a.x += slip * 0.35; moved = true; break;
         }
       }
@@ -165,8 +180,8 @@ export class Player extends Actor {
   constructor(x, y, look) {
     super(x, y);
     this.look = look || { species: 'cat', coat: 'ginger', cloth: '#5b8fd6' };
-    this.speed = 62;
-    this.runSpeed = 104;
+    this.speed = WALK_SPEED;
+    this.runSpeed = RUN_SPEED;
     this.stepTimer = 0;
     this.carrying = null;
   }
@@ -216,10 +231,25 @@ export class Player extends Actor {
 
   draw(ctx, ox, oy) {
     const spr = this.sprite();
-    const dx = Math.round(this.x - CHAR_W / 2 - ox);
-    const dy = Math.round(this.y - CHAR_H - oy);
+    let dx = Math.round(this.x - CHAR_W / 2 - ox);
+    let dy = Math.round(this.y - CHAR_H - oy);
     const a = this.alpha ?? 1;
     if (a < 1) ctx.globalAlpha = a;
+    // Anyone on a mount is drawn as one animal: the bear first, at the rider's
+    // feet, then the rider sitting on her back. Doing it here rather than as
+    // two entries in the draw list is what stops the two of them sorting apart
+    // and the rider appearing to walk in front of the bear she is sitting on.
+    if (this.mount) {
+      this.mount.dir = this.dir;
+      this.mount.frame = this.frame;
+      this.mount.moving = this.moving;
+      this.mount.x = this.x;
+      this.mount.y = this.y;
+      this.mount.draw(ctx, ox, oy);
+      const sit = riderOffset(this.dir);
+      dx += sit.x;
+      dy += sit.y;
+    }
     ctx.drawImage(spr, dx, dy);
     if (a < 1) ctx.globalAlpha = 1;
   }
@@ -701,6 +731,105 @@ export class Cat extends Actor {
   }
 }
 
+// ---------------------------------------------------------------------------
+// The riding bear
+// ---------------------------------------------------------------------------
+
+/**
+ * A bear who lives outside the cafe.
+ *
+ * Off duty she behaves like an enormous cat: sits, sniffs about, sleeps a great
+ * deal, wanders a few paces and thinks better of it. On duty she is furniture —
+ * the rider does the moving and she is drawn under them — which is why `update`
+ * does nothing at all while she is ridden.
+ */
+export class Bear extends Actor {
+  constructor(x, y) {
+    super(x, y);
+    this.speed = 26;                  // ambling. She is in no hurry.
+    this.swims = true;
+    this.state = 'idle';
+    this.pose = 'sniff';
+    this.stateT = 1 + rng() * 3;
+    this.target = null;
+    this.ridden = false;
+    this.home = { x, y };
+    this.gruntT = 12 + rng() * 30;
+  }
+
+  update(dt, map, ctx = {}) {
+    if (this.ridden) { this.moving = false; return; }
+    this.stateT -= dt;
+    this.moving = false;
+    if (this.stateT <= 0) this.pickState();
+
+    if (this.state === 'walk' && this.target) {
+      const dx = this.target.x - this.x, dy = this.target.y - this.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 4) { this.settle(); } else {
+        const step = this.speed * dt;
+        const before = { x: this.x, y: this.y };
+        moveActor(map, this, (dx / dist) * step, (dy / dist) * step);
+        this.moving = Math.hypot(this.x - before.x, this.y - before.y) > 0.05;
+        if (!this.moving) this.settle();
+        if (Math.abs(dx) > Math.abs(dy)) this.dir = dx > 0 ? 'right' : 'left';
+        else this.dir = dy > 0 ? 'down' : 'up';
+      }
+    }
+
+    // Every so often, a noise like a wardrobe being moved upstairs.
+    this.gruntT -= dt;
+    if (this.gruntT <= 0) {
+      this.gruntT = 20 + rng() * 40;
+      if (this.pose !== 'sleep') audio.sfx('rasp', { gain: 0.5, pitch: 0.45, pan: ctx.pan || 0 });
+    }
+    this.animate(dt);
+  }
+
+  settle() {
+    this.state = 'idle';
+    this.pose = 'sniff';
+    this.stateT = 2 + rng() * 4;
+  }
+
+  pickState() {
+    const r = rng();
+    if (r < 0.34) { this.state = 'idle'; this.pose = 'sleep'; this.stateT = 12 + rng() * 20; }
+    else if (r < 0.58) { this.state = 'idle'; this.pose = 'sniff'; this.stateT = 4 + rng() * 8; }
+    else if (r < 0.78) { this.state = 'idle'; this.pose = 'sit'; this.stateT = 5 + rng() * 9; }
+    else {
+      // A few paces and no further: she stays where she was left, so you can
+      // find her again without walking the whole valley.
+      this.state = 'walk';
+      this.pose = 'walk';
+      this.stateT = 3 + rng() * 4;
+      const a = rng() * Math.PI * 2;
+      const d = 16 + rng() * 40;
+      this.target = { x: this.home.x + Math.cos(a) * d, y: this.home.y + Math.sin(a) * d };
+    }
+  }
+
+  /** Put her down here, and let this be the middle of her wandering. */
+  moveTo(x, y) {
+    this.x = x; this.y = y;
+    this.home = { x, y };
+    this.target = null;
+    this.settle();
+  }
+
+  draw(ctx, ox, oy) {
+    const pose = this.ridden ? (this.moving ? 'walk' : 'walk')
+      : (this.moving ? 'walk' : this.pose);
+    const spr = bearSprite(this.dir, this.frame, pose);
+    ctx.drawImage(spr, Math.round(this.x - BEAR_W / 2 - ox), Math.round(this.y - BEAR_H - oy));
+  }
+
+  emoteTop() { return this.y - BEAR_H; }
+}
+
+/** Where to draw a rider so they sit on her back rather than in it. */
+export function riderOffset(dir) { return bearSaddle(dir); }
+
 const CAT_NAMES = [
   'Biscuit', 'Marmalade', 'Pudding', 'Sock', 'Widget', 'Domino', 'Clementine', 'Bramble',
   'Custard', 'Waffle', 'Nutmeg', 'Pickle', 'Tuppence', 'Muffin', 'Hazel', 'Poppet',
@@ -872,11 +1001,24 @@ export class RemotePlayer extends Actor {
     this.mapId = info.map || 'overworld';
     this.goalX = info.x;
     this.goalY = info.y;
+    this.setMount(info.up);
+  }
+
+  /**
+   * Somebody else is on the bear. They have their own, as far as we are
+   * concerned: one bear drawn under them, which is what it looks like from
+   * over here — and it saves passing her position separately when it is
+   * exactly theirs anyway.
+   */
+  setMount(up) {
+    if (up && !this.mount) this.mount = new Bear(this.x, this.y);
+    else if (!up && this.mount) this.mount = null;
   }
 
   setFrom(info) {
     this.goalX = info.x;
     this.goalY = info.y;
+    if (info.up !== undefined) this.setMount(info.up);
     this.dir = info.dir || this.dir;
     this.mapId = info.map || this.mapId;
     if (info.n) this.name = info.n;

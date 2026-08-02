@@ -1556,7 +1556,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             if (o.to) involved.add(o.to);
           }
         }
-        const idle = REGULARS.filter((r) => !involved.has(r.id)).map((r) => r.id);
+        // A regular earns their place by being part of an errand — or, like
+        // the one who comes to tell you about the bear, by carrying the news
+        // that starts something. What is not allowed is a regular who walks in,
+        // says three lines, and leads nowhere at all.
+        const idle = REGULARS.filter((r) => !involved.has(r.id) && !r.arrives).map((r) => r.id);
 
         // Daytime regulars come in daylight and night ones after dark.
         const wrongHour = [];
@@ -2601,6 +2605,192 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (wasConnected && g.net.connected) window.__errors.push('still on the line after leaving: ' + window.__exit);
         if (reloads !== 1) window.__errors.push('did not go back to the front: ' + window.__exit);
         if (inThere) window.__errors.push('the valley still has us in it: ' + window.__exit);
+      } else if (SCRIPT === 'bear') {
+        // The whole bear, end to end: nobody mentions her until you have run
+        // the deliveries, she costs what she costs, she arrives outside the
+        // cafe, she wants a fish, and then she is quick and the river is not
+        // in the way.
+        const B = await import('../src/game/bear.js');
+        const { REGULARS } = await import('../src/game/regulars.js');
+        const st = g.state;
+        st.flags = {}; st.bear = null; st.deliveriesRun = 0;
+        st.clock.t = 11 * (1200 / 24);
+        await wait(600);
+
+        // 1. The drover is nowhere until somebody says he exists.
+        const bellNow = () => g.villagers.find((v) => v.def.id === 'bell');
+        const bellHidden = !g.found(bellNow());
+        // 2. And Comfrey does not walk in until the deliveries are run.
+        const comfrey = REGULARS.find((r) => r.id === 'comfrey');
+        const earlyVisit = g.regularWelcome(comfrey);
+        st.deliveriesRun = 10;
+        st.inCafe = true;
+        const dueVisit = g.regularWelcome(comfrey);
+        st.inCafe = false;
+
+        // Hearing it is what puts Bell in the market.
+        st.flags.heard_hint_comfrey = true;
+        await wait(400);
+        const bellOut = g.found(bellNow());
+
+        // 3. Buying her.
+        st.money = 4000;
+        const poor = st.money >= B.BEAR_PRICE;
+        // Enough for two, deliberately: with only one bear's worth in the till
+        // a second sale is refused for want of money and proves nothing about
+        // whether she can be bought twice.
+        st.money = 12000;
+        g.completeBearSale(bellNow().def);
+        await wait(500);
+        const paid = st.money;
+        const bought = !!st.bear;
+        g.completeBearSale(bellNow().def);
+        const twice = st.money;
+
+        // 4. She is outside the cafe, and she is an actor.
+        await wait(900);
+        const door = g.homeDoor;
+        const near = g.bear && Math.hypot(g.bear.x / 16 - door.x, g.bear.y / 16 - door.y) < 6;
+
+        // 5. She wants a fish. Stand next to her and press.
+        st.inventory[B.BEAR_FOOD] = 0;
+        while (st.cafeSim.stockCount(B.BEAR_FOOD) > 0) st.cafeSim.takeStock(B.BEAR_FOOD, 1);
+        g.player.x = g.bear.x; g.player.y = g.bear.y + 8;
+        await wait(300);
+        const inReach = g.bearInReach();
+        g.interact();
+        await wait(300);
+        const rodeHungry = g.riding;
+
+        st.inventory[B.BEAR_FOOD] = 1;
+        g.interact();
+        await wait(400);
+        const rodeFed = g.riding;
+        const fishLeft = st.inventory[B.BEAR_FOOD] || 0;
+        const fedDay = st.bear.fedDay === st.clock.day;
+
+        // 6. Riding is quick, and water is ground.
+        const fast = g.player.speed >= B.BEAR_SPEED && g.player.runSpeed >= B.BEAR_RUN;
+        const swims = g.player.swims === true;
+        const W = await import('../src/art/tiles.js');
+        let wet = null;
+        for (let ty = 240; ty < 300 && !wet; ty++) {
+          for (let tx = 40; tx < 130; tx++) {
+            if (W.WATER_TILES.includes(g.overworld.get(tx, ty))
+              && W.WATER_TILES.includes(g.overworld.get(tx + 1, ty))) { wet = { tx, ty }; break; }
+          }
+        }
+        // Walk into it, rather than being put in it: teleporting onto water
+        // would prove nothing about whether she can swim there.
+        const E = await import('../src/game/entities.js');
+        const wetX = wet ? wet.tx * 16 + 8 : 0, wetY = wet ? (wet.ty + 1) * 16 - 2 : 0;
+        const onFoot = wet ? E.canStand(g.overworld, wetX, wetY, false) : true;
+        const onBear = wet ? E.canStand(g.overworld, wetX, wetY, true) : false;
+        let swamIn = false;
+        let bankTile = null;
+        if (wet) {
+          // Stand on the bank to the left of it and walk right, into the river.
+          let bx = wet.tx - 1;
+          while (bx > 4 && g.overworld.solid(bx, wet.ty)) bx--;
+          bankTile = bx;
+          g.player.x = bx * 16 + 8; g.player.y = (wet.ty + 1) * 16 - 2;
+          g.cam.follow(g.overworld, g.player.x, g.player.y, true);
+          // Clear anything the drover is still saying: a dialogue box stops the
+          // player moving, which would look exactly like a river stopping her.
+          for (let i = 0; i < 8 && (g.dialogue.active || g.screens.length); i++) {
+            key("Space", true); await wait(110); key("Space", false); await wait(160);
+          }
+          await wait(200);
+          key('ArrowRight', true);
+          for (let i = 0; i < 40 && Math.floor(g.player.x / 16) < wet.tx; i++) await wait(100);
+          key('ArrowRight', false);
+          await wait(150);
+          swamIn = W.WATER_TILES.includes(g.overworld.get(g.player.tx, g.player.ty));
+          window.__wet = `bank=${bx} target=${wet.tx} landedOn=${g.player.tx} dlg=${g.dialogue.active} scr=${g.screens.length} riding=${g.riding}`;
+        }
+
+        // 7. Getting off puts her down on dry land, and she stays there.
+        g.interact();
+        await wait(400);
+        const off = !g.riding;
+        const dry = !g.overworld.solid(g.player.tx, g.player.ty);
+        const parked = st.bear && Math.hypot(st.bear.x - g.player.x, st.bear.y - g.player.y) < 40;
+        // And the books moved with her: she is not still outside the cafe.
+        const movedFromCafe = st.bear && Math.hypot(st.bear.x / 16 - door.x, st.bear.y / 16 - door.y) > 8;
+        const walkSpeed = g.player.speed;
+
+        // She is delivered beside the cafe door. Standing at the door facing it
+        // must still open it rather than feed her.
+        st.bear = { ...st.bear, x: g.homeDoor.x * 16 + 8, y: (g.homeDoor.y + 2) * 16 };
+        g.bear.moveTo(st.bear.x, st.bear.y);
+        g.player.x = g.homeDoor.x * 16 + 8;
+        g.player.y = (g.homeDoor.y + 2) * 16 - 2;
+        g.player.dir = 'up';
+        await wait(300);
+        const atDoor = g.bearInReach();
+        g.interact();
+        await wait(700);
+        const wentIn = g.state.inCafe || g.state.mapId === 'cafe';
+        const rodeInstead = g.riding;
+        if (wentIn) { g.state.inCafe = false; g.state.mapId = 'overworld'; }
+
+        window.__bear = `doorInReach=${atDoor} wentIn=${wentIn} rodeAtDoor=${rodeInstead} bellHidden=${bellHidden} earlyVisit=${earlyVisit} dueVisit=${dueVisit}`
+          + ` bellOut=${bellOut} affordAt4000=${poor} paid=${12000 - paid} bought=${bought}`
+          + ` boughtTwice=${twice !== paid} atCafe=${near} rodeHungry=${rodeHungry}`
+          + ` rodeFed=${rodeFed} fishLeft=${fishLeft} fedToday=${fedDay} fast=${fast}`
+          + ` swims=${swims} intoWater=${swamIn} gotOff=${off} onDryLand=${dry}`
+          + ` parked=${parked} moved=${movedFromCafe} backToWalking=${walkSpeed}`
+          + ` inReach=${inReach} waterOnFoot=${onFoot} waterOnBear=${onBear} ${window.__wet || ""}`;
+        if (!atDoor) window.__errors.push('she was not near the door, so that press proved nothing: ' + window.__bear);
+        if (rodeInstead) window.__errors.push('pressing at your own front door got on the bear: ' + window.__bear);
+        if (!wentIn) window.__errors.push('the bear is blocking the cafe door: ' + window.__bear);
+        if (!bellHidden) window.__errors.push('the drover is stood there before anybody mentions him: ' + window.__bear);
+        if (earlyVisit) window.__errors.push('the tip-off arrives before the deliveries do: ' + window.__bear);
+        if (!dueVisit) window.__errors.push('ten deliveries and nobody mentions the bear: ' + window.__bear);
+        if (!bellOut) window.__errors.push('heard about him and he is still not there: ' + window.__bear);
+        if (poor) window.__errors.push('she costs less than she should: ' + window.__bear);
+        if (12000 - paid !== B.BEAR_PRICE) window.__errors.push('wrong money changed hands: ' + window.__bear);
+        if (!bought) window.__errors.push('paid and got no bear: ' + window.__bear);
+        if (twice !== paid) window.__errors.push('bought a second bear: ' + window.__bear);
+        if (!near) window.__errors.push('she was not walked to the cafe: ' + window.__bear);
+        if (!inReach) window.__errors.push('she was not even in reach, so the press proved nothing: ' + window.__bear);
+        if (onFoot) window.__errors.push('the water we picked is walkable on foot: ' + window.__bear);
+        if (!onBear) window.__errors.push('she cannot stand in water: ' + window.__bear);
+        if (rodeHungry) window.__errors.push('rode her with nothing to feed her: ' + window.__bear);
+        if (!rodeFed) window.__errors.push('fed her and she would not be ridden: ' + window.__bear);
+        if (fishLeft) window.__errors.push('the fish was not eaten: ' + window.__bear);
+        if (!fedDay) window.__errors.push('feeding her did not count for the day: ' + window.__bear);
+        if (!fast) window.__errors.push('riding is no quicker than walking: ' + window.__bear);
+        if (!swims) window.__errors.push('she does not take to water: ' + window.__bear);
+        if (wet && !swamIn) window.__errors.push('the river stopped her: ' + window.__bear);
+        if (!off) window.__errors.push('could not get down: ' + window.__bear);
+        if (!dry) window.__errors.push('left standing in the river: ' + window.__bear);
+        if (!parked) window.__errors.push('she did not stay where she was left: ' + window.__bear);
+        if (!movedFromCafe) window.__errors.push('the books still have her outside the cafe: ' + window.__bear);
+        if (walkSpeed !== 62) window.__errors.push('still moving at bear speed on foot: ' + window.__bear);
+      } else if (SCRIPT === 'bearshot') {
+        // Her, in the world, from the saddle. For looking at.
+        const B = await import('../src/game/bear.js');
+        const st = g.state;
+        st.clock.t = 10 * (1200 / 24);
+        st.flags.heard_hint_comfrey = true;
+        st.money = 12000;
+        await wait(500);
+        const door = g.homeDoor;
+        g.completeBearSale({ name: 'Drover Bell' });
+        await wait(600);
+        for (let i = 0; i < 6 && (g.dialogue.active || g.screens.length); i++) {
+          key('Space', true); await wait(110); key('Space', false); await wait(150);
+        }
+        st.inventory[B.BEAR_FOOD] = 2;
+        g.player.x = g.bear.x; g.player.y = g.bear.y + 10;
+        g.cam.follow(g.overworld, g.player.x, g.player.y, true);
+        await wait(600);
+        g.interact();
+        await wait(400);
+        key('ArrowDown', true); await wait(700); key('ArrowDown', false);
+        await wait(400);
+        window.__bshot = `riding=${g.riding}`;
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -4760,6 +4950,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__shellw ? ` ${window.__shellw}` : '')
         + (window.__hint ? ` ${window.__hint}` : '')
         + (window.__exit ? ` ${window.__exit}` : '')
+        + (window.__bear ? ` ${window.__bear}` : '')
+        + (window.__bshot ? ` ${window.__bshot}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

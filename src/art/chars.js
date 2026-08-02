@@ -16,6 +16,8 @@ export const CHAR_W = 16;
 export const CHAR_H = 24;
 export const CAT_W = 18;
 export const CAT_H = 14;
+export const BEAR_W = 36;
+export const BEAR_H = 26;
 
 const rgb = (hex, a = 255) => PixBuf.rgba(hex, a);
 const OUTLINE = '#2b2333';
@@ -666,6 +668,167 @@ export function catSprite(breedKey, dir, frame, pose = 'walk', groomed = false) 
     paintCat(buf, breedKey, base, frame, pose, groomed);
     return (dir === 'right' ? mirror(buf) : buf).toCanvas();
   });
+}
+
+
+// ---------------------------------------------------------------------------
+// The riding bear
+// ---------------------------------------------------------------------------
+//
+// Four-legged like the cats, and drawn the same way, but three times the volume
+// and with none of the delicacy: a heavy wedge of shoulder, a low head, and
+// feet like dinner plates. She has to read as *large* at a glance from across a
+// field, because the whole point of her is that she is bigger than the valley's
+// problems.
+
+const BEAR_COAT = '#8a6242';
+
+function paintBear(buf, dir, frame, pose) {
+  const F = rgb(BEAR_COAT);
+  const D = rgb(shade(BEAR_COAT, -0.28));
+  const L = rgb(shade(BEAR_COAT, 0.16));
+  const E = rgb('#2f2a3d');
+  const snout = rgb(shade(BEAR_COAT, -0.4));
+  const cx = BEAR_W / 2;
+  const bob = frame % 2 === 1 ? -1 : 0;
+  const ground = BEAR_H - 2;
+
+  const ears = (hx, hy, r) => {
+    for (const s of [-1, 1]) {
+      buf.ellipse(hx + s * (r - 0.6), hy - r + 0.8, 2.0, 1.8, F);
+      buf.ellipse(hx + s * (r - 0.6), hy - r + 1.0, 1.0, 0.9, D);
+    }
+  };
+  const shadow = (rx) => buf.ellipseBlend(cx, ground + 1, rx, 2.0, rgb('#000000', 60));
+
+  if (pose === 'sleep') {
+    // A hill with a nose. Everything tucked in, nothing moving but breathing.
+    buf.ellipse(cx + 1, ground - 5, 12.5, 6.6, F);
+    buf.ellipseBlend(cx + 1, ground - 8, 8.0, 3.4, L);
+    buf.ellipse(cx - 8, ground - 4, 5.0, 4.4, F);    // head down on her paws
+    ears(cx - 8, ground - 5, 4.6);
+    buf.ellipse(cx - 11, ground - 2.5, 2.4, 1.8, snout);
+    buf.hline(cx - 11, ground - 4, 3, E);            // one shut eye, a line
+    buf.ellipse(cx - 4, ground - 1, 3.0, 1.6, D);    // front paws, tucked
+    buf.ellipse(cx + 9, ground - 2, 3.4, 2.4, D);    // rump
+    outline(buf);
+    shadow(11);
+    return;
+  }
+
+  if (pose === 'sit') {
+    buf.ellipse(cx + 2, ground - 4, 7.0, 5.6, F);     // haunches
+    buf.ellipse(cx - 1, ground - 8, 6.2, 6.4, F);     // chest, upright
+    buf.ellipseBlend(cx - 1.5, ground - 9, 4.2, 4.4, L);
+    buf.rect(cx - 5, ground - 4, 3, 4, F);            // front legs
+    buf.rect(cx + 1, ground - 4, 3, 4, F);
+    buf.ellipse(cx - 5, ground - 1, 2.4, 1.4, D);     // paws
+    buf.ellipse(cx + 2, ground - 1, 2.4, 1.4, D);
+    const hy = ground - 15 + bob;
+    buf.ellipse(cx - 1, hy, 5.2, 4.6, F);
+    ears(cx - 1, hy, 5.0);
+    buf.rect(cx - 4, hy - 1, 2, 2, E);
+    buf.rect(cx + 1, hy - 1, 2, 2, E);
+    buf.ellipse(cx - 1, hy + 3, 2.8, 2.0, snout);
+    buf.rect(cx - 1, hy + 2, 2, 1, E);
+    outline(buf);
+    shadow(9);
+    return;
+  }
+
+  if (pose === 'sniff') {
+    // Standing, rump up, nose in the grass. She spends most of a quiet
+    // afternoon like this, working along the ground after something.
+    buf.rect(cx + 5, ground - 8, 3, 7, F);            // back legs, straight
+    buf.rect(cx + 9, ground - 8, 3, 7, F);
+    buf.ellipse(cx + 6, ground - 1, 2.2, 1.4, D);
+    buf.ellipse(cx + 10, ground - 1, 2.2, 1.4, D);
+    buf.ellipse(cx + 4, ground - 11, 8.0, 4.8, F);    // high shoulder at the back
+    buf.ellipse(cx - 4, ground - 9, 8.5, 4.6, F);     // body sloping down
+    buf.ellipseBlend(cx - 1, ground - 11, 6.0, 2.6, L);
+    buf.rect(cx - 7, ground - 7, 3, 6, F);            // front legs, shorter drop
+    buf.rect(cx - 3, ground - 7, 3, 6, F);
+    buf.ellipse(cx - 6, ground - 1, 2.2, 1.4, D);
+    buf.ellipse(cx - 2, ground - 1, 2.2, 1.4, D);
+    const hy = ground - 5 + bob;                       // head down at the front
+    buf.ellipse(cx - 9, hy, 4.6, 4.0, F);
+    ears(cx - 9, hy, 4.4);
+    buf.rect(cx - 10, hy - 1, 2, 2, E);
+    buf.ellipse(cx - 12, hy + 2.5, 2.6, 1.8, snout);
+    outline(buf);
+    shadow(10);
+    return;
+  }
+
+  // ---- standing and walking ----
+  const lift = frame % 4;
+  const bodyY = ground - 10 + bob;
+  buf.ellipse(cx + 1, bodyY, 13.5, 7.0, F);
+  buf.ellipseBlend(cx + 1, bodyY - 3, 10.0, 4.0, L);
+  buf.ellipse(cx + 11, bodyY + 1, 4.2, 3.6, D);       // rump
+
+  // Legs, in diagonal pairs like anything that walks.
+  const legs = [[cx - 10, 0], [cx - 4, 1], [cx + 3, 1], [cx + 9, 0]];
+  legs.forEach(([lx, phase], i) => {
+    const up = pose === 'walk' && (lift === (phase ? 1 : 3) || lift === (phase ? 2 : 0)) ? 1 : 0;
+    buf.rect(lx, bodyY + 4, 3, 6 - up, F);
+    buf.ellipse(lx + 1, bodyY + 10 - up, 2.2, 1.4, D);
+    if (i === 1) buf.ellipseBlend(lx + 1, bodyY + 6, 1.4, 2.0, D);
+  });
+
+  const hy = bodyY - 4;
+  if (dir === 'down' || dir === 'up') {
+    // Facing the camera she is a wall of shoulder with the head *in front of*
+    // it, low and near the viewer — not on top, where a rider would sit on it
+    // and she would read as a footstool with ears.
+    buf.ellipse(cx, bodyY - 2, 11.0, 7.0, F);
+    buf.ellipseBlend(cx, bodyY - 4, 8.0, 4.2, L);
+    if (dir === 'down') {
+      const fy = bodyY + 4;
+      buf.ellipse(cx, fy, 5.6, 4.4, F);
+      ears(cx, fy - 0.5, 5.4);
+      buf.rect(cx - 3, fy - 1, 2, 2, E);
+      buf.rect(cx + 1, fy - 1, 2, 2, E);
+      buf.ellipse(cx, fy + 2.6, 3.2, 2.2, snout);
+      buf.rect(cx - 1, fy + 2, 2, 1, E);
+    } else {
+      // Going away: the back of a head and two ears above the shoulders.
+      buf.ellipse(cx, bodyY - 7, 4.6, 3.4, F);
+      ears(cx, bodyY - 7.5, 4.6);
+    }
+    outline(buf);
+    shadow(9.5);
+    return;
+  }
+
+  buf.ellipse(cx - 11, hy + 3, 5.4, 4.6, F);
+  ears(cx - 11, hy + 3, 5.2);
+  buf.rect(cx - 13, hy + 2, 2, 2, E);
+  buf.ellipse(cx - 15, hy + 5, 2.8, 2.2, snout);
+  buf.rect(cx - 15, hy + 4, 2, 1, E);
+  outline(buf);
+  shadow(10);
+}
+
+/**
+ * The bear, memoised like everything else. `pose` is walk | sit | sleep |
+ * sniff; `dir` is the four cardinals, with left drawn and right mirrored.
+ */
+export function bearSprite(dir, frame, pose = 'walk') {
+  const key = `b|${dir}|${frame}|${pose}`;
+  return cache.get(key, () => {
+    const base = dir === 'right' || dir === 'left' ? 'side' : dir;
+    const buf = new PixBuf(BEAR_W, BEAR_H);
+    paintBear(buf, base, frame, pose);
+    return (dir === 'right' ? mirror(buf) : buf).toCanvas();
+  });
+}
+
+/** Where a rider's feet sit on her back, per direction. */
+export function bearSaddle(dir) {
+  if (dir === 'left') return { x: 2, y: -13 };
+  if (dir === 'right') return { x: -2, y: -13 };
+  return { x: 0, y: -14 };
 }
 
 /** Small emote bubble shown above a head. */

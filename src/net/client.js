@@ -387,10 +387,10 @@ export class NetClient {
       }
       case 'pos':
         this.lastPosAt = performance.now();
-        for (const [id, x, y, dir, frame, map] of msg.p) {
+        for (const [id, x, y, dir, frame, map, up] of msg.p) {
           if (id === this.id) continue;
           const r = this.remotes.get(id);
-          if (r) { r.x = x; r.y = y; r.dir = dir; r.frame = frame; r.map = map; }
+          if (r) { r.x = x; r.y = y; r.dir = dir; r.frame = frame; r.map = map; r.up = !!up; }
         }
         this.emit('pos');
         break;
@@ -454,10 +454,16 @@ export class NetClient {
     this.sendTimer = 1 / SEND_HZ;
     const x = Math.round(player.x), y = Math.round(player.y);
     const last = this.lastSent;
-    if (x === last.x && y === last.y && player.dir === last.dir && mapId === last.map) return;
-    this.lastSent = { x, y, dir: player.dir, map: mapId };
+    // Whether we are on the bear goes with the position, because it changes
+    // what the others should draw and they cannot see our books. Mounting
+    // without moving is a change worth sending, or you sit on an invisible
+    // bear until you take a step.
+    const up = !!player.mounted;
+    if (x === last.x && y === last.y && player.dir === last.dir && mapId === last.map
+      && up === last.up) return;
+    this.lastSent = { x, y, dir: player.dir, map: mapId, up };
     if (this.rejoin) { this.rejoin.x = x; this.rejoin.y = y; this.rejoin.map = mapId; }
-    this.send({ t: 'move', x, y, dir: player.dir, frame: player.frame, map: mapId });
+    this.send({ t: 'move', x, y, dir: player.dir, frame: player.frame, map: mapId, up });
   }
 
   /** Everyone else currently standing in the same room as us. */

@@ -91,6 +91,9 @@ export class GameMap {
     return this.blocked[i] === 1 || isSolidTerrain(this.ground[i]);
   }
 
+  /** Is something *standing on* this tile — a wall, a post, a bookcase? */
+  blockedAt(x, y) { return this.inBounds(x, y) && this.blocked[y * this.w + x] === 1; }
+
   block(x, y, on = true) {
     if (this.inBounds(x, y)) this.blocked[y * this.w + x] = on ? 1 : 0;
   }

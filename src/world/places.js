@@ -475,6 +475,29 @@ export const VILLAGERS = [
       'Warm room. Cats. Somebody who will listen. I have made worse decisions than this one.'],
     hint: 'There is a contest. Longest Face Wins, they call it. Whoever hears the most puns without '
       + 'laughing. I have not won it in four years and I intend to lose again with style.' },
+  // The bear trade, in two people. Comfrey walks into your cafe once you have
+  // carried enough orders about the valley to look like somebody who would
+  // rather not walk; Drover Bell has the bear, and is only interested in the
+  // sort of customer Comfrey sends.
+  { id: 'comfrey', name: 'Comfrey', species: 'goat', coat: 'cream', role: 'villager',
+    regular: true, tellsFirst: true,
+    arrives: (st) => (st.deliveriesRun || 0) >= 10 && !st.flags.heard_hint_comfrey,
+    lines: ['I have seen you on that road more than the road has seen itself.',
+      'There is a faster way about this valley. It has fur on it.',
+      'Ask for Bell. Everyone in Thistlewick knows Bell.'],
+    hint: 'You are wearing that road out. Drover Bell is in Thistlewick with a riding bear for '
+      + 'sale — daylight hours, by the market. She is not cheap and she is worth it.' },
+  { id: 'bell', name: 'Drover Bell', town: 'thistlewick', species: 'badger', coat: 'badger',
+    role: 'villager', sells: 'bear',
+    secret: (st) => !!st.flags.heard_hint_comfrey,
+    // Not standing about in the market until somebody has told you she exists:
+    // a bear for sale is not something you walk past and fail to notice.
+
+    lines: ['She is not a horse. Do not ride her like a horse.',
+      'One fish a day. Fresh. She will tell you if you forget, and you will not enjoy being told.',
+      'Water does not stop her. Very little does.'],
+    sold: ['She is yours. Feed her and she will take you anywhere.',
+      'How is she? Eating? Good. That is the whole of it.'] },
   { id: 'fennel', name: 'Fennel', species: 'rabbit', coat: 'cream', role: 'villager',
     regular: true, visitChance: 0.45,
     lines: ['I have a job. Afternoons. It is not a demanding job and I am not a demanding man.',
