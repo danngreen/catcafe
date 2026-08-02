@@ -1295,6 +1295,70 @@ class Game {
       o.h = o.sprite.height;
       this.renderer.invalidateAll();
     }
+    this.updateOutdoorRecipients();
+  }
+
+  /**
+   * Somebody standing at an open-air address, waiting for their order.
+   *
+   * Orders to a house put a resident in the front room when you open the door.
+   * Orders to a green or a landmark used to put nobody anywhere at all: the map
+   * showed a ring, you walked to it, and the only people there were the
+   * villagers who live there — none of whom had ordered anything. Two thirds of
+   * the addresses in the book were undeliverable.
+   */
+  updateOutdoorRecipients() {
+    const st = this.state;
+    if (!this.villagers) return;
+    const open = st.liveDeliveries().filter((d) => !d.house);
+    const wanted = new Set(open.map((d) => d.id));
+
+    // Anyone whose order has been run, refused or run out of time goes home.
+    for (let i = this.villagers.length - 1; i >= 0; i--) {
+      const v = this.villagers[i];
+      if (v.recipient && !wanted.has(v.recipient)) this.villagers.splice(i, 1);
+    }
+    if (this.secretVillagers) {
+      this.secretVillagers = this.secretVillagers.filter((v) => !v.recipient || wanted.has(v.recipient));
+    }
+
+    for (const d of open) {
+      if (this.villagers.some((v) => v.recipient === d.id)) continue;
+      // Beside the spot rather than on it, and never inside a hedge: the ring
+      // on the map is where the order is, not where a person can stand.
+      const at = this.standableNear(d.x, d.y);
+      if (!at) continue;
+      const rng = makeRng(hashStr(d.id));
+      const v = new Villager({
+        id: `waiting:${d.id}`,
+        name: RESIDENT_NAMES[rng.int(RESIDENT_NAMES.length)],
+        species: SPECIES_LIST[rng.int(SPECIES_LIST.length)],
+        coat: COAT_LIST[rng.int(COAT_LIST.length)],
+        when: 'always',
+        lines: ['*waiting, with the look of somebody expecting a parcel*'],
+      }, at.x * TILE + TILE / 2, (at.y + 1) * TILE - 2);
+      v.recipient = d.id;
+      v.mapId = 'overworld';
+      v.range = 8;
+      v.burrow = { x: v.x, y: v.y };
+      // The same mark a villager with something to say wears, so you can pick
+      // them out of a market square full of people who have nothing for you.
+      v.hasQuestMark = true;
+      this.villagers.push(v);
+    }
+  }
+
+  /** The nearest tile to (tx,ty) somebody could actually stand on. */
+  standableNear(tx, ty) {
+    for (const [ox, oy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1],
+      [2, 0], [-2, 0], [0, 2], [0, -2], [2, 2], [-2, -2]]) {
+      const nx = tx + ox, ny = ty + oy;
+      if (!this.overworld.inBounds(nx, ny)) continue;
+      if (this.overworld.solid(nx, ny)) continue;
+      if (this.overworld.interactAt(nx, ny)) continue;
+      return { x: nx, y: ny };
+    }
+    return null;
   }
 
   /** Everywhere an order could be sent. Houses, doorsteps, and open country. */
@@ -1355,9 +1419,12 @@ class Game {
     // Turning up empty-handed is not a delivery, whatever the journal says.
     if (s.brought.length) st.countDelivery();
     st.clearDelivery(d.id);
-    // Take them out of the room, so the front room is empty on the way back.
+    // Take them away, so the front room is empty on the way back — and so
+    // somebody stood on a green is not still stood there afterwards.
     const map = this.currentMap;
     if (map.villagers) map.villagers = map.villagers.filter((x) => x !== v);
+    const i = this.villagers.indexOf(v);
+    if (i >= 0) this.villagers.splice(i, 1);
 
     let text;
     if (!s.brought.length) {
@@ -2334,6 +2401,9 @@ class Game {
   refreshQuestMarks() {
     const st = this.state;
     for (const v of this.villagers) {
+      // Somebody waiting for an order always has something for you, and is not
+      // in the quest table at all — this pass would quietly unmark them.
+      if (v.recipient) { v.hasQuestMark = true; continue; }
       const mine = QUESTS_BY_GIVER[v.def.id] || [];
       v.hasQuestMark = mine.some((q) => this.wantsToTalk(q, st));
     }

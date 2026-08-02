@@ -2791,6 +2791,99 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         key('ArrowDown', true); await wait(700); key('ArrowDown', false);
         await wait(400);
         window.__bshot = `riding=${g.riding}`;
+      } else if (SCRIPT === 'deliverspots') {
+        // Every address the phone can give you has to have somebody at it.
+        // Orders to a green or a landmark used to have nobody anywhere: the map
+        // drew a ring, you walked to it, and the only people there were the
+        // ones who live there. Two thirds of the book was undeliverable.
+        const D = await import('../src/game/deliveries.js');
+        const st = g.state;
+        st.deliveries = [];
+        st.clock.t = 11 * (1200 / 24);
+        await wait(500);
+
+        const spots = g.deliverySpots();
+        const kinds = { house: 0, landmark: 0, green: 0 };
+        for (const p of spots) {
+          if (p.house) kinds.house++;
+          else if (/^The green at /.test(p.name)) kinds.green++;
+          else kinds.landmark++;
+        }
+
+        // One order to each kind of address, all live at once.
+        const pick = (test) => spots.find(test);
+        const chosen = [
+          pick((p) => !!p.house),
+          pick((p) => /^The green at /.test(p.name)),
+          pick((p) => !p.house && !/^The green at /.test(p.name)),
+        ].filter(Boolean);
+        const made = [];
+        for (const p of chosen) {
+          const d = D.makeDelivery(p, g.homeDoor, st.clock.absolute, () => 0.5);
+          st.deliveries = [...st.deliveries, d];
+          made.push(d);
+        }
+        await wait(700);
+
+        // Whoever is waiting outdoors should now exist, at the address.
+        const report = [];
+        for (const d of made) {
+          const kind = d.house ? 'house' : (/^The green at /.test(d.name) ? 'green' : 'landmark');
+          if (d.house) {
+            // Houses put somebody in the front room on the way in; check the
+            // door is at least enterable, which is the part that leads to them.
+            const lit = g.overworld.objects.some((o) => o.type === '_building'
+              && o.data && o.data.house === d.house && o.cfg && o.cfg.lit);
+            report.push(`${kind}:${lit ? 'lit' : 'DARK'}`);
+            continue;
+          }
+          const who = g.villagers.find((v) => v.recipient === d.id);
+          const near = who && Math.hypot(who.x / 16 - d.x, who.y / 16 - d.y) < 4;
+          const standable = who && !g.overworld.solid(who.tx, who.ty);
+          const marked = who && who.hasQuestMark;
+          report.push(`${kind}:${who ? 'someone' : 'NOBODY'}${near ? '' : '/far'}`
+            + `${standable ? '' : '/in-a-wall'}${marked ? '' : '/unmarked'}`);
+        }
+
+        // And handing over to one of them pays and takes them away.
+        // Hand one over, if there is anybody to hand it to. No early return:
+        // bailing out of this block skips the summary the runner reads, which
+        // turns a plain failure into "the scenario died" — twice as much work
+        // to read and half as much information.
+        const open = made.find((d) => !d.house);
+        const who = g.villagers.find((v) => v.recipient === open.id);
+        let paid = 0, gone = false, cleared = false;
+        if (who) {
+          for (const id of open.items) st.cafeSim.addStock(id, 1, st.clock.day);
+          const before = st.money;
+          g.player.x = who.x; g.player.y = who.y + 10;
+          await wait(200);
+          g.talkTo(who);
+          await wait(500);
+          for (let i = 0; i < 6 && g.dialogue.active; i++) {
+            key('Space', true); await wait(110); key('Space', false); await wait(170);
+          }
+          await wait(500);
+          paid = st.money - before;
+          gone = !g.villagers.some((v) => v.recipient === open.id);
+          cleared = !st.deliveries.some((d) => d.id === open.id);
+        }
+
+        window.__spots = `spots=${spots.length} houses=${kinds.house} greens=${kinds.green}`
+          + ` landmarks=${kinds.landmark} at=[${report}] paid=${paid} worth=${D.fullValue(open)}`
+          + ` leftAfter=${!gone} stillOnTheBooks=${!cleared}`;
+        if (!kinds.green || !kinds.landmark || !kinds.house) {
+          window.__errors.push('an address kind has gone missing: ' + window.__spots);
+        }
+        if (report.some((r) => /NOBODY/.test(r))) {
+          window.__errors.push('an address with nobody at it: ' + window.__spots);
+        }
+        if (report.some((r) => /far|in-a-wall|unmarked/.test(r))) {
+          window.__errors.push('somebody waiting where you cannot find them: ' + window.__spots);
+        }
+        if (who && paid !== D.fullValue(open)) window.__errors.push('handing over paid wrongly: ' + window.__spots);
+        if (who && !gone) window.__errors.push('they are still stood there afterwards: ' + window.__spots);
+        if (who && !cleared) window.__errors.push('the order is still on the books: ' + window.__spots);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -4952,6 +5045,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__exit ? ` ${window.__exit}` : '')
         + (window.__bear ? ` ${window.__bear}` : '')
         + (window.__bshot ? ` ${window.__bshot}` : '')
+        + (window.__spots ? ` ${window.__spots}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')
