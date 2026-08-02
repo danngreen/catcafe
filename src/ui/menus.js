@@ -1647,7 +1647,7 @@ export class FriendsScreen extends Screen {
 
 export class PauseScreen extends ListScreen {
   constructor(game) {
-    super(['Cafe book', 'Journal', 'Map', 'Friends', 'Bag', 'Save game', 'Sound', 'Back'], 8);
+    super(['Cafe book', 'Journal', 'Map', 'Friends', 'Bag', 'Save game', 'Exit', 'Sound', 'Back'], 9);
     this.game = game;
   }
   update(dt, input) {
@@ -1663,6 +1663,16 @@ export class PauseScreen extends ListScreen {
         case 'Friends': this.game.push(new FriendsScreen(this.game)); break;
         case 'Bag': this.game.push(new BagScreen(this.game)); break;
         case 'Save game': this.game.save(); break;
+        // One row below Save game, on a screen driven by a thumb. Saving first
+        // makes leaving cheap, but walking out of a valley somebody else is
+        // playing in is still not something to do by brushing the wrong tile.
+        case 'Exit': this.game.push(new ConfirmScreen({
+          title: 'Leave the valley?',
+          lines: ['Your game is saved first.', 'You can come straight back in.'],
+          yes: 'Save and leave',
+          no: 'Stay',
+          onYes: () => this.game.leaveValley(),
+        })); break;
         case 'Sound': this.game.push(new SoundScreen(this.game)); break;
         default: this.close(); break;
       }

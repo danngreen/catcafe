@@ -254,6 +254,26 @@ export class NetClient {
     link.close();
   }
 
+  /**
+   * Hang up on purpose.
+   *
+   * Not the same as the line going down: nothing here should be reconnected,
+   * rejoined or retried, because the player has chosen to leave. Clearing
+   * `everConnected` is what stops the keepalive quietly dialling back in — the
+   * page is on its way to reloading, and a socket opened in the meantime would
+   * put us back in a valley we just walked out of.
+   */
+  leave() {
+    this.rejoin = null;
+    this.everConnected = false;
+    this.dropLink();
+    this.connected = false;
+    this.joined = false;
+    this.owner = null;
+    this.remotes.clear();
+    if (this.keepalive) { clearInterval(this.keepalive); this.keepalive = null; }
+  }
+
   /** The link went away on its own. */
   noteClose() {
     const wasConnected = this.connected;

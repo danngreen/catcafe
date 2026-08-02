@@ -2531,6 +2531,76 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!who) window.__errors.push('nobody about with a hint: ' + window.__hint);
         if (!spoke) window.__errors.push('the hint did not come up when it should have: ' + window.__hint);
         if (!wrote) window.__errors.push('told us and did not write it down: ' + window.__hint);
+      } else if (SCRIPT === 'netexit') {
+        // Exit: save the game, hang up, and go back to the front of the game.
+        // Driven with the keys a player has, because the thing that went wrong
+        // in the last menu of this kind was a keypress landing twice.
+        const st = g.state;
+        localStorage.removeItem('catcafe.save.v1');
+        st.money = 4321;
+        await wait(400);
+
+        let reloads = 0;
+        g.reloadPage = () => { reloads++; };
+        const wasConnected = g.net.connected;
+
+        key('Escape', true); await wait(150); key('Escape', false); await wait(250);
+        const menu = g.topScreen;
+        const items = (menu && menu.items) || [];
+        const after = items[items.indexOf('Save game') + 1];
+
+        // Walk down to Exit the way a thumb would, one press at a time.
+        const steps = items.indexOf('Exit');
+        for (let i = 0; i < steps; i++) {
+          key('ArrowDown', true); await wait(120); key('ArrowDown', false); await wait(160);
+        }
+        const onExit = items[menu.index];
+        key('Space', true); await wait(150); key('Space', false); await wait(300);
+        const asked = g.topScreen && g.topScreen.constructor.name;
+
+        // It opens on No, and No means stay.
+        key('Space', true); await wait(150); key('Space', false); await wait(400);
+        const stayed = g.topScreen && g.topScreen.constructor.name;
+        const savedAfterNo = !!localStorage.getItem('catcafe.save.v1');
+        const reloadsAfterNo = reloads;
+
+        // Now go through with it.
+        key('Space', true); await wait(150); key('Space', false); await wait(300);
+        key('ArrowRight', true); await wait(140); key('ArrowRight', false); await wait(160);
+        key('Space', true); await wait(150); key('Space', false); await wait(900);
+
+        // And the valley should let go of us: leaving is a hang-up the server
+        // sees, not just a screen change on this machine.
+        // Ask the valley for its roster by name, not for a headcount: these
+        // scenarios share a server, and somebody else's browser still winding
+        // down is not us.
+        const me = st.playerName;
+        let inThere = true;
+        for (let i = 0; i < 24; i++) {
+          const r = await fetch(`/status?game=${g.net.gameId}`).then((x) => x.json()).catch(() => null);
+          inThere = !!r && (r.players || []).some((p) => p.name === me);
+          if (!inThere) break;
+          await wait(250);
+        }
+
+        const raw = localStorage.getItem('catcafe.save.v1');
+        const saved = raw ? JSON.parse(raw) : null;
+        window.__exit = `after Save game="${after}" landedOn="${onExit}" asked=${asked}`
+          + ` noKeeps=${stayed} savedOnNo=${savedAfterNo} reloadsOnNo=${reloadsAfterNo}`
+          + ` money=${saved && saved.money} seed=${saved && saved.seed === g.worldSeed}`
+          + ` wasConnected=${wasConnected} stillConnected=${g.net.connected} reloads=${reloads}`
+          + ` me="${me}" valleyStillHasMe=${inThere}`;
+        if (after !== 'Exit') window.__errors.push('Exit is not under Save game: ' + window.__exit);
+        if (onExit !== 'Exit') window.__errors.push('arrow keys do not reach Exit: ' + window.__exit);
+        if (asked !== 'ConfirmScreen') window.__errors.push('Exit did not ask first: ' + window.__exit);
+        if (stayed !== 'PauseScreen') window.__errors.push('saying No did not keep us here: ' + window.__exit);
+        if (savedAfterNo || reloadsAfterNo) window.__errors.push('No left the valley anyway: ' + window.__exit);
+        if (!saved) window.__errors.push('left without saving: ' + window.__exit);
+        if (saved && saved.money !== 4321) window.__errors.push('saved somebody else\'s game: ' + window.__exit);
+        if (saved && saved.seed !== g.worldSeed) window.__errors.push('the save does not name this valley: ' + window.__exit);
+        if (wasConnected && g.net.connected) window.__errors.push('still on the line after leaving: ' + window.__exit);
+        if (reloads !== 1) window.__errors.push('did not go back to the front: ' + window.__exit);
+        if (inThere) window.__errors.push('the valley still has us in it: ' + window.__exit);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -4689,6 +4759,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__ghost ? ` ${window.__ghost}` : '')
         + (window.__shellw ? ` ${window.__shellw}` : '')
         + (window.__hint ? ` ${window.__hint}` : '')
+        + (window.__exit ? ` ${window.__exit}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

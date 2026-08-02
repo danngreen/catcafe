@@ -738,6 +738,34 @@ class Game {
     audio.sfx('ui_ok');
   }
 
+  /** On its own so a test can watch us leave without the page going away. */
+  reloadPage() { location.reload(); }
+
+  /**
+   * Save, hang up, and go back to the front of the game.
+   *
+   * The books are the server's and were already up to date; the local save is
+   * what lets this browser offer to continue *this* valley later, so it is
+   * written before the line goes down rather than after.
+   *
+   * Then a reload, which is not laziness: start() already works out whether
+   * this machine gets the lobby or the title screen, and a play session leaves
+   * a great deal behind it — a cafe simulation, a valley of villagers, other
+   * players' sprites, sockets, timers. Dismantling all of that by hand to reach
+   * a screen the boot path can produce in a second is a fine way to end up on
+   * the title screen with yesterday's cats still walking about.
+   */
+  leaveValley() {
+    this.state.save();
+    // Say goodbye properly: the socket closing is how the server knows to take
+    // us out of the valley, and how the people still in it hear that we left.
+
+
+    try { net.leave(); } catch { /* going anyway */ }
+    this.hud.toast('Saving and leaving…', 'info', 3);
+    setTimeout(() => this.reloadPage(), 250);
+  }
+
   // ---------------------------------------------------------------- loop
 
   frame(ts) {
