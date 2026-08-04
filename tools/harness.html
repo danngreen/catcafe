@@ -3018,6 +3018,143 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (dropped.length) {
           window.__errors.push('the server quietly throws these away: ' + window.__books);
         }
+      } else if (SCRIPT === 'taxitime') {
+        // What a taxi costs you in time. It used to be seven and a quarter
+        // hours — written as `60 * 6`, which looks like six minutes and is not,
+        // because an hour in this valley is fifty seconds. One flight ate most
+        // of a delivery window and any afternoon flight rolled the date, so
+        // landing came with the end-of-day summary.
+        const D = await import('../src/game/deliveries.js');
+        const TT = await import('../src/game/time.js');
+        const st = g.state;
+        st.deliveries = [];
+        st.clock.day = 5;
+        st.clock.t = 14 * TT.HOUR_SECONDS;            // two in the afternoon
+        st.visited = st.visited || {};
+        await wait(500);
+
+        // An order with the shortest window the phone ever gives out.
+        const spot = g.deliverySpots().find((p) => !p.house);
+        const d = D.makeDelivery(spot, g.homeDoor, st.clock.absolute, () => 0);
+        st.deliveries = [d];
+        const hours = (d.due - d.taken) / TT.HOUR_SECONDS;
+
+        const before = { day: st.clock.day, t: st.clock.t, live: st.liveDeliveries().length };
+        g.flyTaxi({ x: spot.x, y: spot.y, name: spot.name });
+        // The flight is a cutscene, then a fade, then the drop.
+        for (let i = 0; i < 120 && (g.cutscene || g.fader.busy); i++) await wait(100);
+        await wait(600);
+
+        const cost = (st.clock.day - before.day) * TT.DAY_SECONDS + (st.clock.t - before.t);
+        const costHours = cost / TT.HOUR_SECONDS;
+        const rolled = st.clock.day !== before.day;
+        const summary = g.screens.some((s2) => s2.constructor.name === 'SummaryScreen');
+        const stillLive = st.liveDeliveries().length;
+        const arrived = Math.abs(g.player.tx - spot.x) < 4 && Math.abs(g.player.ty - spot.y) < 4;
+
+        // Again in the evening, which is where the second half of the report
+        // came from: a flight long enough to cross midnight rolls the date, and
+        // the date rolling is what puts the morning summary on the screen.
+        st.clock.day = 5;
+        st.clock.t = 19 * TT.HOUR_SECONDS;
+        await wait(300);
+        const eveBefore = st.clock.day;
+        g.flyTaxi({ x: g.homeDoor.x, y: g.homeDoor.y, name: 'home' });
+        for (let i = 0; i < 120 && (g.cutscene || g.fader.busy); i++) await wait(100);
+        await wait(700);
+        const eveRolled = st.clock.day !== eveBefore;
+        const eveSummary = g.screens.some((s2) => s2.constructor.name === 'SummaryScreen');
+        if (eveRolled) window.__errors.push("a seven o clock flight rolled the date");
+        if (eveSummary) window.__errors.push('landing in the evening brought up the summary');
+
+        window.__taxi = `evening rolled=${eveRolled} summary=${eveSummary} `
+          + `orderHours=${hours.toFixed(1)} costHours=${costHours.toFixed(2)}`
+          + ` rolledTheDate=${rolled} summaryOnLanding=${summary}`
+          + ` orders ${before.live}->${stillLive} arrived=${arrived}`;
+        if (!arrived) window.__errors.push('the taxi did not put us there: ' + window.__taxi);
+        if (costHours <= 0) window.__errors.push('flying costs nothing at all: ' + window.__taxi);
+        if (costHours > 1.5) window.__errors.push('the flight eats half a day: ' + window.__taxi);
+        if (costHours > hours) window.__errors.push('the flight outlasts the order it is for: ' + window.__taxi);
+        if (rolled) window.__errors.push('an afternoon flight rolled the date: ' + window.__taxi);
+        if (summary) window.__errors.push('landing brought up the end-of-day summary: ' + window.__taxi);
+        if (stillLive !== before.live) window.__errors.push('the delivery vanished in the air: ' + window.__taxi);
+      } else if (SCRIPT === 'snowday') {
+        // Snow is the one kind of weather a player can go a whole game without
+        // seeing — it belongs to winter, and winter is day 84. So check it
+        // works *before* anybody waits forty days to find out it does not:
+        // that it falls, that it is drawn, and that it moves the orders.
+        const W = await import('../src/game/weather.js');
+        const st = g.state;
+
+        // How often it snows in a winter, over a lot of valleys. A model that
+        // never snows would pass every other test in here.
+        let winterDays = 0, snowDays = 0, snowless = 0;
+        for (let s2 = 0; s2 < 60; s2++) {
+          const seed2 = 1000 + s2 * 7919;
+          let mine = 0;
+          for (let d = 84; d <= 111; d++) {
+            winterDays++;
+            if (W.weatherOn(seed2, d).id === 'snow') { snowDays++; mine++; }
+          }
+          if (!mine) snowless++;
+        }
+        const rate = snowDays / winterDays;
+
+        // And when it does snow: it is drawn, and it sells hot drinks.
+        const snowSeed = (() => {
+          for (let k = 1; k < 8000; k++) if (W.weatherOn(k, 90).id === 'snow') return k;
+          return -1;
+        })();
+        const sky = W.weatherNow(snowSeed, { day: 90, t: 9999 });
+        // What the pantry sees. The drink nudges are per-tag and nested, the
+        // same way cafe.js reads them.
+        const drink = (t) => {
+          const a = sky.from.drink?.[t] ?? 1, b = sky.now.drink?.[t] ?? 1;
+          return a + (b - a) * sky.blend;
+        };
+        const hot = drink('hot');
+        const cold = drink('cold');
+        const crowd = W.mix(sky, 'crowd');
+
+        // Drawn: a stub overlay against the real one, same frame.
+        // Against a clear sky rather than against a number picked by eye: the
+        // flakes are small and faint, and "more than four hundred pixels" is a
+        // guess about the art, not a fact about whether it snowed.
+        const inkFor = (s2) => {
+          const fx = new W.WeatherFx(480, 270);
+          const c = document.createElement('canvas');
+          c.width = 480; c.height = 270;
+          const cx = c.getContext('2d');
+          for (let i = 0; i < 40; i++) fx.update(0.05, s2, false);
+          fx.draw(cx, s2, false);
+          const px = cx.getImageData(0, 0, 480, 270).data;
+          // Count the flakes, not the tint: a cloudy sky lays a shadow over
+          // most of the screen, so "how many pixels changed" says cloudy is
+          // snowier than snow. Flakes are small, pale and opaque.
+          let n2 = 0;
+          for (let i = 0; i < px.length; i += 4) {
+            if (px[i + 3] > 40 && px[i] > 190 && px[i + 1] > 190 && px[i + 2] > 190) n2++;
+          }
+          return n2;
+        };
+        const clearSeed = (() => {
+          for (let k = 1; k < 8000; k++) if (W.weatherOn(k, 90).id === 'cloudy') return k;
+          return -1;
+        })();
+        const ink = inkFor(sky);
+        const clearInk = inkFor(W.weatherNow(clearSeed, { day: 90, t: 9999 }));
+
+        window.__snow = `winterSnowRate=${(rate * 100).toFixed(1)}% snowlessWinters=${snowless}/60`
+          + ` seed=${snowSeed} hot=${hot.toFixed(2)} cold=${cold.toFixed(2)}`
+          + ` crowd=${crowd.toFixed(2)} pixels=${ink} onAClearDay=${clearInk}`;
+        if (rate < 0.12) window.__errors.push('it hardly ever snows, even in winter: ' + window.__snow);
+        if (snowless > 6) window.__errors.push('too many winters with no snow at all: ' + window.__snow);
+        if (snowSeed < 0) window.__errors.push('no valley snows on a winter day: ' + window.__snow);
+        if (!(hot > 1.5)) window.__errors.push('snow does not sell hot drinks: ' + window.__snow);
+        if (!(cold < 0.5)) window.__errors.push('people still want lemonade in the snow: ' + window.__snow);
+        if (!(crowd < 0.6)) window.__errors.push('snow does not keep anybody in: ' + window.__snow);
+        if (ink < 120) window.__errors.push('the snow is not drawn: ' + window.__snow);
+        if (clearInk > 20) window.__errors.push('a clear day draws flakes too, so that proves nothing: ' + window.__snow);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -5182,6 +5319,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__spots ? ` ${window.__spots}` : '')
         + (window.__rugs ? ` ${window.__rugs}` : '')
         + (window.__books ? ` ${window.__books}` : '')
+        + (window.__taxi ? ` ${window.__taxi}` : '')
+        + (window.__snow ? ` ${window.__snow}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

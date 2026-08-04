@@ -1718,7 +1718,17 @@ class Game {
           this.placeOn(this.overworld, place.x, place.y + 1);
           this.cam.follow(this.overworld, this.player.x, this.player.y, true);
           this.hud.showLocation(place.name);
-          st.clock.t += 60 * 6;                       // the flight takes a while
+          // What the flight costs you. Three quarters of an hour: a real cost
+          // against walking, and short enough that an order with three hours
+          // on it survives the trip.
+          //
+          // It used to add 360, which reads as six minutes and is nothing of
+          // the sort — a day is twenty real minutes, so an hour is fifty
+          // seconds and 360 is seven and a quarter *hours*. One flight ate
+          // most of a delivery window, and any flight after about five in the
+          // afternoon rolled the date, which is why landing felt like waking
+          // up: it was the end-of-day summary, on time and in the wrong place.
+          st.clock.t += HOUR_SECONDS * 0.75;
           this.cutscene = new TaxiFlight('dropoff', this.player, {});
         });
       },
