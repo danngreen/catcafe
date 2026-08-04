@@ -9,12 +9,26 @@
 export const DAY_SECONDS = 20 * 60;
 export const HOUR_SECONDS = DAY_SECONDS / 24;
 
-/** Everything a client may set wholesale. Anything else is ignored. */
+/**
+ * Everything a client may set wholesale. Anything else is ignored.
+ *
+ * Silently ignored, which is the trap: add a field to the books, publish it
+ * with touch(), forget this list, and the value lives happily in the client
+ * that changed it and exists nowhere else. It is not in the other player's
+ * game and it is not in the save, so it survives exactly as long as the tab
+ * does. That is how ten deliveries could be run and counted and still leave
+ * the tally at zero, and how a bear could be bought for five thousand and not
+ * be there in the morning.
+ *
+ * The `books` scenario checks this list against GameState.snapshot(), because
+ * the failure has no symptom until somebody reloads.
+ */
 export const FIELDS = new Set([
   'money', 'reputation', 'inventory', 'stock', 'cats', 'cafe', 'flags', 'quests', 'questStep',
   'friends', 'workers', 'materials', 'employee', 'shopOpen', 'shopHours',
-  'visited', 'mail', 'pendingLetters', 'bestDayProfit', 'totalCustomers', 'daysPlayed',
-  'deliveries',
+  'visited', 'mail', 'pendingLetters', 'bestDayProfit', 'bestDayGross',
+  'totalCustomers', 'daysPlayed',
+  'deliveries', 'deliveriesRun', 'bear',
 ]);
 
 /**

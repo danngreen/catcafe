@@ -1418,6 +1418,7 @@ class Game {
     if (s.total) st.earn(s.total);
     // Turning up empty-handed is not a delivery, whatever the journal says.
     if (s.brought.length) st.countDelivery();
+
     st.clearDelivery(d.id);
     // Take them away, so the front room is empty on the way back — and so
     // somebody stood on a green is not still stood there afterwards.

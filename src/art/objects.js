@@ -1409,6 +1409,39 @@ function paintDoorMat(buf, v) {
   for (let x = 2; x < buf.w - 2; x += 3) buf.vline(x, 2, buf.h - 4, rgb('#b98a56'));
 }
 
+
+/**
+ * A woven rug: two tiles of it, flat on the floor.
+ *
+ * Flat is the whole point. Drawn as an object it would sort against the cats
+ * and a sleeping cat would end up *under* the rug she is lying on; baked into
+ * the ground with the doormats and the jetties, everything walks over it.
+ */
+function paintRugMat(buf, v, col) {
+  const sets = [
+    [P.rug, P.rugLt, P.rugDk],
+    ['#6a5a8f', '#8b7ab0', '#4b3e69'],
+    ['#c8ba92', '#e0d5b4', '#9a8c68'],
+  ];
+  const [base, lt, dk] = col ? [col, shade(col, 0.2), shade(col, -0.25)] : sets[v % sets.length];
+  const m = 2;
+  const w = buf.w - m * 2, h = buf.h - m * 2 - 4;
+  const y0 = m + 4;
+  buf.rect(m, y0, w, h, rgb(base));
+  buf.frame(m, y0, w, h, rgb(dk));
+  buf.frame(m + 2, y0 + 2, w - 4, h - 4, rgb(lt));
+  // A plain woven middle with two bands across it, which at this size reads as
+  // "rug" where anything more detailed reads as "noise".
+  buf.hline(m + 4, y0 + Math.round(h * 0.36), w - 8, rgb(lt));
+  buf.hline(m + 4, y0 + Math.round(h * 0.64), w - 8, rgb(lt));
+  buf.rect(m + 6, y0 + Math.round(h * 0.42), w - 12, Math.max(2, Math.round(h * 0.2)), rgb(dk));
+  // Fringe, top and bottom, so it is a rug rather than a painted rectangle.
+  for (let x = m + 1; x < m + w - 1; x += 2) {
+    buf.vline(x, y0 - 2, 2, rgb(lt));
+    buf.vline(x, y0 + h, 2, rgb(lt));
+  }
+}
+
 function paintMenuBoard(buf, v) {
   groundShadow(buf, buf.w / 2, buf.h - 2, 7, 2.4);
   buf.rect(2, 0, buf.w - 4, buf.h - 6, rgb(P.woodDk));
@@ -1503,6 +1536,10 @@ export const OBJECTS = {
   piano:      { w: 48, h: 30, tw: 3, th: 1, solid: true, variants: 1, paint: paintPiano },
   lampIn:     { w: 18, h: 28, tw: 1, th: 1, solid: true, variants: 1, paint: paintLampIn, light: true },
   doormat:    { w: 24, h: 12, tw: 1, th: 1, solid: false, variants: 1, paint: paintDoorMat },
+  // Flat by declaration rather than at every call site: a rug is put down by
+  // the furniture loop, which has no idea which pieces belong on the floor.
+
+  rug:        { w: 32, h: 32, tw: 2, th: 2, solid: false, flat: true, variants: 3, paint: paintRugMat },
   menuBoard:  { w: 22, h: 28, tw: 1, th: 1, solid: true, variants: 1, paint: paintMenuBoard },
 };
 
@@ -1513,6 +1550,7 @@ export const OBJECTS = {
  */
 export const VARIANT_SWATCHES = {
   chair: [P.wood, '#8a72d6', '#6b9e8f'],
+  rug: [P.rug, '#6a5a8f', '#c8ba92'],
   patioChair: ['#6f8f7a', '#c8c2b4', '#5b8fd6'],
   patioStool: ['#6f8f7a', '#c8c2b4', '#d95f5f'],
   patioTable: ['#8f9a8a', '#c8c2b4', '#7d8794'],

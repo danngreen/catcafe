@@ -111,7 +111,7 @@ export class GameMap {
       tw: def.tw, th: def.th,
       w: def.w, h: def.h,
       solid: opts.solid ?? def.solid,
-      flat: opts.flat ?? false,
+      flat: opts.flat ?? def.flat ?? false,
       light: def.light || opts.light,
       offX: opts.offX || 0,
       offY: opts.offY || 0,

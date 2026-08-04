@@ -2852,7 +2852,12 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // to read and half as much information.
         const open = made.find((d) => !d.house);
         const who = g.villagers.find((v) => v.recipient === open.id);
-        let paid = 0, gone = false, cleared = false;
+        // The tally the drover counts. It is the only thing standing between a
+        // player and a five thousand pound bear, so it has to move when a
+        // delivery is actually run — and be written down where a save can see.
+        st.deliveriesRun = st.deliveriesRun || 0;
+        const countBefore = st.deliveriesRun;
+        let paid = 0, gone = false, cleared = false, counted = 0;
         if (who) {
           for (const id of open.items) st.cafeSim.addStock(id, 1, st.clock.day);
           const before = st.money;
@@ -2867,11 +2872,13 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           paid = st.money - before;
           gone = !g.villagers.some((v) => v.recipient === open.id);
           cleared = !st.deliveries.some((d) => d.id === open.id);
+          counted = st.deliveriesRun - countBefore;
         }
 
         window.__spots = `spots=${spots.length} houses=${kinds.house} greens=${kinds.green}`
           + ` landmarks=${kinds.landmark} at=[${report}] paid=${paid} worth=${D.fullValue(open)}`
-          + ` leftAfter=${!gone} stillOnTheBooks=${!cleared}`;
+          + ` leftAfter=${!gone} stillOnTheBooks=${!cleared} counted=${counted}`
+          + ` inTheBooks=${JSON.stringify(st.snapshot().deliveriesRun)}`;
         if (!kinds.green || !kinds.landmark || !kinds.house) {
           window.__errors.push('an address kind has gone missing: ' + window.__spots);
         }
@@ -2884,6 +2891,133 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (who && paid !== D.fullValue(open)) window.__errors.push('handing over paid wrongly: ' + window.__spots);
         if (who && !gone) window.__errors.push('they are still stood there afterwards: ' + window.__spots);
         if (who && !cleared) window.__errors.push('the order is still on the books: ' + window.__spots);
+        if (who && counted !== 1) window.__errors.push('running it did not count towards the bear: ' + window.__spots);
+        if (st.snapshot().deliveriesRun !== st.deliveriesRun) {
+          window.__errors.push('the tally is not in the books a save is made from: ' + window.__spots);
+        }
+      } else if (SCRIPT === 'rugs') {
+        // A rug you cannot see is a hundred and forty pounds of nothing. It was
+        // in the shop, in the bag, in the books and in the room, and had no
+        // painter at all — so the furniture loop dropped it on the floor and
+        // said nothing.
+        const { ITEMS } = await import('../src/game/items.js');
+        const { OBJECTS } = await import('../src/art/objects.js');
+        const T = await import('../src/art/tiles.js');
+        const st = g.state;
+
+        // Nothing placeable may be missing its painter: this is the whole class
+        // of bug, not just the rug.
+        const orphans = Object.entries(ITEMS)
+          .filter(([, it]) => it.place && !OBJECTS[it.place])
+          .map(([id, it]) => `${id}->${it.place}`);
+
+        // Put one down on the blue carpet, which is where it was reported.
+        const room = st.cafe.rooms[0];
+        room.floor = T.T.CARPET_BLUE ?? room.floor;
+        st.cafe.furniture = st.cafe.furniture.filter((f) => f.type !== 'rug');
+        const at = { x: room.x + 2, y: room.y + 2 };
+        st.cafe.furniture.push({ type: 'rug', x: at.x, y: at.y, variant: 0 });
+        st.rebuildCafe();
+        g.maps.set('cafe', st.cafeMap);
+        const map = st.cafeMap;
+        const asDecal = (map.decals || []).some((d) => d.type === 'rug');
+        const asObject = (map.objects || []).some((o) => o.type === 'rug');
+        const blocks = map.solid(at.x + map.meta.offX, at.y + map.meta.offY);
+
+        // And it has to actually put ink on the floor: walk in and compare the
+        // baked ground with and without it. Empty the room first — a cat
+        // wandering through the sample changes a couple of hundred pixels on
+        // its own, which is enough to call an invisible rug visible.
+        st.cats = [];
+        st.catActors = [];
+        st.cafeSim.customers.length = 0;
+        st.inCafe = true; st.mapId = 'cafe';
+        g.currentMap = map;
+        g.player.x = (at.x + map.meta.offX) * 16 + 8;
+        g.player.y = (at.y + map.meta.offY + 3) * 16;
+        g.cam.follow(map, g.player.x, g.player.y, true);
+        await wait(600);
+        // Sample exactly the floor the rug covers, worked out from the camera.
+        // A patch picked by eye catches a lamp or the edge of the HUD, and then
+        // an invisible rug still reads as two hundred changed pixels.
+        const shot = () => {
+          const c = document.querySelector('canvas');
+          const cx = c.getContext('2d');
+          const scale = c.width / 480;                       // VIEW_W
+          const tx = at.x + map.meta.offX, ty = at.y + map.meta.offY;
+          const sx = Math.round(((tx - 1) * 16 - g.cam.ox) * scale);
+          const sy = Math.round(((ty - 2) * 16 - g.cam.oy) * scale);
+          const w = Math.round(16 * 4 * scale), h = Math.round(16 * 4 * scale);
+          return cx.getImageData(sx, sy, w, h).data.slice();
+        };
+        const withRug = shot();
+        st.cafe.furniture = st.cafe.furniture.filter((f) => f.type !== 'rug');
+        st.rebuildCafe();
+        g.maps.set('cafe', st.cafeMap);
+        g.currentMap = st.cafeMap;
+        g.renderer.invalidateAll();
+        await wait(600);
+        const without = shot();
+        let diff = 0;
+        for (let i = 0; i < withRug.length; i += 4) {
+          if (withRug[i] !== without[i] || withRug[i + 1] !== without[i + 1]
+            || withRug[i + 2] !== without[i + 2]) diff++;
+        }
+
+        // Put it back for the screenshot: the last thing the run drew was the
+        // room without it, which is a poor picture of a rug.
+        st.cafe.furniture.push({ type: 'rug', x: at.x, y: at.y, variant: 0 });
+        st.cafe.furniture.push({ type: 'rug', x: at.x + 3, y: at.y, variant: 1 });
+        st.cafe.furniture.push({ type: 'rug', x: at.x + 6, y: at.y, variant: 2 });
+        st.rebuildCafe();
+        g.maps.set('cafe', st.cafeMap);
+        g.currentMap = st.cafeMap;
+        g.renderer.invalidateAll();
+        await wait(500);
+
+        window.__rugs = `orphans=[${orphans}] decal=${asDecal} object=${asObject}`
+          + ` blocksTheFloor=${blocks} pixelsChanged=${diff}`;
+        if (orphans.length) window.__errors.push('something you can buy has no picture: ' + window.__rugs);
+        if (!asDecal) window.__errors.push('the rug is not down on the floor: ' + window.__rugs);
+        if (asObject) window.__errors.push('the rug sorts against the cats instead of lying flat: ' + window.__rugs);
+        if (blocks) window.__errors.push('you cannot walk on the rug: ' + window.__rugs);
+        if (diff < 400) window.__errors.push('the rug is invisible on this floor: ' + window.__rugs);
+      } else if (SCRIPT === 'netbookfields') {
+        // Everything in the books has to survive the trip to the server.
+        //
+        // A field the server does not accept is not rejected, it is ignored:
+        // the value sits in the client that changed it, is in nobody else's
+        // game, and is not in the save. Three fields had gone that way — the
+        // delivery tally, the bear herself, and the best day's takings — so a
+        // bear could be bought for five thousand and be gone by morning.
+        const { FIELDS } = await import('../server/world.js');
+        const st = g.state;
+        const snap = st.snapshot();
+        const orphans = Object.keys(snap).filter((k) => !FIELDS.has(k));
+
+        // Not just the list: put every field through the server's own applyOp
+        // and check the value lands. Comparing two lists would pass if the
+        // list were right and the code that reads it were wrong.
+        const { applyOp } = await import('../server/world.js');
+        const world = JSON.parse(JSON.stringify(snap));
+        const dropped = [];
+        for (const k of Object.keys(snap)) {
+          // A value nothing else in the game would produce, of the right shape.
+          const v = Array.isArray(snap[k]) ? [{ probe: k }]
+            : (snap[k] && typeof snap[k] === 'object') ? { probe: k }
+              : (typeof snap[k] === 'number') ? 8731 : `probe:${k}`;
+          const changed = applyOp(world, { op: 'set', k, v });
+          if (!changed.length || JSON.stringify(world[k]) !== JSON.stringify(v)) dropped.push(k);
+        }
+
+        window.__books = `keys=${Object.keys(snap).length} orphans=[${orphans}]`
+          + ` droppedByTheServer=[${dropped}]`;
+        if (orphans.length) {
+          window.__errors.push('the books have fields the server will not keep: ' + window.__books);
+        }
+        if (dropped.length) {
+          window.__errors.push('the server quietly throws these away: ' + window.__books);
+        }
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -5046,6 +5180,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__bear ? ` ${window.__bear}` : '')
         + (window.__bshot ? ` ${window.__bshot}` : '')
         + (window.__spots ? ` ${window.__spots}` : '')
+        + (window.__rugs ? ` ${window.__rugs}` : '')
+        + (window.__books ? ` ${window.__books}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

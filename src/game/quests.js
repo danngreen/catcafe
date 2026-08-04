@@ -12,9 +12,9 @@ export const QUESTS = [
     desc: 'Pip suggested stocking coffee and something sweet before opening properly.',
     objective: { type: 'stock', any: ['house_coffee', 'black_tea'], count: 6 },
     reward: { money: 60, items: [['cookie', 4]] },
-    offer: "You've opened a cafe with nothing to sell in it. Bold.\n\nGet six portions of coffee or tea in and I'll throw in some biscuits for nothing.",
+    offer: "You've opened a cafe with nothing to sell in it. Bold.\n\nGet six portions of coffee or tea and I'll throw in some cookies for nothing.",
     progress: "Stock six portions of coffee or tea. Buy them from the grocer in Brambleford.",
-    complete: "There we are. Now you're a business.\n\nTake these biscuits. Don't tell anyone I'm soft.",
+    complete: "There we are. Now you're a business.\n\nTake these cookies. Don't tell anyone I'm soft.",
   },
   {
     id: 'honey_run',
@@ -23,10 +23,10 @@ export const QUESTS = [
     desc: "Dough wants a jar of Clover's honey from Oakhollow to work into a scone recipe.",
     objective: { type: 'item', item: 'honey', count: 1 },
     reward: { money: 140, flags: ['recipe_honey'], items: [['honey_scone', 3]] },
-    offer: "Right. Clover keeps bees out at Oakhollow, east through the woods.\n\nBring me one jar and I'll teach you the honey scone. People will walk an hour for it.",
+    offer: "Clover keeps bees out at Oakhollow, east through the woods.\n\nBring me a jar and I'll make honey scones. People will flock to your cafe for it.",
     progress: 'Buy a jar of honey from the beekeeper in Oakhollow. Follow the road east and then '
       + 'north, and look for the very large tree.',
-    complete: "That's the stuff. Right — honey scones. Your menu just got interesting.\n\nBuy the honey, bake the scone, watch them queue.",
+    complete: "That's the stuff. Here are the honey scones.",
   },
   {
     id: 'lost_bell',
@@ -35,7 +35,7 @@ export const QUESTS = [
     desc: 'A little bell with a name scratched inside was found on the road. Marigold thinks it belongs to somebody in Saltmere.',
     objective: { type: 'deliver', item: 'lost_bell', to: 'shrimp' },
     reward: { money: 180, friendship: ['shrimp'], items: [['bell', 1]] },
-    offer: "Somebody handed this in. There's a name scratched inside — can't read it, but it's a Saltmere sort of name.\n\nTake it down to the coast and ask around? Start with the otter on the shingle.",
+    offer: "Somebody handed this in. There's a name scratched inside — can't read it, but it's a Saltmere sort of name.\n\nTake it down to the coast and ask around?",
     progress: 'Take the bell to Shrimp in Saltmere, on the coast to the south-west. He is the '
       + 'otter by the water.',
     complete: 'Thank you for bringing it back. Really.',
@@ -47,9 +47,9 @@ export const QUESTS = [
     desc: 'Nettle picked wildflowers for someone in Hollowdown but is too shy to deliver them.',
     objective: { type: 'deliver', item: 'wildflowers', to: 'chalk' },
     reward: { money: 90, friendship: ['chalk', 'nettle'], hint: 'taxi' },
-    offer: "Right. This is embarrassing. I picked these for someone up in Hollowdown and now I can't possibly hand them over myself.\n\nWould you? Chalk. The squirrel. You'll know them.",
+    offer: "So..... this is um, embarrassing. I picked these for someone up in Hollowdown and um... now I can't possibly hand them over myself.\n\nWould you? They're for Chalk. The cute squirrel. You'll know them.",
     progress: 'Take the flowers to Chalk in Hollowdown, up on the chalk hills to the north.',
-    complete: "Oh. Oh! From Nettle? Well. Well well well.\n\nHere, take this — you'll want to know the birds run a taxi service. Perch in every town.",
+    complete: "Oh. Oh! From Nettle? Well. Well well well.\n\nHere's a tip: did you know the birds run a taxi service? There's a perch in every town.",
   },
   {
     id: 'sea_shell',
@@ -58,7 +58,7 @@ export const QUESTS = [
     desc: 'Juniper thinks your cafe needs a spiral shell on the windowsill.',
     objective: { type: 'item', item: 'seashell', count: 1 },
     reward: { money: 110, items: [['f_plant', 1]], rep: 0.04 },
-    offer: "Your place needs a *thing*. An object. Something with a story.\n\n"
+    offer: "Your place needs a *thing*. An pretty object. Something with a story.\n\n"
       + "A big spiral shell, that's what. There was one down at Saltmere — I'd ask about "
       + "rather than go looking, mind. That beach has been picked over since before I was born.",
     // Asking around *is* the job until somebody answers. Shrimp is the one who
@@ -75,7 +75,7 @@ export const QUESTS = [
     id: 'clear_the_path',
     giver: 'brook',
     title: 'The Fallen Chalk',
-    desc: 'A slab of chalk is blocking the river bridge on the road east. Brook says the right tool would shift it.',
+    desc: 'A slab of chalk is blocking the river bridge on the road east. Brook says the right tool would move it.',
     objective: { type: 'flag', flag: 'barrier_eastpass' },
     reward: { money: 260, rep: 0.05 },
     offer: "Water's high after the rain, and it took the bank out from under a chalk face "
@@ -84,12 +84,12 @@ export const QUESTS = [
       + "That was the road to Thistlewick, that was. You can still get there the long way round, "
       + "by Hollowdown and Oakhollow, but it is the best part of an hour nobody should have to "
       + "walk twice.\n\n"
-      + "Get a pick — the Chalk Pit Store up in Hollowdown has them — and shift it. Everyone in "
+      + "Get a pick — the Chalk Pit Store up in Hollowdown has them — and move it. Everyone in "
       + "this town will be quietly grateful and not one of them will say so.",
     progress: 'Buy a chalk pick at the Chalk Pit Store in Hollowdown, then follow the road due '
       + 'east out of town to the river. You cannot miss the bridge, or the chalk sitting on it.',
-    complete: "You shifted it? On your own?\n\nRight. That is the bridge open again, and the "
-      + "road east with it — no more trailing all the way round by Hollowdown to get to "
+    complete: "You moved it? On your own?\n\nGreat! The bridge is open again, "
+      + "no more trailing all the way round by Hollowdown to get to "
       + "Thistlewick.\n\nTake this, and don't argue.",
   },
   {
@@ -104,7 +104,7 @@ export const QUESTS = [
       + "Shears would do it. The hardware place up in Hollowdown sells them.",
     progress: 'Buy hedge shears at the Chalk Pit Store in Hollowdown, then go to the little '
       + 'bridge on the mill track, north-east of here.',
-    complete: "You got through! And you didn't fall through the floor. Both good.\n\nHere. Map of the valley. It's wrong about the north but it's better than nothing.",
+    complete: "You got through! And you didn't fall through the floor. Both good.\n\nHere's a map of the valley. It's wrong about the north but it's better than nothing.",
   },
   {
     id: 'four_cats',
@@ -113,7 +113,7 @@ export const QUESTS = [
     desc: 'Thimble counts your cats every time they walk past and would like there to be more of them.',
     objective: { type: 'cats', count: 4 },
     reward: { money: 200, rep: 0.06 },
-    offer: "I count your cats when I walk past. There are not enough of them.\n\nGet to four and I'll... I'll be pleased. And I'll give you something. For the trouble.",
+    offer: "I count your cats when I walk past. There are not enough of them.\n\nGet to four and I'll... I'll be pleased. And I'll give you something for the trouble.",
     progress: 'Adopt four cats. Whisker & Paw down the lane sells them.',
     complete: "Four! I counted twice.\n\nHere. Spend it on something for them, not for you.",
   },
@@ -126,7 +126,7 @@ export const QUESTS = [
     reward: { money: 240, items: [['brush', 1]], hint: 'fish' },
     offer: "Everyone thinks grooming is the whole story. It isn't. Food's half of it.\n\nFeed your cats fish or the gourmet tins for a few days — the cheap stuff will not show — and bring one back to me.",
     progress: 'Feed a cat fresh fish or gourmet tins for a few days running. Kibble and good food will not do it.',
-    complete: "*Now* look at that. That's what I'm talking about.\n\nTake a brush — do them between visits. And go and see Kelp in Saltmere about fish. Before noon, mind.",
+    complete: "*Now* look at that. That's what I'm talking about.\n\nRemember to brush them between visits. And go and see Kelp in Saltmere about fish. Before noon, mind.",
   },
   {
     id: 'first_extension',
@@ -135,9 +135,9 @@ export const QUESTS = [
     desc: "Trowel will believe you're serious once you've actually built something.",
     objective: { type: 'rooms', count: 2 },
     reward: { money: 300, rep: 0.08 },
-    offer: "Everyone talks about extending. Almost nobody does it.\n\nHire a hand, buy the timber, put up one more room. Then come back and we'll talk about doing it properly.",
+    offer: "Everyone talks about renovating. Almost nobody does it.\n\nHire a crew, buy the materials, add a room to your place. Then come back and we'll talk about doing it properly.",
     progress: 'Hire workers from me, then build one more room onto the cafe.',
-    complete: "You did it. And it's not bad.\n\nRight. Now you're a customer. Next time we'll do something ambitious.",
+    complete: "You did it. And it's not bad.\n\nNow you're a customer. Next time we'll do something ambitious.",
   },
   {
     id: 'busy_day',
@@ -157,7 +157,7 @@ export const QUESTS = [
     desc: 'Sable will only take you seriously once you own a rare breed.',
     objective: { type: 'rarecat' },
     reward: { money: 400, items: [['ribbon', 2]], rep: 0.08 },
-    offer: "Common cats are lovely and I mean nothing against them.\n\nBut bring a rare coat into that room and watch what happens to your takings. Come back when you've one of mine.",
+    offer: "Common cats are lovely and I mean nothing against them.\n\nBut bring a rare coat into that room and watch what happens to your profit. Come back when you have one of mine.",
     progress: 'Adopt a rare breed. I sell them here, on the days I open.',
     complete: "There. Now your cafe has a *centrepiece*.\n\nTake these ribbons. Presentation is most of it.",
   },
