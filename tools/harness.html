@@ -3234,6 +3234,74 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (fireMoves.some((n2) => n2 < 20)) window.__errors.push('the flame barely moves: ' + window.__fire);
         if (stoneMoves.some((n2) => n2 > 0)) window.__errors.push('the hearth moves with the fire: ' + window.__fire);
         if (cycles < 3) window.__errors.push('the fire does not advance with time: ' + window.__fire);
+      } else if (SCRIPT === 'confirmbox') {
+        // Nothing may be drawn outside the panel it belongs to.
+        //
+        // The box was `54 + lines * 12` tall with its footer planted at h - 6,
+        // and a line of text is nine rows once the shadow is counted — so the
+        // bottom line hung out of the box by three. Checked two ways: the
+        // layout has to add up against the font's own metrics, and the pixels
+        // have to stay inside the frame it declares.
+        const M = await import('../src/ui/menus.js');
+        const F = await import('../src/engine/font.js');
+        const cases = [
+          { title: 'Leave the valley?', lines: ['Your game is saved first.', 'You can come straight back in.'],
+            yes: 'Save and leave', no: 'Stay' },
+          { title: 'That is a lot of money', lines: ['1 x Stone Fireplace', '1,400 — you have 5,000'],
+            yes: 'Buy it', no: 'Not yet' },
+          { title: 'Buy the riding bear?', lines: ['5,000 — you have 12,000', 'There is only one of her.'],
+            yes: 'Buy her', no: 'Not today' },
+          { title: 'Take it down?', lines: ['You get 40% of what it cost back.'], yes: 'Demolish', no: 'Keep it' },
+          { title: 'One line', lines: [], yes: 'Yes', no: 'No' },
+        ];
+
+        const c = document.createElement('canvas');
+        c.width = 480; c.height = 270;
+        const cx = c.getContext('2d');
+        const bad = [];
+        const report = [];
+        for (const spec of cases) {
+          const scr = new M.ConfirmScreen(spec);
+          const L = scr.layout();
+          // 1. The sums, against the font rather than against themselves.
+          const footBottom = L.hintTop + F.GLYPH_H + 1;      // glyph plus shadow
+          if (footBottom > L.h - 1) bad.push(`${spec.title}: footer ${footBottom} of ${L.h}`);
+          if (L.w < F.textWidth(L.foot) + 8) bad.push(`${spec.title}: too narrow for its own footer`);
+          for (const line of spec.lines) {
+            if (F.textWidth(line) > L.w - 8) bad.push(`${spec.title}: "${line}" is wider than the box`);
+          }
+
+          // 2. The pixels. Clear, draw, and look at the rows just outside the
+          // panel: anything there is something that missed the box.
+          cx.clearRect(0, 0, 480, 270);
+          scr.draw(cx);
+          const strip = (sx, sy, sw, sh) => {
+            const d = cx.getImageData(sx, sy, sw, sh).data;
+            let n2 = 0;
+            // The dim() wash covers the screen, so "ink" means brighter than it.
+            for (let i = 0; i < d.length; i += 4) if (d[i] > 120 || d[i + 1] > 120) n2++;
+            return n2;
+          };
+          // Below and beside only. The title is a tab that deliberately
+          // straddles the top edge — every panel in the game is drawn that way,
+          // and calling it an overflow would just be measuring the house style.
+          const below = strip(L.x, L.y + L.h, L.w, 6);
+          const right = strip(L.x + L.w, L.y + 8, 6, L.h - 8);
+          const left = strip(Math.max(0, L.x - 6), L.y + 8, 6, L.h - 8);
+          report.push(`${spec.lines.length}L:h${L.h}/w${L.w} out=${below + right + left}`);
+          if (below + right + left > 0) {
+            bad.push(`${spec.title}: ${below} below, ${right} right, ${left} left`);
+          }
+        }
+
+        // Put a real one up for the screenshot.
+        const show = new M.ConfirmScreen(cases[0]);
+        show.choice = 1;
+        g.push(show);
+        await wait(400);
+
+        window.__cbox = `cases=${cases.length} [${report.join(' ')}] bad=[${bad.join(' | ')}]`;
+        if (bad.length) window.__errors.push('a confirm box does not hold its own text: ' + window.__cbox);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -5401,6 +5469,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__taxi ? ` ${window.__taxi}` : '')
         + (window.__snow ? ` ${window.__snow}` : '')
         + (window.__fire ? ` ${window.__fire}` : '')
+        + (window.__cbox ? ` ${window.__cbox}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

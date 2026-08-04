@@ -2,7 +2,7 @@
 // shops, the cafe management book, the journal, the bag, the map and the
 // morning summary. Screens are pushed onto a stack the game loop draws.
 
-import { panel, panelTitle, bar, cursor, dim, drawText, drawTextCentered, drawTextRight, textWidth, LINE_H } from './core.js';
+import { panel, panelTitle, bar, cursor, dim, drawText, drawTextCentered, drawTextRight, textWidth, LINE_H, GLYPH_H } from './core.js';
 import { SAFE, fitRect } from '../engine/safe.js';
 import { VIEW_W, VIEW_H } from '../engine/display.js';
 import { P } from '../art/palette.js';
@@ -67,18 +67,44 @@ export class ConfirmScreen extends Screen {
     }
   }
 
+  /**
+   * Where everything goes, worked out downwards from the title.
+   *
+   * The box used to be `54 + lines * 12` tall with the footer planted at
+   * `h - 6`, and a line of text is nine rows once you count the shadow — so
+   * the last line hung three rows out of the bottom of the panel. Deriving the
+   * height from the contents instead means it cannot come adrift again when
+   * somebody adds a line, and the test below can check the sums.
+   */
+  layout() {
+    const n = this.lines.length;
+    const foot = 'Left/Right to choose    Space to confirm';
+    const widest = Math.max(textWidth(foot),
+      ...this.lines.map((l) => textWidth(l)),
+      textWidth(this.yes) + textWidth(this.no) + 60,
+      textWidth(this.title) + 24);
+    const w = Math.min(VIEW_W - 24, Math.max(250, widest + 34));
+    const linesTop = 24;
+    const btnTop = linesTop + n * LINE_H + 8;
+    const hintTop = btnTop + 20;
+    const h = hintTop + GLYPH_H + 10;             // glyph, its shadow, and air
+    return {
+      w, h, foot, linesTop, btnTop, hintTop,
+      x: Math.round((VIEW_W - w) / 2), y: Math.round((VIEW_H - h) / 2),
+    };
+  }
+
   draw(ctx) {
     dim(ctx, 0.7);
-    const w = 250;
-    const h = 54 + this.lines.length * 12;
-    const x = Math.round((VIEW_W - w) / 2), y = Math.round((VIEW_H - h) / 2);
+    const L = this.layout();
+    const { x, y, w, h } = L;
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, this.title);
     this.lines.forEach((line, i) => {
-      drawTextCentered(ctx, line, x + w / 2, y + 24 + i * 12,
+      drawTextCentered(ctx, line, x + w / 2, y + L.linesTop + i * LINE_H,
         { color: i === 0 ? P.uiText : P.uiTextDim, shadow: P.uiShadow });
     });
-    const by = y + h - 20;
+    const by = y + L.btnTop;
     const labels = [this.no, this.yes];
     labels.forEach((label, i) => {
       const bx = x + w / 2 + (i ? 18 : -18 - textWidth(label));
@@ -89,7 +115,7 @@ export class ConfirmScreen extends Screen {
       }
       drawText(ctx, label, bx, by, { color: on ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
     });
-    drawTextCentered(ctx, 'Left/Right to choose    Space to confirm', x + w / 2, y + h - 6,
+    drawTextCentered(ctx, L.foot, x + w / 2, y + L.hintTop,
       { color: P.uiTextDim, shadow: P.uiShadow });
   }
 }

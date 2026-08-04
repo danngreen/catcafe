@@ -353,7 +353,7 @@ export const QUESTS = [
     complete: "*the grey cat considers the bed, considers Linnet, and gets into the bed*\n\n"
       + "...She is not sitting with me. She is sitting *near* me.\n\n"
       + "That will do. That will do very nicely. Do not tell anyone I got emotional about "
-      + "a deer-shaped absence in a chair.\n\nTake this. She has never once used it.",
+      + "this.\n\nTake this. She has never once used it.",
     steps: [
       {
         objective: { type: 'furniture', place: 'catBed' },

@@ -1,7 +1,7 @@
 // Shared UI furniture: framed panels, dialogue boxes with a typewriter, the
 // HUD, toasts and floating numbers.
 
-import { drawText, drawTextCentered, drawTextRight, textWidth, LINE_H } from '../engine/font.js';
+import { drawText, drawTextCentered, drawTextRight, textWidth, LINE_H, GLYPH_H } from '../engine/font.js';
 import { VIEW_W, VIEW_H } from '../engine/display.js';
 import { P } from '../art/palette.js';
 import { wrapText, clamp, money } from '../engine/util.js';
@@ -486,5 +486,5 @@ export class Fader {
   }
 }
 
-export { drawText, drawTextCentered, drawTextRight, textWidth, LINE_H };
+export { drawText, drawTextCentered, drawTextRight, textWidth, LINE_H, GLYPH_H };
 export { SAFE, fitRect, safeCenterX };
