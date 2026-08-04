@@ -1350,15 +1350,54 @@ function paintToy(buf, v, kind) {
   outline(buf);
 }
 
-function paintFireplace(buf, v) {
+/**
+ * The fireplace, burning.
+ *
+ * Only the fire moves. The stone, the mantel and the opening are drawn
+ * identically in every frame, because a hearth that shifts by a pixel as it
+ * flickers reads as the whole wall wobbling rather than as a fire.
+ *
+ * Four frames of flame at five a second: two tongues that breathe out of step
+ * with each other, a pale core, and an ember or two on the grate. The
+ * out-of-step part is what sells it — flames that all rise and fall together
+ * look like a light being turned up and down.
+ */
+function paintFireplace(buf, v, col, frame = 0) {
+  const f = frame % 4;
   buf.rect(0, buf.h - 30, buf.w, 28, rgb(P.stone));
   for (let y = buf.h - 30; y < buf.h - 2; y += 4) {
     for (let x = 0; x < buf.w; x += 7) buf.rect(x + ((y / 4) % 2 ? 3 : 0), y, 6, 3, rgb(n(x, y, v) > 0.5 ? P.stoneLt : P.stone));
   }
   buf.rect(4, buf.h - 20, buf.w - 8, 18, rgb('#2a2020'));
-  buf.ellipse(buf.w / 2, buf.h - 5, 7, 4, rgb('#ff8a3a'));
-  buf.ellipse(buf.w / 2, buf.h - 7, 4.4, 4, rgb('#ffc04a'));
-  buf.ellipse(buf.w / 2, buf.h - 8, 2.2, 2.4, rgb('#fff0b0'));
+
+  const cx = buf.w / 2;
+  const base = buf.h - 4;
+  // Two tongues on their own cycles, so the fire never repeats as a whole.
+  const tall = [0, 1, 0.4, 0.8][f];
+  const lean = [0, -1, 0, 1][f];
+  const small = [0.7, 0.2, 1, 0.5][f];
+
+  // Embers under it, barely moving.
+  buf.ellipse(cx, base, 8, 2.4, rgb('#8a2f18'));
+  buf.ellipse(cx - 3 + f % 2, base - 1, 2.2, 1.2, rgb('#d1552a'));
+  buf.ellipse(cx + 3 - f % 2, base - 1, 1.8, 1.1, rgb('#b8451f'));
+
+  // The main flame: a broad base with a tongue tapering off the top, rather
+  // than a ball. Two narrowing ellipses do the taper; a single one reads as a
+  // hot bun sitting in the grate.
+  buf.ellipse(cx + lean * 0.5, base - 3 - tall, 6.4, 4 + tall, rgb('#ff8a3a'));
+  buf.ellipse(cx + lean, base - 6 - tall * 1.5, 3.4, 3.2 + tall, rgb('#ff8a3a'));
+  buf.ellipse(cx + lean * 1.4, base - 9 - tall * 2, 1.6, 2 + tall * 0.8, rgb('#ff9c3f'));
+  buf.ellipse(cx + lean, base - 5 - tall * 1.2, 3.4 + tall * 0.3, 3 + tall * 0.8, rgb('#ffc04a'));
+  buf.ellipse(cx + lean * 1.2, base - 8 - tall * 1.8, 1.2, 1.6 + tall * 0.6, rgb('#ffd577'));
+  buf.ellipse(cx + lean, base - 5 - tall * 1.4, 1.8, 2 + tall * 0.5, rgb('#fff0b0'));
+  // A second, smaller one beside it, on its own beat.
+  buf.ellipse(cx + 5, base - 2 - small * 2, 2.6, 2 + small * 1.6, rgb('#ff9c3f'));
+  buf.ellipse(cx + 5, base - 3 - small * 2.4, 1.4, 1.2 + small, rgb('#ffd577'));
+  // A spark leaving, on two frames out of four.
+  if (f === 1) buf.set(Math.round(cx - 4), Math.round(base - 12), rgb('#ffd577'));
+  if (f === 3) buf.set(Math.round(cx + 2), Math.round(base - 14), rgb('#ffb04a'));
+
   buf.rect(2, buf.h - 34, buf.w - 4, 5, rgb(P.wood));
   outline(buf);
 }
@@ -1530,7 +1569,7 @@ export const OBJECTS = {
   toyBall:    { w: 12, h: 10, tw: 1, th: 1, solid: false, variants: 1, paint: (b, v) => paintToy(b, v, 'ball') },
   toyYarn:    { w: 12, h: 10, tw: 1, th: 1, solid: false, variants: 1, paint: (b, v) => paintToy(b, v, 'yarn') },
   toyWand:    { w: 14, h: 22, tw: 1, th: 1, solid: false, variants: 1, paint: (b, v) => paintToy(b, v, 'wand') },
-  fireplace:  { w: 44, h: 38, tw: 3, th: 1, solid: true, variants: 1, paint: paintFireplace, light: true },
+  fireplace:  { w: 44, h: 38, tw: 3, th: 1, solid: true, variants: 1, paint: paintFireplace, light: true, frames: 4, fps: 5 },
   painting:   { w: 24, h: 20, tw: 1, th: 1, solid: true, variants: 3, paint: paintPainting, wall: true },
   windowIn:   { w: 24, h: 22, tw: 1, th: 1, solid: true, variants: 1, paint: paintWindowIn, wall: true },
   piano:      { w: 48, h: 30, tw: 3, th: 1, solid: true, variants: 1, paint: paintPiano },
@@ -1591,16 +1630,30 @@ export function variantCount(type) {
 
 const cache = new SpriteCache();
 
-/** Get the baked sprite for an object type + variant. */
-export function objSprite(type, variant = 0) {
+/**
+ * Get the baked sprite for an object type + variant, at a frame.
+ *
+ * Anything without `frames` ignores the third argument and bakes once, as
+ * before. The frame goes in the fourth paint slot rather than the third, which
+ * belongs to the colour a few pieces take.
+ */
+export function objSprite(type, variant = 0, frame = 0) {
   const def = OBJECTS[type];
   if (!def) return null;
   const v = variant % (def.variants || 1);
-  return cache.get(`o|${type}|${v}`, () => {
+  const f = def.frames ? ((frame % def.frames) + def.frames) % def.frames : 0;
+  return cache.get(`o|${type}|${v}|${f}`, () => {
     const buf = new PixBuf(def.w, def.h);
-    def.paint(buf, v);
+    def.paint(buf, v, null, f);
     return buf.toCanvas();
   });
+}
+
+/** Which frame a thing that moves should be showing at time `t`. */
+export function objFrame(type, t) {
+  const def = OBJECTS[type];
+  if (!def || !def.frames) return 0;
+  return Math.floor(t * (def.fps || 6)) % def.frames;
 }
 
 /** Buildings are parameterised rather than enumerated, so they cache by config. */

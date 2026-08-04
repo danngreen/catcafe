@@ -3155,6 +3155,85 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!(crowd < 0.6)) window.__errors.push('snow does not keep anybody in: ' + window.__snow);
         if (ink < 120) window.__errors.push('the snow is not drawn: ' + window.__snow);
         if (clearInk > 20) window.__errors.push('a clear day draws flakes too, so that proves nothing: ' + window.__snow);
+      } else if (SCRIPT === 'firelight') {
+        // The fire moves and the hearth does not. A flicker that shifts the
+        // stone reads as the wall wobbling, and a fire drawn once reads as a
+        // painting of a fire.
+        const O = await import('../src/art/objects.js');
+        const grab = (f) => {
+          const spr = O.objSprite('fireplace', 0, f);
+          const c = document.createElement('canvas');
+          c.width = spr.width; c.height = spr.height;
+          c.getContext('2d').drawImage(spr, 0, 0);
+          return { d: c.getContext('2d').getImageData(0, 0, spr.width, spr.height).data, h: spr.height, w: spr.width };
+        };
+        const frames = [0, 1, 2, 3].map(grab);
+        const diff = (a, b, fromY, toY) => {
+          let n2 = 0;
+          for (let y = fromY; y < toY; y++) {
+            for (let x = 0; x < a.w; x++) {
+              const i = (y * a.w + x) * 4;
+              if (a.d[i] !== b.d[i] || a.d[i + 1] !== b.d[i + 1] || a.d[i + 2] !== b.d[i + 2]) n2++;
+            }
+          }
+          return n2;
+        };
+        const H = frames[0].h;
+        // The opening is the bottom twenty rows — see paintFireplace — so that
+        // is where the fire is allowed to move, sparks included. Everything
+        // above it is stone and mantel and must not shift by a pixel.
+        const fireMoves = [1, 2, 3].map((i) => diff(frames[0], frames[i], H - 20, H));
+        const stoneMoves = [1, 2, 3].map((i) => diff(frames[0], frames[i], 0, H - 20));
+        const allDiffer = new Set([0, 1, 2, 3].map((i) => frames[i].d.join(','))).size;
+
+        // And the renderer has to actually advance it: same fireplace, two
+        // moments, different picture.
+        const at = (t) => O.objFrame('fireplace', t);
+        const seq = [0, 0.1, 0.25, 0.45, 0.65, 0.85].map(at);
+        const cycles = new Set(seq).size;
+
+        // And in the room, through the renderer, which is the part that has to
+        // pass the frame along. Baking four pictures nobody asks for would
+        // pass everything above this line.
+        const st = g.state;
+        st.cafe.furniture = st.cafe.furniture.filter((x) => x.type !== 'fireplace');
+        const room = st.cafe.rooms[0];
+        const fx2 = { x: room.x + 2, y: room.y + 1 };
+        st.cafe.furniture.push({ type: 'fireplace', x: fx2.x, y: fx2.y, variant: 0 });
+        st.cats = []; st.catActors = [];
+        st.rebuildCafe();
+        g.maps.set('cafe', st.cafeMap);
+        st.inCafe = true; st.mapId = 'cafe';
+        g.currentMap = st.cafeMap;
+        g.player.x = (fx2.x + st.cafeMap.meta.offX) * 16 + 8;
+        g.player.y = (fx2.y + st.cafeMap.meta.offY + 3) * 16;
+        g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
+        st.cafeSim.customers.length = 0;
+        await wait(500);
+        const canvasInk = () => {
+          const c = document.querySelector('canvas');
+          const cx2 = c.getContext('2d');
+          const scale = c.width / 480;
+          const tx = fx2.x + st.cafeMap.meta.offX, ty = fx2.y + st.cafeMap.meta.offY;
+          const sx = Math.round(((tx - 1) * 16 - g.cam.ox) * scale);
+          const sy = Math.round(((ty - 1) * 16 - g.cam.oy) * scale);
+          return cx2.getImageData(sx, sy, Math.round(80 * scale), Math.round(48 * scale)).data;
+        };
+        const a1 = canvasInk();
+        await wait(320);                       // a couple of frames at five a second
+        const a2 = canvasInk();
+        let moved = 0;
+        for (let i = 0; i < a1.length; i += 4) {
+          if (a1[i] !== a2[i] || a1[i + 1] !== a2[i + 1] || a1[i + 2] !== a2[i + 2]) moved++;
+        }
+        if (moved < 30) window.__errors.push('the fire is still when it is actually drawn');
+
+        window.__fire = `inTheRoom=${moved} framesDiffer=${allDiffer}/4 fireMoves=[${fireMoves}]`
+          + ` stoneMoves=[${stoneMoves}] overTime=[${seq}] distinct=${cycles}`;
+        if (allDiffer !== 4) window.__errors.push('the fire draws the same picture twice: ' + window.__fire);
+        if (fireMoves.some((n2) => n2 < 20)) window.__errors.push('the flame barely moves: ' + window.__fire);
+        if (stoneMoves.some((n2) => n2 > 0)) window.__errors.push('the hearth moves with the fire: ' + window.__fire);
+        if (cycles < 3) window.__errors.push('the fire does not advance with time: ' + window.__fire);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -5321,6 +5400,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__books ? ` ${window.__books}` : '')
         + (window.__taxi ? ` ${window.__taxi}` : '')
         + (window.__snow ? ` ${window.__snow}` : '')
+        + (window.__fire ? ` ${window.__fire}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

@@ -201,8 +201,8 @@ export const QUESTS = [
         progress: 'Go back to the hedge after dark and talk to whatever is in it. It will not '
           + 'be me who does it.',
         done: '*the shape in the hedge lifts its head*\n\n'
-          + 'You can see me. Nobody has been able to see me in a very long while.\n\n'
-          + 'I have lost my collar. It was gold, and it had my name upon it, and I have been '
+          + 'You can see me? Nobody has been able to see me in a very long while.\n\n'
+          + 'I lost my collar. It was gold, and it had my name upon it, and I\'ve been '
           + 'looking in this hedge for — some time. I no longer recall where I had it last.\n\n'
           + 'I do not recall a great deal. I am fairly sure I was IMPORTANT.',
       },
@@ -211,7 +211,7 @@ export const QUESTS = [
         evidence: 'read_town_history',
         note: 'Read about Sir Woofers at the Reading Room in Brambleford',
         progress: 'Read the town history at the Reading Room in Brambleford. Somebody will have '
-          + 'written a dead dog down — somebody writes everything down.',
+          + 'written about famous dog dying — somebody writes everything down.',
         done: 'Saltsouth Pier. 1800. He wore it to the opening and never came home with it.\n\n'
           + 'And Saltsouth, according to the margin, is Saltmere.',
       },
@@ -314,7 +314,7 @@ export const QUESTS = [
     id: 'the_usual',
     giver: 'fennel',
     title: 'The Usual',
-    desc: 'Fennel would like his usual. You do not stock his usual and he is in no hurry about it.',
+    desc: 'Fennel would like his usual. You don\'t stock his usual and he\'s in no hurry about it.',
     offer: "Afternoon. I'll have the usual.\n\n"
       + "...Ah. You don't do the usual. That's all right. Nobody does the usual any more.\n\n"
       + "Dandelion cordial. Root & Remedy in Oakhollow make it, in small batches, badly "
@@ -329,12 +329,12 @@ export const QUESTS = [
         note: 'Buy dandelion cordial at Root & Remedy in Oakhollow',
         progress: 'Buy two dandelion cordials at Root & Remedy in Oakhollow, so there is one '
           + 'left when I come back.',
-        done: "You went. You actually went.\n\nRight. Pour me one, then. I'll be here.",
+        done: "You got it. You actually did it.\n\nPour me one, then.",
       },
       {
         objective: { type: 'deliver', item: 'dandelion', to: 'fennel', give: false },
         note: 'Serve Fennel his cordial, next time he is in',
-        progress: 'Wait for Fennel to come in, then hand him a cordial. He is always in.',
+        progress: 'Wait for Fennel to come in, then hand him a cordial.',
       },
     ],
     reward: { money: 220, rep: 0.1, items: [['f_painting', 1]], friendship: ['fennel'] },

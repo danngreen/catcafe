@@ -5,7 +5,7 @@
 
 import { TILE, T, TERRAIN, prio, EDGE_DIRS } from '../art/tiles.js';
 import { CHUNK } from './tilemap.js';
-import { objSprite } from '../art/objects.js';
+import { objSprite, objFrame } from '../art/objects.js';
 import { emoteSprite } from '../art/chars.js';
 import { makeCanvas } from '../engine/pixel.js';
 import { VIEW_W, VIEW_H } from '../engine/display.js';
@@ -225,7 +225,10 @@ export class Renderer {
 
     for (const d of drawables) {
       if (d.draw) { d.draw(ctx, ox, oy); continue; }
-      const spr = d.sprite || objSprite(d.type, d.variant);
+      // Objects are drawn every frame rather than baked into a chunk, so a
+      // thing that moves — the fire in the hearth — only has to choose a
+      // different picture of itself.
+      const spr = d.sprite || objSprite(d.type, d.variant, objFrame(d.type, this.t));
       if (!spr) continue;
       const dx = d.tx * TILE + Math.round((d.tw * TILE - spr.width) / 2) + d.offX - ox;
       const dy = (d.ty + 1) * TILE - spr.height + d.offY - oy;
