@@ -3302,6 +3302,108 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
 
         window.__cbox = `cases=${cases.length} [${report.join(' ')}] bad=[${bad.join(' | ')}]`;
         if (bad.length) window.__errors.push('a confirm box does not hold its own text: ' + window.__cbox);
+      } else if (SCRIPT === 'bearlegs') {
+        // Two legs when she is coming or going, four when she passes. Drawing
+        // all four from the front puts a beetle under the rider.
+        const C = await import('../src/art/chars.js');
+        const count = (dir, f) => {
+          const spr = C.bearSprite(dir, f, 'walk');
+          const cnv = document.createElement('canvas');
+          cnv.width = spr.width; cnv.height = spr.height;
+          cnv.getContext('2d').drawImage(spr, 0, 0);
+          const d = cnv.getContext('2d').getImageData(0, 0, spr.width, spr.height).data;
+          // How many legs are showing: the most separate runs of solid pixels
+          // on any row near the ground. One row will not do — the legs part
+          // company at different heights depending on which way she is facing,
+          // and a row chosen for the side view lands inside the body from the
+          // front.
+          let most = 0;
+          for (let y = spr.height - 6; y < spr.height; y++) {
+            // Runs of three or more: a leg is four pixels wide, and the
+            // outline under her belly leaves single dark pixels that are not
+            // legs and should not be counted as one.
+            let runs = 0, width = 0;
+            for (let x = 0; x <= spr.width; x++) {
+              const a = x < spr.width ? d[(y * spr.width + x) * 4 + 3] : 0;
+              if (a > 200) { width++; continue; }
+              if (width >= 3) runs++;
+              width = 0;
+            }
+            most = Math.max(most, runs);
+          }
+          return most;
+        };
+        const legs = {};
+        for (const dir of ['down', 'up', 'left', 'right']) {
+          legs[dir] = [0, 1, 2, 3].map((f) => count(dir, f));
+        }
+        const facing = [...legs.down, ...legs.up];
+        const across = [...legs.left, ...legs.right];
+        window.__legs = `down=[${legs.down}] up=[${legs.up}] left=[${legs.left}] right=[${legs.right}]`;
+        if (facing.some((n2) => n2 !== 2)) {
+          window.__errors.push('coming or going she has the wrong number of legs: ' + window.__legs);
+        }
+        if (across.some((n2) => n2 < 3)) {
+          window.__errors.push('side on she has lost legs: ' + window.__legs);
+        }
+      } else if (SCRIPT === 'cottages') {
+        // Cottages are somebody's front room, and everything in them has to be
+        // visible. They used to be furnished with four to six pieces that were
+        // never indexed for the renderer: solid, invisible, and the only sign
+        // of them was that you could not walk there.
+        const I = await import('../src/world/interiors.js');
+        const { OBJECTS } = await import('../src/art/objects.js');
+        let drawnOK = 0, tooBare = 0, blockedDoor = 0, samey = 0, unreachable = 0;
+        const notes = [];
+        const counts = [];
+        for (let n = 0; n < 24; n++) {
+          const map = I.buildHouseInterior(`h${n}`);
+          const room = map.meta.room;
+          const door = map.meta.door;
+
+          // 1. Everything solid must also be drawable: in the chunk index.
+          let indexed = 0;
+          for (const [, list] of map.objectChunks) indexed += list.length;
+          if (indexed === map.objects.length) drawnOK++;
+          else notes.push(`h${n}: ${map.objects.length - indexed} invisible`);
+
+          // 2. A room with things in it.
+          const inside = map.objects.filter((o) => o.ty >= room.y && o.ty < room.y + room.h);
+          counts.push(inside.length);
+          if (inside.length < 4) tooBare++;
+          const byType = {};
+          for (const o of inside) byType[o.type] = (byType[o.type] || 0) + 1;
+          if (Object.values(byType).some((c) => c > 2)) { samey++; notes.push(`h${n}: ${JSON.stringify(byType)}`); }
+
+          // 3. You can get in, and get anywhere.
+          if (map.blockedAt(door.x, door.y) || map.blockedAt(door.x, door.y - 1)) blockedDoor++;
+          const seen = new Set([`${door.x},${door.y - 1}`]);
+          const queue = [[door.x, door.y - 1]];
+          while (queue.length) {
+            const [x, y] = queue.pop();
+            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+              const nx = x + dx, ny = y + dy;
+              if (nx < room.x || ny < room.y || nx >= room.x + room.w || ny >= room.y + room.h) continue;
+              if (map.blockedAt(nx, ny) || seen.has(`${nx},${ny}`)) continue;
+              seen.add(`${nx},${ny}`);
+              queue.push([nx, ny]);
+            }
+          }
+          let open = 0;
+          for (let y = room.y; y < room.y + room.h; y++) {
+            for (let x = room.x; x < room.x + room.w; x++) if (!map.blockedAt(x, y)) open++;
+          }
+          if (seen.size < open) { unreachable++; notes.push(`h${n}: ${open - seen.size} tiles walled off`); }
+        }
+        const avg = (counts.reduce((a, b) => a + b, 0) / counts.length).toFixed(1);
+        window.__cots = `houses=24 allDrawn=${drawnOK} pieces~${avg} bare=${tooBare}`
+          + ` repetitive=${samey} doorBlocked=${blockedDoor} strandedTiles=${unreachable}`
+          + (notes.length ? ` [${notes.slice(0, 3)}]` : '');
+        if (drawnOK !== 24) window.__errors.push('a cottage has furniture nobody can see: ' + window.__cots);
+        if (tooBare) window.__errors.push('a cottage is empty: ' + window.__cots);
+        if (samey) window.__errors.push('a cottage is three of the same thing: ' + window.__cots);
+        if (blockedDoor) window.__errors.push('a cottage has its own door blocked: ' + window.__cots);
+        if (unreachable) window.__errors.push('part of a cottage floor cannot be reached: ' + window.__cots);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -5470,6 +5572,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__snow ? ` ${window.__snow}` : '')
         + (window.__fire ? ` ${window.__fire}` : '')
         + (window.__cbox ? ` ${window.__cbox}` : '')
+        + (window.__legs ? ` ${window.__legs}` : '')
+        + (window.__cots ? ` ${window.__cots}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

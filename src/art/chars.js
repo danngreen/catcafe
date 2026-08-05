@@ -767,14 +767,16 @@ function paintBear(buf, dir, frame, pose) {
   buf.ellipseBlend(cx + 1, bodyY - 3, 10.0, 4.0, L);
   buf.ellipse(cx + 11, bodyY + 1, 4.2, 3.6, D);       // rump
 
-  // Legs, in diagonal pairs like anything that walks.
-  const legs = [[cx - 10, 0], [cx - 4, 1], [cx + 3, 1], [cx + 9, 0]];
-  legs.forEach(([lx, phase], i) => {
-    const up = pose === 'walk' && (lift === (phase ? 1 : 3) || lift === (phase ? 2 : 0)) ? 1 : 0;
-    buf.rect(lx, bodyY + 4, 3, 6 - up, F);
-    buf.ellipse(lx + 1, bodyY + 10 - up, 2.2, 1.4, D);
-    if (i === 1) buf.ellipseBlend(lx + 1, bodyY + 6, 1.4, 2.0, D);
-  });
+  // Four legs from the side, where you can see all four.
+  if (dir === 'side') {
+    const legs = [[cx - 10, 0], [cx - 4, 1], [cx + 3, 1], [cx + 9, 0]];
+    legs.forEach(([lx, phase], i) => {
+      const up = pose === 'walk' && (lift === (phase ? 1 : 3) || lift === (phase ? 2 : 0)) ? 1 : 0;
+      buf.rect(lx, bodyY + 4, 3, 6 - up, F);
+      buf.ellipse(lx + 1, bodyY + 10 - up, 2.2, 1.4, D);
+      if (i === 1) buf.ellipseBlend(lx + 1, bodyY + 6, 1.4, 2.0, D);
+    });
+  }
 
   const hy = bodyY - 4;
   if (dir === 'down' || dir === 'up') {
@@ -783,6 +785,23 @@ function paintBear(buf, dir, frame, pose) {
     // and she would read as a footstool with ears.
     buf.ellipse(cx, bodyY - 2, 11.0, 7.0, F);
     buf.ellipseBlend(cx, bodyY - 4, 8.0, 4.2, L);
+
+    // One pair of legs, not four. Coming towards you the front pair is what
+    // you can see and the back pair is behind her; going away, the other way
+    // round. Drawing all four put a beetle under the rider.
+    //
+    // The stance differs because the halves of a bear do: she is narrow at the
+    // shoulder and wide at the hip, so from behind the legs sit further apart.
+    const stance = dir === 'down' ? 5.5 : 7;
+    for (const side of [-1, 1]) {
+      const lx = Math.round(cx + side * stance) - 1;
+      // The two swing against each other, which is what walking looks like
+      // from the front. In step they read as hopping.
+      const up = pose === 'walk' && ((lift < 2) === (side < 0)) ? 1 : 0;
+      buf.rect(lx, bodyY + 3, 4, 8 - up, F);
+      buf.ellipse(lx + 1.5, bodyY + 11 - up, 2.6, 1.5, D);
+    }
+
     if (dir === 'down') {
       const fy = bodyY + 4;
       buf.ellipse(cx, fy, 5.6, 4.4, F);

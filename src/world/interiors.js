@@ -212,30 +212,88 @@ export function buildHouseInterior(id) {
   map.addWarp(doorX, doorY, 'overworld', 0, 0, { sound: 'door' });
   map.spawn = { x: doorX, y: doorY - 1 };
 
-  // Somewhere to sit, something to look at, a fire more often than not.
   map.addObject('windowIn', room.x + 2, room.y - 1, { offY: WALL_MOUNT });
   map.addObject('windowIn', room.x + room.w - 3, room.y - 1, { offY: WALL_MOUNT });
   if (rng.chance(0.7)) map.addObject('painting', room.x + Math.floor(room.w / 2), room.y - 1, { offY: WALL_MOUNT, variant: rng.int(3) });
-  const kit = ['sofa', 'tableRound', 'chair', 'bookshelf', 'plantPot', 'lampIn', 'catBed', 'fireplace'];
-  const spots = [];
-  for (let y = room.y + 1; y < room.y + room.h - 1; y += 2) {
-    for (let x = room.x + 1; x < room.x + room.w - 2; x += 3) spots.push({ x, y });
-  }
-  for (let i = spots.length - 1; i > 0; i--) {
-    const j = rng.int(i + 1);
-    [spots[i], spots[j]] = [spots[j], spots[i]];
-  }
-  const many = 4 + rng.int(3);
-  for (let i = 0; i < many && i < spots.length; i++) {
-    const type = kit[rng.int(kit.length)];
-    map.addObject(type, spots[i].x, spots[i].y, {
-      variant: rng.int(3),
-      lightR: type === 'lampIn' || type === 'fireplace' ? 70 : undefined,
-    });
-  }
+  furnishCottage(map, room, rng);
   map.lights.push({ x: (room.x + room.w / 2) * 16, y: (room.y + room.h / 2) * 16, r: 120, color: '#ffdcae' });
   map.meta = { house: id, room, door: { x: doorX, y: doorY } };
   return map;
+}
+
+
+/**
+ * Furnish somebody's front room.
+ *
+ * Picking types at random gave houses with four bookshelves and nothing to sit
+ * on: each piece was chosen without reference to any other, which is not how a
+ * room comes to be. So the room is laid out in the order a person would
+ * furnish one — the fire, then what faces it, then the table, then the
+ * corners — with each piece placed only if there is space left for it.
+ *
+ * Nothing overlaps, because everything goes through `put`, which refuses a
+ * spot whose footprint is already taken or would cross a wall.
+ */
+function furnishCottage(map, room, rng) {
+  const taken = new Set();
+  const key = (x, y) => `${x},${y}`;
+  const left = room.x + 1, right = room.x + room.w - 2;
+  const top = room.y + 1, bottom = room.y + room.h - 2;
+
+  /** Put a piece down if it fits, and say whether it went. */
+  const put = (type, x, y, opts = {}) => {
+    const def = OBJECTS[type];
+    if (!def) return false;
+    if (x < room.x || y < room.y || x + def.tw - 1 > room.x + room.w - 1) return false;
+    if (y - def.th + 1 < room.y || y > room.y + room.h - 1) return false;
+    for (let j = 0; j < def.th; j++) {
+      for (let i = 0; i < def.tw; i++) if (taken.has(key(x + i, y - j))) return false;
+    }
+    // Leave the way in clear: a sofa across the door is a house you cannot
+    // walk into, and the doormat is the one tile everybody arrives on.
+    const d = map.meta?.door || { x: -9, y: -9 };
+    for (let i = 0; i < def.tw; i++) if (x + i === d.x && Math.abs(y - d.y) <= 1) return false;
+    map.addObject(type, x, y, opts);
+    for (let j = 0; j < def.th; j++) for (let i = 0; i < def.tw; i++) taken.add(key(x + i, y - j));
+    return true;
+  };
+
+  const doorX = room.x + Math.floor(room.w / 2);
+  const hearthX = rng.chance(0.5) ? left + 1 : right - 3;
+
+  // The fire, against the back wall, and something facing it.
+  const hasFire = rng.chance(0.75) && put('fireplace', hearthX, top, { lightR: 70 });
+  if (hasFire) {
+    // Between the fire and whatever faces it, with a clear row either side —
+    // put down level with the sofa it disappears underneath it.
+    put('rug', hearthX, top + 2, { variant: rng.int(3) });
+    if (!put('sofa', hearthX - 1, top + 4, { variant: rng.int(3) })) put('sofa', hearthX, top + 4, { variant: rng.int(3) });
+  } else {
+    put('bookshelf', hearthX, top, { variant: rng.int(3) });
+    put('sofa', hearthX - 1, top + 3, { variant: rng.int(3) });
+  }
+
+  // A table to eat at, with chairs either side of it.
+  const tx = hearthX < doorX ? right - 2 : left + 1;
+  const ty = top + 2 + rng.int(2);
+  if (put('tableRound', tx, ty)) {
+    put('chair', tx - 1, ty, { variant: rng.int(3) });
+    put('chairUp', tx + 1, ty, { variant: rng.int(3) });
+  }
+
+  // Then the things that fill a corner: shelves, a lamp, a plant, a cat.
+  const corners = [
+    ['bookshelf', left, bottom - 1],
+    ['lampIn', right, bottom - 1],
+    ['plantPot', left, bottom],
+    ['catBed', doorX - 2, bottom],
+    ['plantPot', right, top],
+  ];
+  for (const [type, x, y] of corners) {
+    if (rng.chance(type === 'catBed' ? 0.55 : 0.7)) {
+      put(type, x, y, { variant: rng.int(3), lightR: type === 'lampIn' ? 70 : undefined });
+    }
+  }
 }
 
 export function buildSpecialInterior(id) {

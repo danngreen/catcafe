@@ -119,7 +119,7 @@ export class GameMap {
       id: opts.id,
     };
     if (o.flat) { this.decals.push(o); }
-    else this.objects.push(o);
+    else { this.objects.push(o); this.bucket(o); }
     if (o.solid) {
       for (let j = 0; j < def.th; j++) for (let i = 0; i < def.tw; i++) this.block(tx + i, ty - j);
     }
@@ -136,6 +136,7 @@ export class GameMap {
       offX: opts.offX || 0, offY: opts.offY || 0, data: opts.data || null,
     };
     this.objects.push(o);
+    this.bucket(o);
     if (o.solid) {
       for (let j = 0; j < th; j++) for (let i = 0; i < tw; i++) this.block(tx + i, ty - j);
     }
@@ -155,16 +156,26 @@ export class GameMap {
   setInteract(x, y, data) { this.interacts.set(`${x},${y}`, data); }
   interactAt(x, y) { return this.interacts.get(`${x},${y}`) || null; }
 
-  /** Bucket objects by chunk so the renderer only walks what's on screen. */
+  /**
+   * Put one object in the chunk bucket the renderer looks in.
+   *
+   * Done as the object is added rather than only in a pass at the end, because
+   * a builder that forgets the pass gets furniture that blocks the floor and
+   * is never drawn — which is what cottages did: four to six pieces in every
+   * one of them, solid, invisible, and impossible to explain to a player.
+   */
+  bucket(o) {
+    const cx = Math.floor(o.tx / CHUNK), cy = Math.floor(o.ty / CHUNK);
+    const k = cy * this.chunksX + cx;
+    let list = this.objectChunks.get(k);
+    if (!list) this.objectChunks.set(k, (list = []));
+    list.push(o);
+  }
+
+  /** Rebuild the whole index — after moving or removing something. */
   indexObjects() {
     this.objectChunks.clear();
-    for (const o of this.objects) {
-      const cx = Math.floor(o.tx / CHUNK), cy = Math.floor(o.ty / CHUNK);
-      const k = cy * this.chunksX + cx;
-      let list = this.objectChunks.get(k);
-      if (!list) this.objectChunks.set(k, (list = []));
-      list.push(o);
-    }
+    for (const o of this.objects) this.bucket(o);
   }
 
   removeObject(o) {
