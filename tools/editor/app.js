@@ -225,7 +225,22 @@ function listFor(kind) {
   return Object.entries(content.items).map(([id, it], i) => ({ i, id, label: it.name || id, sub: it.cat, item: it }));
 }
 
+/**
+ * Redraw everything. Only for changes that alter the shape of the form —
+ * picking a different quest, adding a step, switching tabs.
+ *
+ * Never call this from something you type into. It rebuilds the form, which
+ * throws away the very input you are typing in: the name field used to take
+ * one letter per click, because every keystroke re-made the box holding the
+ * cursor.
+ */
 function render() {
+  renderList();
+  drawForm();
+}
+
+/** Just the list down the side. Safe to call while somebody is typing. */
+function renderList() {
   const filter = $('#filter').value.toLowerCase();
   const ul = $('#list');
   ul.textContent = '';
@@ -243,7 +258,6 @@ function render() {
     li.addEventListener('click', () => { picked = row.id; render(); });
     ul.append(li);
   }
-  drawForm();
 }
 
 function drawForm() {
@@ -264,12 +278,12 @@ function questForm(box) {
   const head = document.createElement('div');
   head.className = 'row';
   head.append(
-    field('Title', text(q.title, (v) => { q.title = v; render(); })),
-    field('Id', text(q.id, (v) => { q.id = v; picked = v; render(); },
+    field('Title', text(q.title, (v) => { q.title = v; renderList(); })),
+    field('Id', text(q.id, (v) => { q.id = v; picked = v; renderList(); },
       { placeholder: 'lower_case' }),
     'Saved games remember quests by id. Changing it on a quest somebody is part way '
       + 'through loses their progress.'),
-    field('Given by', choose(q.giver, villagerChoices(), (v) => { q.giver = v; render(); }, { blank: false })),
+    field('Given by', choose(q.giver, villagerChoices(), (v) => { q.giver = v; renderList(); }, { blank: false })),
   );
   box.append(head);
 
@@ -524,10 +538,10 @@ function castForm(box) {
   const r1 = document.createElement('div');
   r1.className = 'row';
   r1.append(
-    field('Name', text(v.name, (x) => { v.name = x; render(); })),
-    field('Id', text(v.id, (x) => { v.id = x; picked = x; render(); }),
+    field('Name', text(v.name, (x) => { v.name = x; renderList(); })),
+    field('Id', text(v.id, (x) => { v.id = x; picked = x; renderList(); }),
       'Quests point at people by id.'),
-    field('Role', choose(v.role, content.options.roles.map((x) => [x, x]), (x) => { v.role = x; render(); })),
+    field('Role', choose(v.role, content.options.roles.map((x) => [x, x]), (x) => { v.role = x; renderList(); })),
   );
   box.append(r1);
 
@@ -544,7 +558,7 @@ function castForm(box) {
   const r3 = document.createElement('div');
   r3.className = 'row';
   r3.append(
-    field('Town', choose(v.town, content.options.towns.map((t) => [t.id, t.name]), (x) => { v.town = x; render(); }),
+    field('Town', choose(v.town, content.options.towns.map((t) => [t.id, t.name]), (x) => { v.town = x; renderList(); }),
       'Blank means they wander the countryside.'),
     field('About when', choose(v.when, [['day', 'daytime'], ['night', 'after dark'], ['always', 'always']], (x) => { v.when = x; })),
     field('Stands at', choose(v.spot, (content.options.searchSpots || []).map((x) => [x, x]), (x) => { v.spot = x || undefined; }),
@@ -626,15 +640,15 @@ function itemForm(box) {
   const r1 = document.createElement('div');
   r1.className = 'row';
   r1.append(
-    field('Name', text(it.name, (v) => { it.name = v; render(); })),
+    field('Name', text(it.name, (v) => { it.name = v; renderList(); })),
     field('Id', text(id, (v) => {
       if (!v || v === id || content.items[v]) return;
       const copy = {};
       for (const [k, val] of Object.entries(content.items)) copy[k === id ? v : k] = val;
       content.items = copy;
-      picked = v; render();
+      picked = v; renderList();
     })),
-    field('Category', choose(it.cat, content.options.categories.map((c) => [c, c]), (v) => { it.cat = v; render(); }, { blank: false })),
+    field('Category', choose(it.cat, content.options.categories.map((c) => [c, c]), (v) => { it.cat = v; renderList(); }, { blank: false })),
   );
   box.append(r1);
 
@@ -730,7 +744,7 @@ for (const b of document.querySelectorAll('nav button')) {
     render();
   });
 }
-$('#filter').addEventListener('input', render);
+$('#filter').addEventListener('input', renderList);
 $('#add').addEventListener('click', addNew);
 $('#check').addEventListener('click', check);
 $('#save').addEventListener('click', save);

@@ -3465,6 +3465,30 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           window.__errors.push(`the content does not hold together: ${problems[0]} — ` + window.__content);
         }
         if (!printed) window.__errors.push('the editor cannot print the content back out: ' + window.__content);
+
+        // And one rule about the editor itself, checked in its source because
+        // it is the only way to check it from here: nothing you type into may
+        // redraw the form. `render()` rebuilds the box holding the cursor, so a
+        // name field wired to it takes one letter per click — which is exactly
+        // what the Cast page did.
+        const appSrc = await fetch('/tools/editor/app.js').then((r) => r.text()).catch(() => '');
+        const typers = [];
+        for (const m of appSrc.matchAll(/\b(text|number)\(/g)) {
+          // The handler runs to the end of the arrow function it is written in.
+          const tail = appSrc.slice(m.index, m.index + 260);
+          const arrow = tail.indexOf('=>');
+          if (arrow < 0) continue;
+          const body = tail.slice(arrow, tail.indexOf('}', arrow) + 1);
+          if (/\brender\(\)/.test(body)) {
+            typers.push(appSrc.slice(Math.max(0, m.index - 30), m.index + 60).replace(/\s+/g, ' '));
+          }
+        }
+        window.__content += ` typingRedraws=${typers.length}`;
+        if (!appSrc) window.__errors.push('could not read the editor to check it: ' + window.__content);
+        if (typers.length) {
+          window.__errors.push(`a field you type into redraws the whole form (${typers[0]}) — `
+            + 'it will lose focus after every keystroke: ' + window.__content);
+        }
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
