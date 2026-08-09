@@ -1,0 +1,43 @@
+[Unit]
+Description=Cat Cafe Editor
+Documentation=https://github.com/danngreen/catcafe
+After=network.target
+StartLimitIntervalSec=0
+StartLimitBurst=0
+
+[Service]
+Type=simple
+User=orangepi
+Group=orangepi
+WorkingDirectory=/home/orangepi/catcafe
+
+# Same Node as the game — see catcafe.service for why this is spelled out in
+# full and what breaks when the version in the path moves.
+ExecStart=/home/orangepi/.nvm/versions/node/v24.18.0/bin/node /home/orangepi/catcafe/tools/editor/server.js
+
+Environment=EDITOR_PORT=8090
+
+# Answer the house network, not just the Pi.
+#
+# The editor binds loopback by default on purpose: it rewrites the game's
+# source files and has no password on it, so anybody who can reach this port
+# can rewrite the quests. On a home LAN that is a fair trade for being able to
+# edit from the sofa. Anywhere else, leave this line out and tunnel instead:
+#
+#   ssh -N -L 8090:localhost:8090 orangepi@<pi>      # then http://localhost:8090
+Environment=EDITOR_HOST=0.0.0.0
+
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=10
+SyslogIdentifier=catcafe-editor
+
+# Note what is NOT here: ProtectSystem=full, which the game's unit does have.
+# This service exists to write to /home/orangepi/catcafe, and hardening that
+# stops it doing the one thing it is for.
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

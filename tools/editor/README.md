@@ -5,6 +5,27 @@
 A separate tool on a separate port. Nothing in `src/` knows it exists and the
 game plays perfectly well with it never started.
 
+## Reaching it from another machine
+
+By default it listens on loopback only, so the machine it runs on can reach it
+and nothing else can. That is deliberate: it rewrites the game's source files
+and has no password on it, so anyone who can reach the port can rewrite the
+quests. Deployed to a house server, it will look like it is running fine and
+refuse every connection — which it is, and which it should.
+
+Two ways round it. Tunnel, which changes nothing and exposes nothing:
+
+    ssh -N -L 8090:localhost:8090 orangepi@mcserve     # then http://localhost:8090
+
+Or open it to the network on purpose:
+
+    EDITOR_HOST=0.0.0.0 node tools/editor/server.js
+
+It prints which one it is doing on startup, along with the addresses to type.
+`deploy/catcafe-editor.service` is a systemd unit that takes the second route,
+on the grounds that a home LAN is a fair place to trade a little safety for
+being able to edit from the sofa.
+
 ## What it edits
 
 Three files, and only three:

@@ -7,9 +7,11 @@
 // part of it: nothing in src/ knows this exists, and the game plays perfectly
 // well with this never started.
 //
-// It binds the loopback address only. This is a tool for whoever is sitting at
-// the machine, and a thing that rewrites source files should not be answering
-// the LAN.
+// It binds the loopback address unless told otherwise. A thing that rewrites
+// source files with no password on it should not answer the LAN by default —
+// but on a house server the person editing is rarely sitting at the machine,
+// so EDITOR_HOST=0.0.0.0 opens it deliberately, and it says so loudly when you
+// do. The quieter way is an ssh tunnel; see the README.
 //
 // What it edits: questdata.js, villagerdata.js and itemdata.js — the three
 // files that hold content rather than code. It reads them by importing them,
@@ -17,6 +19,7 @@
 // printing them back out. Every save takes a copy of all three first.
 
 import { createServer } from 'node:http';
+import { networkInterfaces } from 'node:os';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -27,6 +30,7 @@ import { validate, OBJECTIVE_TYPES, objectiveFields } from './validate.js';
 const HERE = new URL('.', import.meta.url).pathname;
 const ROOT = join(HERE, '../..');
 const PORT = Number(process.env.EDITOR_PORT || 8090);
+const HOST = process.env.EDITOR_HOST || '127.0.0.1';
 
 const FILES = {
   quests: join(ROOT, 'src/game/questdata.js'),
@@ -194,11 +198,36 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '127.0.0.1', () => {
+/** Every address somebody on the LAN could type in. */
+function lanAddresses() {
+  const out = [];
+  for (const list of Object.values(networkInterfaces())) {
+    for (const ni of list || []) if (ni.family === 'IPv4' && !ni.internal) out.push(ni.address);
+  }
+  return out;
+}
+
+server.listen(PORT, HOST, () => {
   console.log(`Cat Cafe content editor — http://localhost:${PORT}`);
   console.log('Editing:');
   for (const [name, path] of Object.entries(FILES)) console.log(`  ${name.padEnd(10)} ${path}`);
   console.log(`Backups in ${BACKUPS}`);
+  if (HOST === '127.0.0.1') {
+    // The commonest way to meet this server is to deploy it somewhere and then
+    // fail to reach it, so say plainly why and what to do about it.
+    console.log('');
+    console.log('Listening on loopback only — this machine can reach it, nothing else can.');
+    console.log('From another machine, either tunnel:');
+    console.log(`  ssh -N -L ${PORT}:localhost:${PORT} <this-host>     # then http://localhost:${PORT}`);
+    console.log('or open it to the network on purpose:');
+    console.log(`  EDITOR_HOST=0.0.0.0 node tools/editor/server.js`);
+  } else {
+    for (const addr of lanAddresses()) console.log(`  on this network: http://${addr}:${PORT}`);
+    console.log('');
+    console.log('Open to the network. There is no password on this: anyone who can reach');
+    console.log('the port can rewrite the game\'s quests, cast and items. Fine on a home');
+    console.log('LAN you trust, and a bad idea anywhere else.');
+  }
 });
 
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(0));
