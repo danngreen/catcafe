@@ -70,3 +70,26 @@ restart. Players already in a valley keep the old content until they reload.
 One thing to be careful of: saved games remember quests by id. Renaming a quest
 somebody is part way through loses their progress in it, and deleting one
 leaves a journal entry pointing at nothing.
+
+## Testing a change to the editor
+
+    node tools/editor/test.js            # about six seconds
+    node tools/editor/test.js --quick    # skip the browser half, a tenth of that
+    node tools/check.js content          # the one game scenario that reads this tool
+
+That is the whole list. The game imports nothing from `tools/editor`, so the
+full sweep — ninety-nine browser scenarios, ten minutes — proves nothing about
+a change to a form field. Run it when `src/` changes, which includes the three
+content files: a quest saved from here is a change to the game.
+
+What the editor's own tests cover: the printer round-trips the content
+unchanged and refuses anything it cannot write; the validator catches each kind
+of typo and says which; the server refuses a bad save without writing, writes a
+good one, backs up first, and what it wrote loads the way the game loads it;
+and the page lists, opens, and takes typing without losing focus.
+
+They save for real, against a copy of the repository in a temp folder. The copy
+is proved to be in effect — a marker written into it and read back through the
+API — before anything is written, because the only thing standing between these
+tests and your content is one environment variable, and it has already been
+lost once.

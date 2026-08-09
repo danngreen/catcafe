@@ -21,14 +21,16 @@
 import { createServer } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
-import { extname, join } from 'node:path';
+import { extname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { questsFile, villagersFile, itemsFile } from './generate.js';
 import { validate, OBJECTIVE_TYPES, objectiveFields } from './validate.js';
 
 const HERE = new URL('.', import.meta.url).pathname;
-const ROOT = join(HERE, '../..');
+// The repository it edits. Overridable so the tests can point it at a copy and
+// exercise a real save without writing to the real content.
+const ROOT = process.env.EDITOR_ROOT ? resolve(process.env.EDITOR_ROOT) : join(HERE, '../..');
 const PORT = Number(process.env.EDITOR_PORT || 8090);
 const HOST = process.env.EDITOR_HOST || '127.0.0.1';
 
@@ -198,7 +200,11 @@ const server = createServer(async (req, res) => {
     let path = url.pathname === '/' ? '/app.html' : url.pathname;
     const base = path.startsWith('/src/') ? ROOT : HERE;
     const file = join(base, path.replace(/^\/+/, ''));
-    if (!file.startsWith(ROOT)) { send(403, { error: 'no' }); return; }
+    // Inside whichever of the two it was asked for, and not a step above it.
+    // Testing both against ROOT alone forbade the editor's own page whenever
+    // ROOT was somewhere else — which is exactly what happens when the tests
+    // point it at a copy.
+    if (!file.startsWith(base)) { send(403, { error: 'no' }); return; }
     const body = await readFile(file);
     send(200, body, TYPES[extname(file)] || 'application/octet-stream');
   } catch (e) {
