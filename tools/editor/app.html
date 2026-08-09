@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cat Cafe — content</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header>
+  <h1>Cat Cafe <span>content</span></h1>
+  <nav>
+    <button data-tab="quests" class="on">Quests</button>
+    <button data-tab="cast">Cast</button>
+    <button data-tab="items">Items</button>
+  </nav>
+  <div class="right">
+    <span id="dirty" hidden>unsaved changes</span>
+    <button id="check">Check</button>
+    <button id="save" class="go">Save</button>
+  </div>
+</header>
+
+<div id="problems" hidden></div>
+<div id="said" hidden></div>
+
+<main>
+  <aside>
+    <input id="filter" placeholder="Filter…" autocomplete="off">
+    <ul id="list"></ul>
+    <button id="add">+ New</button>
+  </aside>
+  <section id="form">
+    <p class="empty">Pick something on the left.</p>
+  </section>
+</main>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

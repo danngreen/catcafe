@@ -3404,6 +3404,67 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (samey) window.__errors.push('a cottage is three of the same thing: ' + window.__cots);
         if (blockedDoor) window.__errors.push('a cottage has its own door blocked: ' + window.__cots);
         if (unreachable) window.__errors.push('part of a cottage floor cannot be reached: ' + window.__cots);
+      } else if (SCRIPT === 'content') {
+        // The three content files have to be exactly that: data, and nothing
+        // else. The editor rewrites them whole, so anything else living in one
+        // is deleted the first time somebody saves — which is how two helper
+        // functions vanished out of villagerdata.js and took the game with
+        // them. The game booting at all is most of this test.
+        const qd = await import('../src/game/questdata.js');
+        const vd = await import('../src/world/villagerdata.js');
+        const id = await import('../src/game/itemdata.js');
+        const files = { questdata: qd, villagerdata: vd, itemdata: id };
+
+        const extras = [];
+        const notData = [];
+        for (const [name, mod] of Object.entries(files)) {
+          for (const key of Object.keys(mod)) {
+            if (!/^(QUESTS|VILLAGERS|ITEM_DATA)$/.test(key)) extras.push(`${name}.${key}`);
+            if (typeof mod[key] === 'function') extras.push(`${name}.${key}()`);
+          }
+          // And nothing inside may be a function either, or the round trip
+          // through the editor quietly drops it.
+          const walk = (v, path) => {
+            if (typeof v === 'function') { notData.push(path); return; }
+            if (Array.isArray(v)) v.forEach((x, i) => walk(x, `${path}[${i}]`));
+            else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) walk(x, `${path}.${k}`);
+          };
+          for (const key of Object.keys(mod)) walk(mod[key], `${name}.${key}`);
+        }
+
+        // Every reference in the content has to point at something real. This
+        // is the editor's own check, run against the content as it stands.
+        const V = await import('../tools/editor/validate.js');
+        const { OBJECTS } = await import('../src/art/objects.js');
+        const { TOWNS } = await import('../src/world/places.js');
+        const M = await import('../src/main.js');
+        const problems = V.validate(
+          { quests: qd.QUESTS, villagers: vd.VILLAGERS, items: id.ITEM_DATA },
+          { towns: TOWNS.map((t) => t.id), furniture: Object.keys(OBJECTS),
+            places: Object.keys(M.SEARCH_SPOTS || {}) },
+        );
+
+        // And the printer has to be able to write what it just read.
+        const G = await import('../tools/editor/generate.js');
+        let printed = '';
+        try {
+          printed = G.questsFile(qd.QUESTS) + G.villagersFile(vd.VILLAGERS) + G.itemsFile(id.ITEM_DATA);
+        } catch (e) { printed = ''; window.__printErr = String(e.message || e); }
+
+        window.__content = `quests=${qd.QUESTS.length} cast=${vd.VILLAGERS.length}`
+          + ` items=${Object.keys(id.ITEM_DATA).length} strayExports=[${extras}]`
+          + ` functionsInContent=${notData.length} problems=${problems.length}`
+          + ` printed=${printed.length}${window.__printErr ? ' err=' + window.__printErr : ''}`;
+        if (extras.length) {
+          window.__errors.push('a content file holds something other than its data: ' + window.__content);
+        }
+        if (notData.length) {
+          window.__errors.push(`content holds a function (${notData[0]}), which the editor cannot write: ` + window.__content);
+        }
+        if (problems.length) {
+          window.__errors.push(`the content does not hold together: ${problems[0]} — ` + window.__content);
+        }
+        if (!printed) window.__errors.push('the editor cannot print the content back out: ' + window.__content);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -5048,6 +5109,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
       } else if (SCRIPT === 'netclock') {
         // The server owns the clock. When another player sleeps, our morning
         // arrives too — and the books are cashed up exactly once.
+        //
+        // It shares valley 001 with the rest of the net scenarios, which is a
+        // known weakness: only the sim owner cashes up, so if another scenario
+        // has left a client connected this one sees no morning at all. The
+        // check below says so plainly rather than blaming the clock.
         const st = g.state;
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${proto}//${location.host}/ws`);
@@ -5060,16 +5126,28 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           }
         };
         await wait(900);
-        const day0 = st.clock.day, money0 = st.money;
+        for (let i = 0; i < 40 && !g.net.simOwner; i++) await wait(100);
+        const day0 = st.clock.day, money0 = st.money, played0 = st.daysPlayed;
+        if (!g.net.simOwner) {
+          window.__errors.push('somebody else owns this valley, so nothing here means anything');
+        }
         ws.send(JSON.stringify({ t: 'skip', hour: 7 }));
         await wait(1500);
         const screen = g.screens[g.screens.length - 1];
-        window.__clock = `netclock=${JSON.stringify(g.net.clock)} day ${day0}->${st.clock.day} hour=${st.clock.hour}`
-          + ` money ${money0}->${st.money} screen=${screen ? screen.constructor.name : 'none'}`;
+        window.__clock = `owner=${g.net.simOwner} netclock=${JSON.stringify(g.net.clock)} day ${day0}->${st.clock.day} hour=${st.clock.hour}`
+          + ` money ${money0}->${st.money} nights=${st.daysPlayed - played0}`
+          + ` screen=${screen ? screen.constructor.name : 'none'}`;
         if (st.clock.day !== day0 + 1) window.__errors.push('their morning was not ours: ' + window.__clock);
         if (st.clock.hour !== 7) window.__errors.push('clock did not follow: ' + window.__clock);
-        // Two cats at 4 a day, nobody served: the day must be cashed up once.
-        if (st.money !== money0 - 8) window.__errors.push('overnight was not run exactly once: ' + window.__clock);
+        // Cashed up exactly once. Counted in days rather than in money: the
+        // old check knew what two cats cost to feed, which is true of a valley
+        // on its first morning and of no other — a server left up for a while
+        // has more cats, wages and spoilage, and the test failed for being
+        // right about a cafe that had grown.
+        if (st.daysPlayed !== played0 + 1) {
+          window.__errors.push(`overnight ran ${st.daysPlayed - played0} times, not once: ` + window.__clock);
+        }
+        if (st.money === money0) window.__errors.push('a night cost nothing at all: ' + window.__clock);
         if (!screen || screen.constructor.name !== 'SummaryScreen') {
           window.__errors.push('no morning summary: ' + window.__clock);
         }
@@ -5574,6 +5652,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__cbox ? ` ${window.__cbox}` : '')
         + (window.__legs ? ` ${window.__legs}` : '')
         + (window.__cots ? ` ${window.__cots}` : '')
+        + (window.__content ? ` ${window.__content}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

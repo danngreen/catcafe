@@ -5,3 +5,6 @@ node_modules/
 # The valleys the LAN server keeps between sessions.
 valley.json
 saves/
+
+# Copies the content editor takes before it writes. Local safety net, not history.
+content-backups/

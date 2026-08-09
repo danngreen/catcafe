@@ -5,6 +5,9 @@
 // and how likely they are to order again. `shelf` is how many days a portion
 // keeps before it spoils.
 
+import { ITEM_DATA } from './itemdata.js';
+
+/** The tabs a bag and a shop are divided into. */
 export const CAT = {
   DRINK: 'drink',
   FOOD: 'food',
@@ -15,107 +18,11 @@ export const CAT = {
   SERVICE: 'service',
 };
 
-export const ITEMS = {
-  // ---------------------------------------------------------------- drinks
-  house_coffee: { name: 'House Coffee', cat: CAT.DRINK, icon: 'coffee', cost: 4, price: 12, appeal: 1.0, temp: 'hot', shelf: 8, desc: 'Dependable. Nobody has ever complained about it, which is its own kind of praise.' },
-  espresso: { name: 'Espresso', cat: CAT.DRINK, icon: 'espresso', cost: 5, price: 16, appeal: 1.15, temp: 'hot', shelf: 8, desc: 'Small, dark, and extremely serious.' },
-  latte: { name: 'Latte', cat: CAT.DRINK, icon: 'latte', cost: 7, price: 21, appeal: 1.3, temp: 'hot', shelf: 4, desc: 'The foam has a cat face on it. It takes you nine tries each time.' },
-  black_tea: { name: 'Black Tea', cat: CAT.DRINK, icon: 'tea', cost: 3, price: 11, appeal: 1.0, temp: 'hot', shelf: 24, desc: 'Strong enough to stand a spoon in, if that is your preference.' },
-  herbal_tea: { name: 'Herbal Tea', cat: CAT.DRINK, icon: 'herbal', cost: 5, price: 17, appeal: 1.2, temp: 'hot', shelf: 24, desc: 'Chamomile, mostly. People fall asleep in the window seat.' },
-  matcha: { name: 'Matcha', cat: CAT.DRINK, icon: 'matcha', cost: 9, price: 27, appeal: 1.5, temp: 'hot', shelf: 14, desc: 'Bright green and quietly expensive.' },
-  cocoa: { name: 'Hot Cocoa', cat: CAT.DRINK, icon: 'cocoa', cost: 6, price: 19, appeal: 1.3, temp: 'hot', shelf: 12, desc: 'Two marshmallows. Three if you like them.' },
-  lemonade: { name: 'Lemonade', cat: CAT.DRINK, icon: 'lemonade', cost: 4, price: 14, appeal: 1.1, temp: 'cold', shelf: 4, desc: 'Made fresh, which is why it never lasts.' },
-  milk: { name: 'Warm Milk', cat: CAT.DRINK, icon: 'milk', cost: 3, price: 9, appeal: 0.95, temp: 'hot', shelf: 3, desc: 'The cats become extremely interested whenever you pour it.' },
-  dandelion: { name: 'Dandelion Cordial', cat: CAT.DRINK, icon: 'dandelion', cost: 6, price: 19, appeal: 1.35, temp: 'cold', shelf: 14, desc: 'Made from a weed by somebody who knows exactly which weed. Tastes like a field in June.' },
-  iced_coffee: { name: 'Iced Coffee', cat: CAT.DRINK, icon: 'icedCoffee', cost: 5, price: 17, appeal: 1.2, temp: 'cold', shelf: 3, desc: 'Over a lot of ice, in a tall glass, on the one week a year it is warranted.' },
-  iced_tea: { name: 'Iced Tea', cat: CAT.DRINK, icon: 'icedTea', cost: 4, price: 15, appeal: 1.15, temp: 'cold', shelf: 3, desc: 'With a slice of lemon balanced on the rim, which nobody eats.' },
-  cider: { name: 'Cloudy Cider', cat: CAT.DRINK, icon: 'cider', cost: 8, price: 24, appeal: 1.4, temp: 'cold', shelf: 20, desc: 'Pressed from the orchard up the valley. Very cloudy. Very good.' },
-  smoked_tea: { name: 'Smoked Lapsang', cat: CAT.DRINK, icon: 'tea', cost: 14, price: 42, appeal: 1.95, temp: 'hot', shelf: 24, rare: true, desc: 'Tastes like a bonfire in the best possible way. Divisive. Profitable.' },
-
-  // ------------------------------------------------------------------ food
-  cookie: { name: 'Butter Cookie', cat: CAT.FOOD, icon: 'cookie', cost: 3, price: 10, appeal: 1.0, shelf: 10, desc: 'Shaped like a paw. Badly, but sincerely.' },
-  scone: { name: 'Scone', cat: CAT.FOOD, icon: 'scone', cost: 5, price: 16, appeal: 1.2, shelf: 3, desc: 'Jam first. This is not negotiable in this valley.' },
-  croissant: { name: 'Croissant', cat: CAT.FOOD, icon: 'croissant', cost: 6, price: 18, appeal: 1.3, shelf: 2, desc: 'Leaves flakes everywhere. The cats consider this a feature.' },
-  muffin: { name: 'Berry Muffin', cat: CAT.FOOD, icon: 'muffin', cost: 5, price: 15, appeal: 1.15, shelf: 3, desc: 'Berries from the hedgerow, mostly picked by you.' },
-  sandwich: { name: 'Sandwich', cat: CAT.FOOD, icon: 'sandwich', cost: 7, price: 20, appeal: 1.2, shelf: 2, desc: 'Cut into triangles, because squares are for weekdays.' },
-  toast: { name: 'Honey Toast', cat: CAT.FOOD, icon: 'toast', cost: 6, price: 19, appeal: 1.3, temp: 'hot', shelf: 2, desc: 'Thick cut, dripping. Deeply unserious food.' },
-  cake: { name: 'Sponge Cake', cat: CAT.FOOD, icon: 'cake', cost: 9, price: 28, appeal: 1.55, shelf: 3, desc: 'A slice big enough to justify a second visit.' },
-  pancakes: { name: 'Pancake Stack', cat: CAT.FOOD, icon: 'pancakes', cost: 8, price: 25, appeal: 1.45, temp: 'hot', shelf: 1, desc: 'Weekend food. People come specifically.' },
-  parfait: { name: 'Berry Parfait', cat: CAT.FOOD, icon: 'parfait', cost: 11, price: 32, appeal: 1.65, temp: 'cold', shelf: 2, desc: 'Layered in a tall glass so it looks like it took effort.' },
-  pie: { name: 'Fruit Pie', cat: CAT.FOOD, icon: 'pie', cost: 12, price: 36, appeal: 1.75, temp: 'hot', shelf: 4, desc: 'Whole pie, sold by the slice, gone by three.' },
-  honey_scone: { name: 'Honey Scone', cat: CAT.FOOD, icon: 'scone', cost: 8, price: 26, appeal: 1.6, temp: 'hot', shelf: 3, rare: true, desc: "Clover's honey, warm from the oven. People have written letters about this." },
-  ice_cream: { name: 'Ice Cream', cat: CAT.FOOD, icon: 'iceCream', cost: 6, price: 20, appeal: 1.35, temp: 'cold', shelf: 2, desc: 'Two scoops. Melts faster than anybody plans for.' },
-  fishcake: { name: 'Fishcake', cat: CAT.FOOD, icon: 'fishcake', cost: 10, price: 30, appeal: 1.5, temp: 'hot', shelf: 2, desc: 'Every cat in the building will supervise you making these.' },
-
-  // -------------------------------------------------------------- cat food
-  kibble: { name: 'Everyday Kibble', cat: CAT.CATFOOD, icon: 'catfood', cost: 8, quality: 1, portions: 6, shelf: 30, desc: 'Keeps a cat alive and mildly disappointed.' },
-  good_food: { name: 'Good Cat Food', cat: CAT.CATFOOD, icon: 'catfoodPremium', cost: 18, quality: 2, portions: 6, shelf: 22, desc: 'Coats get glossier within the week. Customers notice.' },
-  fresh_fish: { name: 'Fresh Fish', cat: CAT.CATFOOD, icon: 'fish', cost: 30, quality: 3, portions: 6, shelf: 3, desc: 'Landed this morning. Silky coats, delighted cats, very short shelf life.' },
-  gourmet: { name: 'Gourmet Tins', cat: CAT.CATFOOD, icon: 'catfoodGourmet', cost: 44, quality: 4, portions: 6, shelf: 40, rare: true, desc: 'Absurd. Effective. The cats become visibly smug.' },
-
-  // -------------------------------------------------------------- supplies
-  catnip: { name: 'Catnip', cat: CAT.SUPPLY, icon: 'catnip', cost: 22, shelf: 30, desc: 'One pinch and the whole room becomes entertainment for an hour.' },
-  treats: { name: 'Cat Treats', cat: CAT.SUPPLY, icon: 'treats', cost: 14, shelf: 30, desc: 'The universal apology.' },
-  medicine: { name: 'Cat Medicine', cat: CAT.SUPPLY, icon: 'medicine', cost: 46, shelf: 99, desc: 'Treats one sick cat at home, if you catch it early.' },
-  vitamins: { name: 'Vitamins', cat: CAT.SUPPLY, icon: 'vitamins', cost: 34, shelf: 60, desc: 'Makes illness less likely for a while. Tastes revolting, apparently.' },
-  brush: { name: 'Grooming Brush', cat: CAT.SUPPLY, icon: 'brush', cost: 60, tool: true, desc: 'Do a rough job yourself between proper groomings.' },
-  ribbon: { name: 'Ribbon Collar', cat: CAT.SUPPLY, icon: 'ribbon', cost: 40, wearable: true, appeal: 0.08, desc: 'Purely decorative. Extremely effective.' },
-  bell: { name: 'Little Bell', cat: CAT.SUPPLY, icon: 'bell', cost: 55, wearable: true, appeal: 0.12, desc: 'You always know where they are. So does everyone else.' },
-  toy_ball: { name: 'Bouncy Ball', cat: CAT.SUPPLY, icon: 'toyBall', cost: 28, place: 'toyBall', appeal: 0.2, catJoy: 0.8, desc: 'Ends up under the furniture within the hour. Put it down and the cats will find it.' },
-  toy_yarn: { name: 'Ball of Yarn', cat: CAT.SUPPLY, icon: 'toyYarn', cost: 24, place: 'toyYarn', appeal: 0.25, catJoy: 0.9, desc: 'Classic. Undefeated. Set it out and see.' },
-  toy_wand: { name: 'Feather Wand', cat: CAT.SUPPLY, icon: 'toyWand', cost: 46, place: 'toyWand', appeal: 0.5, catJoy: 1.4, wand: true, desc: 'Stand it in the room and customers cannot resist picking it up. Neither can the cats, which is the point.' },
-
-  // ------------------------------------------------------------- furniture
-  f_chair: { name: 'Wooden Chair', cat: CAT.FURNITURE, icon: 'chair', cost: 55, place: 'chair', seats: 1, appeal: 0.4, desc: 'A place to sit. The foundation of hospitality.' },
-  f_stool: { name: 'Padded Stool', cat: CAT.FURNITURE, icon: 'stool', cost: 70, place: 'stool', seats: 1, appeal: 0.5, desc: 'No back, but cheerful.' },
-  f_table: { name: 'Round Table', cat: CAT.FURNITURE, icon: 'table', cost: 110, place: 'tableRound', appeal: 0.6, desc: 'Fits two comfortably, three if they like each other.' },
-  f_table_cloth: { name: 'Dressed Table', cat: CAT.FURNITURE, icon: 'tableCloth', cost: 175, place: 'tableCloth', appeal: 1.1, desc: 'The cloth suggests you have standards.' },
-  f_table_long: { name: 'Long Table', cat: CAT.FURNITURE, icon: 'tableLong', cost: 210, place: 'tableSq', appeal: 0.9, desc: 'For groups. Groups order more.' },
-  f_sofa: { name: 'Velvet Sofa', cat: CAT.FURNITURE, icon: 'sofa', cost: 420, place: 'sofa', seats: 3, appeal: 2.4, desc: 'People stay far too long on this. That is the point.' },
-  f_plant: { name: 'Potted Fern', cat: CAT.FURNITURE, icon: 'plant', cost: 90, place: 'plantPot', appeal: 0.9, desc: 'Instantly makes a room look cared for.' },
-  f_lamp: { name: 'Floor Lamp', cat: CAT.FURNITURE, icon: 'floorlamp', cost: 130, place: 'lampIn', appeal: 1.1, light: true, desc: 'Warm pool of light. Essential after dark.' },
-  f_painting: { name: 'Landscape Painting', cat: CAT.FURNITURE, icon: 'painting', cost: 160, place: 'painting', appeal: 1.2, wall: true, desc: 'The valley, badly painted, beloved.' },
-  f_bookshelf: { name: 'Bookshelf', cat: CAT.FURNITURE, icon: 'bookshelf', cost: 240, place: 'bookshelf', appeal: 1.6, desc: 'People browse. Browsing people order tea.' },
-  f_fireplace: { name: 'Stone Fireplace', cat: CAT.FURNITURE, icon: 'fireplace', cost: 680, place: 'fireplace', appeal: 3.2, light: true, desc: 'On a wet afternoon this pays for itself.' },
-  f_piano: { name: 'Upright Piano', cat: CAT.FURNITURE, icon: 'piano', cost: 900, place: 'piano', appeal: 3.6, rare: true, desc: 'Somebody always knows three songs.' },
-  f_cattower: { name: 'Cat Tower', cat: CAT.FURNITURE, icon: 'cattower', cost: 180, place: 'catTower', appeal: 1.0, catJoy: 2, desc: 'The high shelf is the best seat in the house, and everyone knows it.' },
-  f_catbed: { name: 'Cat Bed', cat: CAT.FURNITURE, icon: 'catbed', cost: 85, place: 'catBed', appeal: 0.6, catJoy: 1.4, desc: 'They will sleep in the box it came in. Then, eventually, in this.' },
-  f_scratch: { name: 'Scratching Post', cat: CAT.FURNITURE, icon: 'scratchpost', cost: 95, place: 'scratchPost', appeal: 0.3, catJoy: 1.6, desc: 'Saves the sofa. Worth every fish.' },
-  f_bowl: { name: 'Feeding Bowl', cat: CAT.FURNITURE, icon: 'catbowl', cost: 35, place: 'catBowl', appeal: 0.1, catJoy: 0.6, desc: 'More bowls, fewer arguments.' },
-  // Patio. Same shops as the indoor furniture — Velvet & Oak sell it new, the
-  // flea market turns some of it up secondhand.
-  f_patio_chair: { name: 'Patio Chair', cat: CAT.FURNITURE, icon: 'patioChair', cost: 65, place: 'patioChair', seats: 1, appeal: 0.45, outdoor: true, desc: 'Slatted, stackable, and surprisingly comfortable for what it is.' },
-  f_patio_stool: { name: 'Patio Stool', cat: CAT.FURNITURE, icon: 'patioStool', cost: 55, place: 'patioStool', seats: 1, appeal: 0.4, outdoor: true, desc: 'Light enough to move, heavy enough to stay put in a breeze.' },
-  f_patio_table: { name: 'Patio Table', cat: CAT.FURNITURE, icon: 'patioTable', cost: 130, place: 'patioTable', appeal: 0.7, outdoor: true, desc: 'Mesh top. Rain goes straight through, which is the entire idea.' },
-  f_patio_bench: { name: 'Garden Bench', cat: CAT.FURNITURE, icon: 'patioBench', cost: 260, place: 'patioBench', seats: 3, appeal: 1.5, outdoor: true, desc: 'Seats three politely, two comfortably, one gloriously.' },
-  f_umbrella: { name: 'Umbrella Table', cat: CAT.FURNITURE, icon: 'umbrella', cost: 340, place: 'umbrella', appeal: 2.2, outdoor: true, desc: 'Shade on the hot days, shelter on the sudden ones. Earns its keep either way.' },
-  f_fountain: { name: 'Stone Fountain', cat: CAT.FURNITURE, icon: 'fountain', cost: 1400, place: 'fountain', appeal: 4.2, rare: true, outdoor: true, catJoy: 1.2, desc: 'Absurdly expensive. People sit near it and forget to leave, and the cats stare at it for hours.' },
-
-  f_telephone: { name: 'Telephone', cat: CAT.FURNITURE, icon: 'phone', place: 'phone', appeal: 0.4, desc: 'Cream bakelite, a dial, and a bell loud enough to be heard from the pantry. People ring up wanting things brought to them.' },
-
-  f_counter: { name: 'Service Counter', cat: CAT.FURNITURE, icon: 'counterUnit', cost: 260, place: 'counter', appeal: 0.5, desc: 'Where the money happens.' },
-  f_case: { name: 'Pastry Case', cat: CAT.FURNITURE, icon: 'cake', cost: 320, place: 'pastryCase', appeal: 1.4, desc: 'Cake at eye level sells itself.' },
-  f_machine: { name: 'Coffee Machine', cat: CAT.FURNITURE, icon: 'grinder', cost: 380, place: 'coffeeMachine', appeal: 1.2, desc: 'Hisses impressively. Customers trust a machine that hisses.' },
-  f_bar: { name: 'Bar Counter', cat: CAT.FURNITURE, icon: 'bar', cost: 480, place: 'bar', appeal: 2.4, desc: 'Three yards of polished oak. People perch at a bar who would never take a table.' },
-  f_barstool: { name: 'Bar Stool', cat: CAT.FURNITURE, icon: 'barstool', cost: 95, place: 'barStool', seats: 1, appeal: 0.7, desc: 'Tall, swivelly, and always taken by whoever got here first.' },
-  f_rug: { name: 'Woven Rug', cat: CAT.FURNITURE, icon: 'rug', cost: 140, place: 'rug', appeal: 1.0, floor: true, desc: 'Softens the whole room, and the acoustics with it.' },
-
-  // ------------------------------------------------------------- key items
-  pickaxe: { name: 'Chalk Pick', cat: CAT.KEY, icon: 'hammer', cost: 320, desc: 'Heavy. Splits chalk like cheese.' },
-  shears: { name: 'Hedge Shears', cat: CAT.KEY, icon: 'hammer', cost: 180, desc: 'For brambles that have got ideas above their station.' },
-  rope: { name: 'Coil of Rope', cat: CAT.KEY, icon: 'bag', cost: 150, desc: 'Twenty fathoms of good hemp.' },
-  valley_map: { name: 'Valley Map', cat: CAT.KEY, icon: 'map', cost: 240, reveals: true, desc: 'Hand-drawn, slightly wrong about the north, but it shows every village and every taxi perch — including the ones you have not walked to yet.' },
-  honey: { name: 'Jar of Honey', cat: CAT.KEY, icon: 'honey', cost: 55, desc: 'Sunlight in a jar. Unlocks honey bakes if the baker sees it.' },
-  seashell: { name: 'Spiral Shell', cat: CAT.KEY, icon: 'shell', desc: 'Holds the sound of the sea, or of your own blood, depending who you ask.' },
-  wildflowers: { name: 'Wildflowers', cat: CAT.KEY, icon: 'bouquet', desc: 'Picked from the meadow. Wilting slightly, still lovely.' },
-  lost_bell: { name: "A Lost Bell", cat: CAT.KEY, icon: 'bell', desc: 'Someone is missing this. It has a name scratched on the inside.' },
-  golden_collar: { name: 'A Golden Collar', cat: CAT.KEY, icon: 'bell',
-    desc: 'Heavier than it looks, and still bright under two centuries of river mud. Engraved: SIR WOOFERS.' },
-  lantern: { name: 'Storm Lantern', cat: CAT.KEY, icon: 'floorlamp', price: 90,
-    desc: 'Burns steady in wind. Things out at night are easier to see, and slightly less easy to ignore.' },
-  logbook: { name: "Keeper's Logbook", cat: CAT.KEY, icon: 'book', desc: 'Eleven years of weather, tides, and one line about a cat.' },
-  letter: { name: 'A Letter', cat: CAT.KEY, icon: 'letter', desc: 'Sealed, addressed, and waiting for a bird.' },
-};
+/**
+ * The catalogue itself. It lives in itemdata.js, which is content the editor
+ * writes; everything below is the code that reads it.
+ */
+export const ITEMS = ITEM_DATA;
 
 /** Shop catalogues. Each entry is an item id, optionally with a stock limit. */
 export const STOCK = {

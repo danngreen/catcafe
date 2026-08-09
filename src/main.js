@@ -19,6 +19,7 @@ import { generateWorld, WORLD_W, WORLD_H } from './world/worldgen.js';
 import { Renderer, Camera } from './world/render.js';
 import { buildShopInterior, buildSpecialInterior, buildHouseInterior } from './world/interiors.js';
 import { SHOPS, VILLAGERS, TOWNS, GOSSIP, PLAYER_NAMES } from './world/places.js';
+import { secretMet, arrivesNow } from './world/villagers.js';
 
 import { GameState, seedStartingInventory } from './game/state.js';
 import { Player, Villager, RemotePlayer, Employee, canStand, Bear, riderOffset,
@@ -537,7 +538,7 @@ class Game {
    * not walking about in front of the quest that has you find them.
    */
   found(v) {
-    return !v.def.secret || !!v.def.secret(this.state);
+    return secretMet(v.def.secret, this.state);
   }
 
   /**
@@ -1179,7 +1180,7 @@ class Game {
     if (!st.inCafe) return false;
     // Somebody who comes with news comes when there is news, once, and stops
     // coming when they have delivered it — not on the visiting rota.
-    if (def.arrives) return !!def.arrives(st);
+    if (def.arrives) return arrivesNow(def.arrives, st);
     return dueNow(def, this.worldSeed, st.clock, this.waitingOn(def.id));
   }
 
