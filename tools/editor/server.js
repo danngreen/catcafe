@@ -87,6 +87,16 @@ async function loadContent() {
       searchSpots: spots,
       roles: [...new Set(v.VILLAGERS.map((x) => x.role))].filter(Boolean).sort(),
       seats: ['barStool', 'chair', 'sofa', 'stool'],
+      // Flags the game sets for itself — searching a place, clearing a
+      // barrier, serving somebody after dark. Content can wait on these but
+      // cannot invent them: the name has to be one the code already writes.
+      codeFlags: [...new Set([
+        ...[...mainSrc.matchAll(/flags\.([a-z_][a-z0-9_]*)\s*=/g)].map((m) => m[1]),
+        ...[...mainSrc.matchAll(/flag: '([a-z_][a-z0-9_]*)'/g)].map((m) => m[1]),
+        ...spots.map((sp) => `found_${sp}`),
+        'served_after_dark', 'read_town_history', 'read_stones', 'left_milk',
+        'bought_the_bear', 'most_seats',
+      ])].sort(),
     },
   };
 }

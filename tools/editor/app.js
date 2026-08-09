@@ -127,6 +127,53 @@ function choose(value, list, onChange, opts = {}) {
   return el;
 }
 
+/**
+ * A flag name. You may invent one — a flag is just a key in a dictionary and
+ * nothing declares them — so this is a text box, not a dropdown. But it offers
+ * every flag anything already mentions, because most of the time you want one
+ * that exists, and the two failure modes are inventing a name that is already
+ * taken and misspelling one that is not.
+ */
+function flagBox(value, onChange) {
+  const el = text(value, onChange, { placeholder: 'a_name_you_choose' });
+  const id = `flags-known`;
+  el.setAttribute('list', id);
+  if (!document.getElementById(id)) {
+    const dl = document.createElement('datalist');
+    dl.id = id;
+    document.body.append(dl);
+  }
+  const dl = document.getElementById(id);
+  dl.textContent = '';
+  for (const f of knownFlags()) {
+    const o = document.createElement('option');
+    o.value = f;
+    dl.append(o);
+  }
+  return el;
+}
+
+/** Every flag the content mentions, plus the ones the game itself sets. */
+function knownFlags() {
+  const out = new Set(content.options.codeFlags || []);
+  for (const q of content.quests) {
+    for (const f of q.reward?.flags || []) out.add(f);
+    const steps = q.steps || [{ objective: q.objective, progressWhen: q.progressWhen }];
+    for (const s of steps) {
+      if (s.objective?.type === 'flag' && s.objective.flag) out.add(s.objective.flag);
+      if (s.evidence) out.add(s.evidence);
+      for (const a of s.progressWhen || []) if (a.flag) out.add(a.flag);
+    }
+    for (const a of q.progressWhen || []) if (a.flag) out.add(a.flag);
+  }
+  for (const v of content.villagers) {
+    if (v.hint) out.add(`heard_hint_${v.id}`);
+    if (v.secret?.flag) out.add(v.secret.flag);
+    if (v.arrives?.until) out.add(v.arrives.until);
+  }
+  return [...out].sort();
+}
+
 function toggle(value, label, onChange) {
   const wrap = document.createElement('label');
   wrap.style.cssText = 'display:flex;gap:8px;align-items:center;color:var(--dim);font-size:12px';
@@ -396,7 +443,9 @@ function stepCard(step, i, total, opts) {
       } else if (f === 'give') {
         row.append(field('Hand it over', toggle(oo.give !== false, 'the giver hands you the parcel', (v) => { oo.give = v ? undefined : false; })));
       } else if (f === 'flag') {
-        row.append(field('Flag', text(oo.flag, (v) => { oo.flag = v; }, { placeholder: 'barrier_eastpass' })));
+        row.append(field('Flag', flagBox(oo.flag, (v) => { oo.flag = v; }),
+          'The step is done once this is set. Anything can set it: another quest\'s '
+          + 'reward, searching a place, clearing a barrier.'));
       } else {
         row.append(field(f, number(oo[f], (v) => { oo[f] = v; }, { step: f === 'quality' ? '0.01' : '1' })));
       }
@@ -408,7 +457,7 @@ function stepCard(step, i, total, opts) {
       'What the giver says while it is unfinished.'));
     if (total > 1) {
       body.append(field('On finishing this step', text(step.done, (v) => { step.done = v || undefined; }, { long: true })));
-      body.append(field('Counts as done if this flag is set', text(step.evidence, (v) => { step.evidence = v || undefined; }),
+      body.append(field('Counts as done if this flag is set', flagBox(step.evidence, (v) => { step.evidence = v || undefined; }),
         'For steps that consume what they ask for: once the collar is handed over you '
         + 'are not holding it, and without this the step looks unfinished for ever.'));
     }
@@ -433,7 +482,7 @@ function conditionalNotes(step) {
     (step.progressWhen || []).forEach((alt, i) => {
       const row = document.createElement('div');
       row.className = 'row';
-      row.append(field('When this flag is set', text(alt.flag, (v) => { alt.flag = v; })));
+      row.append(field('When this flag is set', flagBox(alt.flag, (v) => { alt.flag = v; })));
       row.append(field('Say this instead', text(alt.text, (v) => { alt.text = v; }, { long: true })));
       row.append(button('×', () => { step.progressWhen.splice(i, 1); touch(); draw(); }, 'danger'));
       wrap.append(row);
@@ -459,6 +508,28 @@ function multiItems(arr, onChange) {
       box.append(row);
     });
     box.append(button('+ item', () => { arr.push(Object.keys(content.items)[0]); onChange(arr); draw(); touch(); }));
+  };
+  draw();
+  return box;
+}
+
+/** The flags a reward sets, one box each, each with the known-flags list. */
+function flagList(r) {
+  const box = document.createElement('div');
+  const draw = () => {
+    box.textContent = '';
+    (r.flags || []).forEach((f, i) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.append(flagBox(f, (v) => { r.flags[i] = v; }));
+      row.append(button('×', () => {
+        r.flags.splice(i, 1);
+        if (!r.flags.length) delete r.flags;
+        touch(); draw();
+      }, 'danger'));
+      box.append(row);
+    });
+    box.append(button('+ flag', () => { (r.flags ||= []).push(''); touch(); draw(); }));
   };
   draw();
   return box;
@@ -509,9 +580,10 @@ function rewardCard(q) {
   drawFriends();
   card.append(field('Makes a friend of', friends));
 
-  card.append(field('Flags it sets', text((r.flags || []).join(', '),
-    (v) => { r.flags = v.split(',').map((x) => x.trim()).filter(Boolean); if (!r.flags.length) delete r.flags; }),
-  'Comma separated. Other quests can wait on these — recipe_honey, for instance.'));
+  card.append(field('Flags it sets', flagList(r),
+  'Invent a name and another quest can wait on it, or somebody can appear when it '
+  + 'is set. Names the game itself reads — recipe_honey unlocks a recipe — only work '
+  + 'if the code already knows them.'));
   // Named for what it looks like it does rather than what it does. Worth
   // saying plainly in the form, because the obvious reading — that typing
   // something here unlocks something — is wrong.
@@ -602,7 +674,7 @@ function castForm(box) {
     });
   secret.append(lg, field('Condition', kind));
   if (v.secret?.flag !== undefined) {
-    secret.append(field('Flag', text(v.secret.flag, (x) => { v.secret.flag = x; })));
+    secret.append(field('Flag', flagBox(v.secret.flag, (x) => { v.secret.flag = x; })));
   }
   if (v.secret?.quest !== undefined) {
     const row = document.createElement('div');
@@ -612,6 +684,28 @@ function castForm(box) {
     secret.append(row);
   }
   box.append(secret);
+
+  // Somebody who comes with news, once, when the news exists. Comfrey has had
+  // this since the bear went in and there was no way to edit it — the one part
+  // of the cast that was still hand-written JavaScript from in here.
+  const arr = document.createElement('fieldset');
+  const alg = document.createElement('legend');
+  alg.textContent = 'Walks into the cafe with news…';
+  arr.append(alg, field('Brings news', toggle(!!v.arrives, 'comes once, when there is something to say', (x) => {
+    v.arrives = x ? { deliveries: 10, until: `heard_hint_${v.id}` } : undefined;
+    drawForm();
+  }), 'Rather than on the usual visiting rota. They stop coming once they have said it.'));
+  if (v.arrives) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.append(field('After this many deliveries', number(v.arrives.deliveries, (x) => { v.arrives.deliveries = x; })));
+    row.append(field('Once this flag is set', flagBox(v.arrives.flag, (x) => { v.arrives.flag = x || undefined; }),
+      'Optional: another thing that has to have happened first.'));
+    row.append(field('Stops coming when', flagBox(v.arrives.until, (x) => { v.arrives.until = x || undefined; }),
+      `Usually heard_hint_${v.id} — the flag set by telling you their hint.`));
+    arr.append(row);
+  }
+  box.append(arr);
 
   const del = document.createElement('div');
   del.style.marginTop = '30px';
