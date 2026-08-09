@@ -512,7 +512,14 @@ function rewardCard(q) {
   card.append(field('Flags it sets', text((r.flags || []).join(', '),
     (v) => { r.flags = v.split(',').map((x) => x.trim()).filter(Boolean); if (!r.flags.length) delete r.flags; }),
   'Comma separated. Other quests can wait on these — recipe_honey, for instance.'));
-  card.append(field('Hint it unlocks', text(r.hint, (v) => { r.hint = v || undefined; })));
+  // Named for what it looks like it does rather than what it does. Worth
+  // saying plainly in the form, because the obvious reading — that typing
+  // something here unlocks something — is wrong.
+  card.append(field('Sets the flag hint_…', text(r.hint, (v) => { r.hint = v || undefined; }),
+    'Historic. Typing "fish" sets a flag called hint_fish, and nothing in the game '
+    + 'reads any hint_ flag. The one exception is "taxi", which prints a toast about '
+    + 'the taxi birds — who fly whether or not you have it. Use "Flags it sets" for '
+    + 'anything a quest should actually gate on.'));
   return card;
 }
 
