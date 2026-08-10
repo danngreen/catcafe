@@ -5,6 +5,7 @@
 #   deploy/push.sh              # copy and restart
 #   deploy/push.sh --dry-run    # say what would be copied, touch nothing
 #   deploy/push.sh --force      # go anyway with a dirty tree or players in
+#   deploy/push.sh --no-restart # copy, leave the game server running
 #
 # There is no sudo here, and there does not need to be. The service runs as
 # orangepi, so an ssh session as orangepi is allowed to signal it; the server
@@ -24,10 +25,12 @@ UNIT=${CATCAFE_UNIT:-catcafe}
 
 DRY=
 FORCE=
+NORESTART=
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY=1 ;;
     --force) FORCE=1 ;;
+    --no-restart) NORESTART=1 ;;
     -h|--help) sed -n '3,8p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "push.sh: unknown option $arg" >&2; exit 2 ;;
   esac
@@ -74,8 +77,13 @@ if [ -z "$GAMES" ]; then
   warn "This script can restart the game but cannot start it: that needs sudo."
 elif echo "$GAMES" | grep -qE '"(playing|here)": [1-9]'; then
   echo "$GAMES" | grep -E '"(cafe|playing|here)"' | sed 's/^/    /'
-  [ -z "$FORCE" ] && die "Somebody is playing. Wait for them, or --force."
-  warn "Somebody is playing, and you said --force."
+  if [ -n "$NORESTART" ]; then
+    warn "Somebody is playing — copying the files and leaving them to it."
+  elif [ -z "$FORCE" ]; then
+    die "Somebody is playing. Wait for them, --force, or --no-restart to copy only."
+  else
+    warn "Somebody is playing, and you said --force."
+  fi
 fi
 
 # --- copy -------------------------------------------------------------------
@@ -113,6 +121,15 @@ pushed from $(hostname -s) by $(whoami)
 EOF
 
 # --- restart ----------------------------------------------------------------
+
+# Copying alone is enough for a good many changes. The server holds no quest
+# data — the definitions are modules the browser fetches — so new content
+# reaches a player when they reload, and somebody mid-session is undisturbed
+# until then. What a restart is actually for is a change to server.js itself.
+if [ -n "$NORESTART" ]; then
+  say "Copied $SHA. Game server left running — reload the browser to pick it up."
+  exit 0
+fi
 
 # Ask systemd which process is the server rather than grepping for it. `pkill -f
 # catcafe/server.js` looks tidier and is a trap: the ssh wrapper shell has that
