@@ -22,7 +22,11 @@ export const VILLAGERS = [
       'Cats drink milk, cats drink cream, cats drink whatever you left out. Stock accordingly.',
       'Buy the beans in bulk. Your customers can tell, honestly.',
     ],
-    hint: 'If you want the really good cat food, you want fish. Saltmere. Get there before noon or Kelp sells out.',
+    hints: [
+      {
+        text: 'If you want the really good cat food, you want fish. Saltmere. Get there before noon or Kelp sells out.',
+      },
+    ],
   },
   {
     id: 'dough',
@@ -36,7 +40,11 @@ export const VILLAGERS = [
       'A cafe with no cake is just a room with chairs.',
       "Scones on Wednesdays. Don't argue with me about scones.",
     ],
-    hint: 'Clover in Oakhollow keeps bees. Honey in a bake makes folk stay an hour longer, I swear it.',
+    hints: [
+      {
+        text: 'Clover in Oakhollow keeps bees. Honey in a bake makes folk stay an hour longer, I swear it.',
+      },
+    ],
   },
   {
     id: 'marigold',
@@ -50,7 +58,11 @@ export const VILLAGERS = [
       "A bored cat is a destructive cat. Buy toys. I'm biased, but I'm right.",
       "They'll pick you, you know. Not the other way round.",
     ],
-    hint: "Sable over in Thistlewick has breeds I can't get. Only opens some days. Bring money. Bring a lot of money.",
+    hints: [
+      {
+        text: "Sable over in Thistlewick has breeds I can't get. Only opens some days. Bring money. Bring a lot of money.",
+      },
+    ],
   },
   {
     id: 'hollis',
@@ -64,7 +76,11 @@ export const VILLAGERS = [
       'Weekend crowds are the real test of a cafe. Be ready.',
       "There's a fellow comes through selling maps. Never has the one you want.",
     ],
-    hint: "You'll want Trowel up in Hollowdown before you knock any walls about. He's grumpy. He's also the only one.",
+    hints: [
+      {
+        text: "You'll want Trowel up in Hollowdown before you knock any walls about. He's grumpy. He's also the only one.",
+      },
+    ],
   },
   {
     id: 'nettle',
@@ -169,7 +185,11 @@ export const VILLAGERS = [
       'Money first, then workers, then walls. In that order.',
       "I can put a roof on anything. Doesn't mean I should.",
     ],
-    hint: "Hire more hands and I'll let you build bigger. Simple as that.",
+    hints: [
+      {
+        text: "Hire more hands and I'll let you build bigger. Simple as that.",
+      },
+    ],
   },
   {
     id: 'suds',
@@ -222,7 +242,11 @@ export const VILLAGERS = [
       "Drop something in a postbox and I'll find whoever it's for.",
       'People are much braver in writing than in person. I read the outsides only, mind.',
     ],
-    hint: 'If a villager gives you their address, post them something. Folk remember a kindness.',
+    hints: [
+      {
+        text: 'If a villager gives you their address, post them something. Folk remember a kindness.',
+      },
+    ],
   },
   {
     id: 'gorse',
@@ -236,7 +260,11 @@ export const VILLAGERS = [
       'That path east has been blocked since the storm. Big rock. Very rude.',
       'Somebody strong could shift it. Not me. I have a bad knee and a good excuse.',
     ],
-    hint: 'The blocked path east needs proper tools. Ask at the Chalk Pit Store.',
+    hints: [
+      {
+        text: 'The blocked path east needs proper tools. Ask at the Chalk Pit Store.',
+      },
+    ],
   },
   {
     id: 'tuft',
@@ -276,7 +304,11 @@ export const VILLAGERS = [
       'One sneezing cat becomes three sneezing cats becomes a very quiet cafe.',
       "Prevention is cheaper than cure. Feed them properly and I'll see less of you.",
     ],
-    hint: "Keep a sick cat away from the others, or bring them to me the same day. That's the whole of it.",
+    hints: [
+      {
+        text: "Keep a sick cat away from the others, or bring them to me the same day. That's the whole of it.",
+      },
+    ],
   },
   {
     id: 'kelp',
@@ -316,7 +348,11 @@ export const VILLAGERS = [
       'The beach gives things up after a storm. Not shells, though. Never shells when you want one.',
       "Somebody said there's treasure. Somebody says that every year.",
     ],
-    hint: "That big spiral shell? Moth's got it. Little grey fellow in Brambleford — only out after dark, counting things on the lamps.",
+    hints: [
+      {
+        text: "That big spiral shell? Moth's got it. Little grey fellow in Brambleford — only out after dark, counting things on the lamps.",
+      },
+    ],
   },
   {
     id: 'gull',
@@ -447,7 +483,11 @@ export const VILLAGERS = [
       "A cat eats every day whether you open or not. Did you know that? People don't.",
       "Pay staff too little and they'll cost you more than they save.",
     ],
-    hint: 'Once you can afford help, set a fair wage. Underpay and the customers stop coming back.',
+    hints: [
+      {
+        text: 'Once you can afford help, set a fair wage. Underpay and the customers stop coming back.',
+      },
+    ],
   },
   {
     id: 'primrose',
@@ -761,7 +801,11 @@ export const VILLAGERS = [
       'Everything ever written about this valley is on that middle shelf. It is not a long shelf.',
       "People think a library is about books. It's about knowing which one.",
     ],
-    hint: 'Anything old around here, you want the town history. Middle shelf. Green spine, gold letters.',
+    hints: [
+      {
+        text: 'Anything old around here, you want the town history. Middle shelf. Green spine, gold letters.',
+      },
+    ],
   },
   {
     id: 'moth',
@@ -823,7 +867,11 @@ export const VILLAGERS = [
       'You can see every lit window from up here. I know whose is whose.',
       "Stars are other people's lamps. That isn't true. I like saying it.",
     ],
-    hint: 'Stand in the middle of the standing stones after dark. Just stand there. You will see.',
+    hints: [
+      {
+        text: 'Stand in the middle of the standing stones after dark. Just stand there. You will see.',
+      },
+    ],
   },
   {
     id: 'tallow',
@@ -852,7 +900,11 @@ export const VILLAGERS = [
       'That old pier is rotten through. Mind your feet if you go out on it.',
       'The tide takes things out and brings other things back. Never the same things.',
     ],
-    hint: 'Anything lost off the end of that pier is still under it. The mud keeps what it is given.',
+    hints: [
+      {
+        text: 'Anything lost off the end of that pier is still under it. The mud keeps what it is given.',
+      },
+    ],
   },
   {
     id: 'bruin',
@@ -869,7 +921,11 @@ export const VILLAGERS = [
       'A pun is a small unkindness you do to a word. The word forgives you. Usually.',
       'Warm room. Cats. Somebody who will listen. I have made worse decisions than this one.',
     ],
-    hint: 'There is a contest. Longest Face Wins, they call it. Whoever hears the most puns without laughing. I have not won it in four years and I intend to lose again with style.',
+    hints: [
+      {
+        text: 'There is a contest. Longest Face Wins, they call it. Whoever hears the most puns without laughing. I have not won it in four years and I intend to lose again with style.',
+      },
+    ],
   },
   {
     id: 'comfrey',
@@ -885,7 +941,11 @@ export const VILLAGERS = [
       'There is a faster way about this valley. It has fur on it.',
       'Ask for Bell. Everyone in Thistlewick knows Bell.',
     ],
-    hint: 'You are wearing that road out. Drover Bell is in Thistlewick with a riding bear for sale — daylight hours, by the market. She is not cheap and she is worth it.',
+    hints: [
+      {
+        text: 'You are wearing that road out. Drover Bell is in Thistlewick with a riding bear for sale — daylight hours, by the market. She is not cheap and she is worth it.',
+      },
+    ],
   },
   {
     id: 'bell',
@@ -921,7 +981,11 @@ export const VILLAGERS = [
       "I could go and get it myself, yes. I could. Let's both sit with that for a moment.",
       '*settles into the nearest chair with the finality of a dropped sandbag*',
     ],
-    hint: 'Root & Remedy. Oakhollow. Ask for the cordial and do not let them talk you into the tea.',
+    hints: [
+      {
+        text: 'Root & Remedy. Oakhollow. Ask for the cordial and do not let them talk you into the tea.',
+      },
+    ],
   },
   {
     id: 'linnet',
@@ -966,7 +1030,11 @@ export const VILLAGERS = [
       "Warm milk. That's the order. It's always the order. Don't make me look at the board.",
       '*asleep, upright, with the composure of someone who has practised*',
     ],
-    hint: 'A cafe that is warm at two in the morning would be, I think, the finest thing in the valley.',
+    hints: [
+      {
+        text: 'A cafe that is warm at two in the morning would be, I think, the finest thing in the valley.',
+      },
+    ],
   },
   {
     id: 'nightjar',

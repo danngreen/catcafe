@@ -103,7 +103,7 @@ await check('a typo is caught wherever it is made', async () => {
     ['somebody with nothing to say', (c) => { c.villagers[0].lines = []; }, /nothing to say/],
     ['an id with a space in it', (c) => { c.villagers[0].id = 'two words'; }, /not a usable id/],
     ['a hint nobody can give', (c) => {
-      c.quests[0].needsHint = c.villagers.find((v) => !v.hint).id;
+      c.quests[0].needsHint = c.villagers.find((v) => !v.hints?.length).id;
     }, /no hint to give/],
   ];
   for (const [what, breakIt, expect] of cases) {

@@ -1113,6 +1113,14 @@ export class JournalScreen extends ListScreen {
       const st = this.game.state;
       if (st.quests[q.id] === 'done') {
         drawText(ctx, 'Finished.', dx + 8, ly, { color: P.uiGreen, shadow: P.uiShadow });
+        ly += LINE_H + 4;
+        // What it left you with. A job often changes what you can do rather
+        // than what you own, and the journal is the only place that can say so
+        // after the dialogue box has gone.
+        for (const line of wrapText(q.reward?.journal || '', Math.floor((dw - 16) / 6))) {
+          drawText(ctx, line, dx + 8, ly, { color: P.uiText, shadow: P.uiShadow });
+          ly += LINE_H;
+        }
       } else {
         // Wrapped, not clipped: a step of a longer job says where to go and
         // when, which is a sentence rather than "Clear the way".

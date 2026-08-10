@@ -12,6 +12,11 @@
 // catches hand edits too, which is why the same function runs in the test
 // harness against the content as it stands.
 
+// The one definition of what a hint is, borrowed from the game rather than
+// written out again here — a second copy is a second thing to forget when the
+// shape changes, which is exactly how this file went stale.
+import { hintsOf } from '../../src/world/villagers.js';
+
 const OBJECTIVES = {
   stock: ['any', 'count'],
   item: ['item', 'count'],
@@ -69,6 +74,9 @@ export function validate({ quests = [], villagers = [], items = {} }, places = {
     if (!v.id || !/^[a-z][a-z0-9_]*$/.test(v.id)) say('cast', `"${v.id}" is not a usable id (lower case, no spaces)`);
     if (!v.name) say(v.id || 'cast', 'has no name');
     if (!Array.isArray(v.lines) || !v.lines.length) say(v.id, 'has nothing to say — give them at least one line');
+    (v.hints || []).forEach((h, i) => {
+      if (!h || !h.text) say(v.id, `hint ${i + 1} has nothing written in it`);
+    });
     if (v.town && places.towns && !places.towns.includes(v.town)) say(v.id, `lives in "${v.town}", which is not a town`);
     if (v.spot && placeIds.size && !placeIds.has(v.spot)) say(v.id, `stands at "${v.spot}", which is not a landmark`);
     if (v.secret?.quest && !questIds.has(v.secret.quest)) say(v.id, `waits on the quest "${v.secret.quest}", which does not exist`);
@@ -88,7 +96,7 @@ export function validate({ quests = [], villagers = [], items = {} }, places = {
     if (q.needsHint && !villagerIds.has(q.needsHint)) say(at, `waits on a hint from "${q.needsHint}", who is not in the cast`);
     else if (q.needsHint) {
       const who = villagers.find((v) => v.id === q.needsHint);
-      if (!who.hint) say(at, `waits on a hint from ${q.needsHint}, who has no hint to give`);
+      if (!hintsOf(who).length) say(at, `waits on a hint from ${q.needsHint}, who has no hint to give`);
     }
 
     const steps = q.steps?.length ? q.steps : [{ objective: q.objective, progress: q.progress }];
@@ -135,14 +143,15 @@ export function validate({ quests = [], villagers = [], items = {} }, places = {
 
 /** Does anything in the content actually set this flag? */
 function flagIsSet(flag, quests, villagers) {
-  if (/^heard_hint_/.test(flag)) {
-    const who = flag.slice('heard_hint_'.length);
-    return villagers.some((v) => v.id === who && v.hint);
-  }
+  // Something anybody says can set it.
+  for (const v of villagers) if (hintsOf(v).some((h) => h.sets === flag)) return true;
   for (const q of quests) {
     if ((q.reward?.flags || []).includes(flag)) return true;
     const steps = q.steps || [];
-    for (const s of steps) if (s.evidence === flag) return true;
+    for (const s of steps) {
+      if (s.evidence === flag) return true;
+      if ((s.sets || s.flags || []).includes(flag)) return true;
+    }
   }
   // Flags the game itself sets — searching a spot, clearing a barrier, and so
   // on. The editor cannot know them all, so anything with a known prefix is

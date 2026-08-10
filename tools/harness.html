@@ -61,6 +61,14 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
 
     async function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+    /** How much was drawn on a canvas — for "is this on screen at all". */
+    function ink(ctx2, w = 480, h = 270) {
+      const d = ctx2.getImageData(0, 0, w, h).data;
+      let n = 0;
+      for (let i = 3; i < d.length; i += 4) if (d[i] > 40) n++;
+      return n;
+    }
+
     (async () => {
       await wait(400);
       const g = window.game;
@@ -2514,7 +2522,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await wait(400);
         // Somebody with something useful to say and no quest gating it, so the
         // only branch that can speak it is the chance one.
-        const who = g.villagers.find((v) => v.def.hint && v.def.id !== 'shrimp'
+        const V2 = await import('../src/world/villagers.js');
+        const who = g.villagers.find((v) => V2.hintsOf(v.def).length && v.def.id !== 'shrimp'
           && v.shift === 'here');
         const real = Math.random;
         Math.random = () => 0.1;                 // inside the 0.2 hint chance
@@ -2529,7 +2538,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         for (let i = 0; i < 6 && g.dialogue.active; i++) {
           key('Space', true); await wait(100); key('Space', false); await wait(160);
         }
-        const spoke = said.trim() === who.def.hint.trim();
+        const spoke = said.trim() === V2.hintsOf(who.def)[0].text.trim();
         const wrote = !!st.flags[`heard_hint_${who.def.id}`];
         window.__hint = `who=${who && who.def.id} spokeTheHint=${spoke} wroteItDown=${wrote}`;
         if (!who) window.__errors.push('nobody about with a hint: ' + window.__hint);
@@ -3489,6 +3498,100 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           window.__errors.push(`a field you type into redraws the whole form (${typers[0]}) — `
             + 'it will lose focus after every keystroke: ' + window.__content);
         }
+      } else if (SCRIPT === 'questextras') {
+        // Three things a quest can do that it could not before: leave a line in
+        // the journal when it is finished, set and clear flags as each step
+        // lands, and hold back what somebody knows until something has happened.
+        const Q = await import('../src/game/quests.js');
+        const V = await import('../src/world/villagers.js');
+        const st = g.state;
+        st.flags = {}; st.quests = {}; st.questStep = {};
+        await wait(500);
+
+        // --- a hint that waits on a flag ---
+        const def = { id: 'testcase', hints: [
+          { text: 'The plain one, always available.' },
+          { text: 'The one I only say once the hedge has been seen.', when: 'saw_the_hedge' },
+        ] };
+        const first = V.nextHint(def, {});
+        const afterFirst = V.nextHint(def, { heard_hint_testcase: true });
+        const gated = V.nextHint(def, { heard_hint_testcase: true, saw_the_hedge: true });
+        const allSaid = V.nextHint(def, {
+          heard_hint_testcase: true, saw_the_hedge: true, heard_hint_testcase_1: true });
+
+        // The old shape still reads, so nothing that skipped the migration breaks.
+        const oldShape = V.hintsOf({ id: 'x', hint: 'one line' });
+
+        // --- and in the world: somebody says the next thing they know ---
+        const shrimp = g.villagers.find((v) => v.def.id === 'shrimp');
+        const said = [];
+        for (let n = 0; n < 2; n++) {
+          g.player.x = shrimp.x; g.player.y = shrimp.y + 10;
+          await wait(150);
+          g.talkTo(shrimp);
+          await wait(400);
+          said.push((g.dialogue.pages || []).flat().join(' ').slice(0, 30));
+          for (let i = 0; i < 6 && g.dialogue.active; i++) {
+            key('Space', true); await wait(100); key('Space', false); await wait(150);
+          }
+        }
+        const heardShrimp = !!st.flags.heard_hint_shrimp;
+
+        // --- steps that set and clear ---
+        const q = { id: 'testquest', giver: 'pip', title: 'T', offer: 'o', complete: 'c',
+          steps: [
+            { objective: { type: 'talk', to: 'pip' }, sets: ['a_flag', 'b_flag'] },
+            { objective: { type: 'talk', to: 'pip' }, clears: ['a_flag'], sets: ['c_flag'] },
+          ] };
+        st.quests.testquest = 'active';
+        st.questStep.testquest = 0;
+        g.applyStepFlags(q.steps[0]);
+        const afterOne = ['a_flag', 'b_flag'].every((f) => st.flags[f]);
+        g.applyStepFlags(q.steps[1]);
+        const cleared = !st.flags.a_flag && st.flags.b_flag && st.flags.c_flag;
+
+        // --- the journal line on a finished quest ---
+        const withLine = Q.QUESTS.find((x) => x.reward?.journal);
+        const shown = [];
+        st.quests = { first_beans: 'done' };
+        const target = Q.QUEST_BY_ID.first_beans;
+        const had = target.reward.journal;
+        target.reward.journal = 'A line that only shows once it is finished.';
+        const { JournalScreen } = await import('../src/ui/menus.js');
+        const scr = new JournalScreen(g);
+        scr.index = 0;
+        const c = document.createElement('canvas');
+        c.width = 480; c.height = 270;
+        const cx = c.getContext('2d');
+        // Counting ink will not do: the screen dims the whole canvas, so every
+        // pixel is lit either way. Draw it twice and compare the two.
+        scr.draw(cx);
+        const a = cx.getImageData(0, 0, 480, 270).data.slice();
+        cx.clearRect(0, 0, 480, 270);
+        target.reward.journal = undefined;
+        scr.draw(cx);
+        const b = cx.getImageData(0, 0, 480, 270).data;
+        let withIt = 0;
+        for (let i = 0; i < a.length; i += 4) {
+          if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) withIt++;
+        }
+        const without = 0;
+        target.reward.journal = had;
+
+        window.__extras = `firstHint=${first && first.sets} afterFirst=${afterFirst && afterFirst.sets}`
+          + ` gated=${gated && gated.sets} allSaid=${allSaid} oldShape=${oldShape.length}`
+          + ` shrimpSaid1="${said[0]}" heard=${heardShrimp}`
+          + ` stepSets=${afterOne} stepClears=${cleared}`
+          + ` journalPixels=${withIt}`;
+        if (!first || first.sets !== 'heard_hint_testcase') window.__errors.push('the first hint is not the one quests wait on: ' + window.__extras);
+        if (afterFirst) window.__errors.push('a gated hint was offered before its flag: ' + window.__extras);
+        if (!gated || gated.sets !== 'heard_hint_testcase_1') window.__errors.push('the gated hint never becomes available: ' + window.__extras);
+        if (allSaid) window.__errors.push('a hint is offered again after being said: ' + window.__extras);
+        if (oldShape.length !== 1) window.__errors.push('the old single-hint shape no longer reads: ' + window.__extras);
+        if (!heardShrimp) window.__errors.push('talking twice did not get the hint out: ' + window.__extras);
+        if (!afterOne) window.__errors.push('a step did not set its flags: ' + window.__extras);
+        if (!cleared) window.__errors.push('a step did not clear what it should, or cleared too much: ' + window.__extras);
+        if (withIt < 60) window.__errors.push('the journal line does not show on a finished quest: ' + window.__extras);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -5677,6 +5780,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__legs ? ` ${window.__legs}` : '')
         + (window.__cots ? ` ${window.__cots}` : '')
         + (window.__content ? ` ${window.__content}` : '')
+        + (window.__extras ? ` ${window.__extras}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

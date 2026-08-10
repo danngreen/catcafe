@@ -19,7 +19,7 @@ import { generateWorld, WORLD_W, WORLD_H } from './world/worldgen.js';
 import { Renderer, Camera } from './world/render.js';
 import { buildShopInterior, buildSpecialInterior, buildHouseInterior } from './world/interiors.js';
 import { SHOPS, VILLAGERS, TOWNS, GOSSIP, PLAYER_NAMES } from './world/places.js';
-import { secretMet, arrivesNow } from './world/villagers.js';
+import { secretMet, arrivesNow, nextHint } from './world/villagers.js';
 
 import { GameState, seedStartingInventory } from './game/state.js';
 import { Player, Villager, RemotePlayer, Employee, canStand, Bear, riderOffset,
@@ -2215,10 +2215,11 @@ class Game {
    * says "ask around" — so if the note changed, say so, because the journal is
    * where you look when you have forgotten what somebody said.
    */
-  recordHint(id) {
+  recordHint(flag) {
     const st = this.state;
+    if (st.flags[flag]) return;
     const before = this.journalLines();
-    st.flags[`heard_hint_${id}`] = true;
+    st.flags[flag] = true;
     st.touch('flags');
     if (this.journalLines() !== before) {
       this.hud.toast('Your journal is updated.', 'good', 5);
@@ -2306,23 +2307,26 @@ class Game {
     // 5. Ordinary chatter, with the odd hint or piece of gossip.
     let line;
     const roll = Math.random();
-    const heardHint = st.flags[`heard_hint_${def.id}`];
     // Somebody whose hint is the only way on gets it out at once. Shrimp knows
     // where the shell went, and until he has said so Moth will not raise the
     // job that ends in it — so hearing his chatter first and his hint second
     // left the errand looking broken from both ends.
     const gating = QUESTS.some((q) => q.needsHint === def.id && !st.quests[q.id])
       || def.tellsFirst;
-    if (def.hint && (!heardHint && (gating || v.lineIndex >= 1) || roll < 0.2)) {
+    // The next thing they know that you have not heard, and that they are
+    // willing to say yet — a hint may wait on a flag, so somebody can have one
+    // answer before you own a cat and a different one after.
+    const hint = nextHint(def, st.flags);
+    if (hint && (gating || v.lineIndex >= 1 || roll < 0.2)) {
       // Anyone with something genuinely useful to say gets it out by the second
       // conversation, rather than hiding it behind an invisible friendship roll.
       //
-      // Every telling counts, including the ones that come up by chance. The
-      // second branch used to speak the hint without recording it, so a player
-      // could be told in as many words where the shell went and have the world
-      // still hold that they had never asked.
-      line = def.hint;
-      if (!heardHint) this.recordHint(def.id);
+      // Every telling counts, including the ones that come up by chance. This
+      // used to speak the hint without recording it on the chance branch, so a
+      // player could be told in as many words where the shell went and have the
+      // world still hold that they had never asked.
+      line = hint.text;
+      this.recordHint(hint.sets);
     } else if (roll < 0.16) line = GOSSIP[Math.floor(Math.random() * GOSSIP.length)];
     else {
       line = def.lines[v.lineIndex % def.lines.length];
@@ -2354,17 +2358,37 @@ class Game {
   }
 
   /**
+   * What finishing a step does to the world's flags.
+   *
+   * Set some, clear others. Clearing matters for anything that is true for a
+   * while and then is not: a light that was lit, a door that was open, a
+   * rumour that has been overtaken by what actually happened.
+   */
+  applyStepFlags(step) {
+    const st = this.state;
+    const sets = step.sets || step.flags || [];      // `flags` is the old name
+    const clears = step.clears || [];
+    if (!sets.length && !clears.length) return;
+    for (const f of sets) st.flags[f] = true;
+    for (const f of clears) delete st.flags[f];
+
+    st.touch('flags');
+  }
+
+  /**
    * One step of a job is done. Either move on to the next — saying whatever
    * this step ends with, and handing over anything the next one needs — or, if
    * that was the last, finish the whole thing.
    */
   advanceQuest(q, v, finish, step) {
     const st = this.state;
-    if (isLastStep(q, st)) { this.completeQuest(q, v, finish); return; }
+    // The last step's own flags are applied here rather than inside
+    // completeQuest, which is also reached by jobs that have no steps at all.
+    if (isLastStep(q, st)) { this.applyStepFlags(step); this.completeQuest(q, v, finish); return; }
 
     st.setQuestStep(q.id, stepIndex(q, st) + 1);
     if (step.gives) for (const [id, n] of step.gives) st.give(id, n);
-    if (step.flags) { for (const f of step.flags) st.flags[f] = true; st.touch('flags'); }
+    this.applyStepFlags(step);
     const next = currentStep(q, st);
     // A delivery step normally comes with the parcel; `give: false` is for the
     // ones where you're carrying something you found yourself.

@@ -124,6 +124,7 @@ const BUDGET = {
   bearlegs: 15000,
   cottages: 25000,
   content: 20000,
+  questextras: 20000,
   netbookfields: 20000,
   bearshot: 20000,
   netnewvalley: 20000,
@@ -149,7 +150,7 @@ const BUDGET = {
 // have broken without running everything. `all` is what to run before a commit.
 const GROUPS = {
   quests: ['ghostquest', 'deliverquest', 'journalstep', 'questrepair', 'ghoststuck',
-    'barriers', 'nightfolk', 'nightplaces', 'questchain', 'logbook', 'hedgestuck', 'freshstones', 'questwalk', 'piercheck', 'hedgewalk', 'shellchain', 'spotcheck', 'coatgoal', 'ghosthidden', 'shellwalk', 'hintheard', 'bear', 'deliverspots', 'rugs', 'taxitime', 'snowday', 'firelight', 'confirmbox', 'bearlegs', 'cottages', 'content', 'regular', 'barstool'],
+    'barriers', 'nightfolk', 'nightplaces', 'questchain', 'logbook', 'hedgestuck', 'freshstones', 'questwalk', 'piercheck', 'hedgewalk', 'shellchain', 'spotcheck', 'coatgoal', 'ghosthidden', 'shellwalk', 'hintheard', 'bear', 'deliverspots', 'rugs', 'taxitime', 'snowday', 'firelight', 'confirmbox', 'bearlegs', 'cottages', 'content', 'questextras', 'regular', 'barstool'],
   cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers', 'employee',
     'weathercafe', 'hourly'],
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',

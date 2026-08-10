@@ -470,6 +470,38 @@ function stepCard(step, i, total, opts) {
   return card;
 }
 
+/** What finishing this step does to the world's flags. */
+function stepFlags(step) {
+  const wrap = document.createElement('fieldset');
+  const lg = document.createElement('legend');
+  lg.textContent = 'Finishing this step';
+  const draw = () => {
+    wrap.textContent = '';
+    wrap.append(lg);
+    for (const [key, label, why] of [
+      ['sets', 'Sets these flags', 'Other quests can wait on them, and people can appear.'],
+      ['clears', 'Clears these flags', 'For anything that was true and is not any more.'],
+    ]) {
+      const box = document.createElement('div');
+      (step[key] || []).forEach((f, i) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.append(flagBox(f, (val) => { step[key][i] = val; }));
+        row.append(button('×', () => {
+          step[key].splice(i, 1);
+          if (!step[key].length) delete step[key];
+          touch(); draw();
+        }, 'danger'));
+        box.append(row);
+      });
+      box.append(button('+ flag', () => { (step[key] ||= []).push(''); touch(); draw(); }));
+      wrap.append(field(label, box, why));
+    }
+  };
+  draw();
+  return wrap;
+}
+
 /** Notes that replace the usual one once a flag is set. */
 function conditionalNotes(step) {
   const wrap = document.createElement('fieldset');
@@ -587,6 +619,10 @@ function rewardCard(q) {
   // Named for what it looks like it does rather than what it does. Worth
   // saying plainly in the form, because the obvious reading — that typing
   // something here unlocks something — is wrong.
+  card.append(field('What the journal says afterwards', text(r.journal, (v) => { r.journal = v || undefined; }, { long: true }),
+    'Optional. Shown in the journal under the green "Finished." — what the job left '
+    + 'you with, for the jobs that change what you can do rather than what you own.'));
+
   card.append(field('Sets the flag hint_…', text(r.hint, (v) => { r.hint = v || undefined; }),
     'Historic. Typing "fish" sets a flag called hint_fish, and nothing in the game '
     + 'reads any hint_ flag. The one exception is "taxi", which prints a toast about '
@@ -659,9 +695,7 @@ function castForm(box) {
 
   box.append(field('Lines', lineList(v.lines || (v.lines = []), (x) => { v.lines = x; }),
     'Said in turn as you talk to them again.'));
-  box.append(field('Hint', text(v.hint, (x) => { v.hint = x || undefined; }, { long: true }),
-    'The one useful thing they know. Saying it sets the flag heard_hint_'
-    + (v.id || 'them') + ', which a quest can wait on.'));
+  box.append(hintList(v));
 
   const secret = document.createElement('fieldset');
   const lg = document.createElement('legend');
@@ -718,6 +752,54 @@ function castForm(box) {
     picked = null; touch(); render();
   }, 'danger'));
   box.append(del);
+}
+
+/**
+ * Everything somebody knows. Each one may wait on a flag, and each records
+ * that it has been said in a flag of its own — the first in heard_hint_<id>,
+ * which is the name quests wait on, so adding a second hint cannot break the
+ * job that depends on the first.
+ */
+function hintList(v) {
+  const wrap = document.createElement('fieldset');
+  const lg = document.createElement('legend');
+  lg.textContent = 'What they know';
+  const draw = () => {
+    wrap.textContent = '';
+    wrap.append(lg);
+    const hints = v.hints || [];
+    hints.forEach((h, i) => {
+      const card = document.createElement('div');
+      card.className = 'step';
+      const head = document.createElement('h4');
+      head.textContent = i === 0 ? 'Hint (the one quests can wait on)' : `Hint ${i + 1}`;
+      const sp = document.createElement('span');
+      sp.className = 'sp';
+      sp.append(button('×', () => {
+        hints.splice(i, 1);
+        if (!hints.length) delete v.hints;
+        touch(); draw();
+      }, 'danger'));
+      head.append(sp);
+      card.append(head);
+      card.append(field('They say', text(h.text, (x) => { h.text = x; }, { long: true })));
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.append(field('Only once this flag is set', flagBox(h.when, (x) => { h.when = x || undefined; }),
+        'Leave blank and they will say it from the first day, which is how hints '
+        + 'have always worked.'));
+      row.append(field('Saying it sets', flagBox(h.sets, (x) => { h.sets = x || undefined; }),
+        `Blank means ${i === 0 ? `heard_hint_${v.id}` : `heard_hint_${v.id}_${i}`}.`));
+      card.append(row);
+      wrap.append(card);
+    });
+    wrap.append(button('+ something they know', () => {
+      (v.hints ||= []).push({ text: '' });
+      touch(); draw();
+    }));
+  };
+  draw();
+  return wrap;
 }
 
 // ---------------------------------------------------------------- items
