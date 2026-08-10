@@ -6,6 +6,8 @@
 #   deploy/push.sh --dry-run    # say what would be copied, touch nothing
 #   deploy/push.sh --force      # go anyway with a dirty tree or players in
 #   deploy/push.sh --no-restart # copy, leave the game server running
+#   deploy/push.sh --take-theirs  # bring the server's content down here first
+#   deploy/push.sh --keep-mine    # overwrite the server's content with this one
 #
 # There is no sudo here, and there does not need to be. The service runs as
 # orangepi, so an ssh session as orangepi is allowed to signal it; the server
@@ -26,11 +28,24 @@ UNIT=${CATCAFE_UNIT:-catcafe}
 DRY=
 FORCE=
 NORESTART=
+TAKE=
+KEEP=
+
+# The three files the content editor writes. They are the one thing on the
+# server that can be newer than what is here — everything else only ever goes
+# one way — so they are never copied over the top of a change.
+CONTENT=(
+  src/game/questdata.js
+  src/world/villagerdata.js
+  src/game/itemdata.js
+)
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY=1 ;;
     --force) FORCE=1 ;;
     --no-restart) NORESTART=1 ;;
+    --take-theirs) TAKE=1 ;;
+    --keep-mine) KEEP=1 ;;
     -h|--help) sed -n '3,8p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "push.sh: unknown option $arg" >&2; exit 2 ;;
   esac
@@ -86,6 +101,73 @@ elif echo "$GAMES" | grep -qE '"(playing|here)": [1-9]'; then
   fi
 fi
 
+# --- content -----------------------------------------------------------------
+#
+# Quests are written on both sides now: here in an editor, and over there in
+# the one running on the server. That makes the three content files the only
+# thing a deploy could destroy work with — everything else in the tree is
+# written here and only here.
+#
+# So they are excluded from the copy entirely, and reconciled instead. Missing
+# over there means a first deployment and they are seeded. The same means
+# nothing to do. Different means somebody has been editing on the server, and
+# this stops rather than guessing which of you is right.
+
+reconcile() {
+  local seeded=0 differ=()
+  for f in "${CONTENT[@]}"; do
+    if ! ssh -o BatchMode=yes "$HOST" "test -f '$DIR/$f'"; then
+      say "  $f — not there yet, seeding it"
+      ssh -o BatchMode=yes "$HOST" "mkdir -p '$DIR/$(dirname "$f")'"
+      rsync -a "$f" "$HOST:$DIR/$f"
+      seeded=$((seeded + 1))
+      continue
+    fi
+    if ssh -o BatchMode=yes "$HOST" "cat '$DIR/$f'" | cmp -s - "$f"; then continue; fi
+    differ+=("$f")
+  done
+
+  [ ${#differ[@]} -eq 0 ] && return 0
+
+  if [ -n "$TAKE" ]; then
+    for f in "${differ[@]}"; do
+      rsync -a "$HOST:$DIR/$f" "$f"
+      say "  $f — taken from the server"
+    done
+    warn ''
+    warn "Brought ${#differ[@]} file(s) down. They are edits made on the server and are"
+    warn 'not in git yet — commit them before you change them here:'
+    warn "  git add ${differ[*]} && git commit"
+    die 'Stopping so you can look at them first. Run the deploy again afterwards.'
+  fi
+
+  if [ -n "$KEEP" ]; then
+    local stamp
+    stamp=$(date '+%Y-%m-%d-%H%M%S')
+    ssh -o BatchMode=yes "$HOST" "mkdir -p '$DIR/content-backups/$stamp-before-deploy'"
+    for f in "${differ[@]}"; do
+      ssh -o BatchMode=yes "$HOST" \
+        "cp '$DIR/$f' '$DIR/content-backups/$stamp-before-deploy/$(basename "$f")'"
+      rsync -a "$f" "$HOST:$DIR/$f"
+      say "  $f — overwritten (theirs kept in content-backups/$stamp-before-deploy)"
+    done
+    return 0
+  fi
+
+  warn ''
+  warn "The server's content is not the same as this copy:"
+  for f in "${differ[@]}"; do
+    local n
+    n=$(ssh -o BatchMode=yes "$HOST" "cat '$DIR/$f'" | diff - "$f" | grep -c '^[<>]' || true)
+    warn "  $f — $n line(s) differ"
+  done
+  warn ''
+  warn 'Somebody has been editing quests on the server. Pick one:'
+  warn '  deploy/push.sh --take-theirs   bring them down here, to look at and commit'
+  warn '  deploy/push.sh --keep-mine     overwrite them (a copy is kept over there)'
+  die 'Nothing has been copied.'
+}
+
 # --- copy -------------------------------------------------------------------
 #
 # --delete so a file deleted here goes away there too; a stale module that
@@ -99,15 +181,37 @@ RSYNC=(rsync -a --delete
   # are somebody's afternoon, and there is no second copy.
   --exclude '*valley*.json'
   --exclude 'bak.*'
+  # The server's own copies of the content, taken before each save from the
+  # editor running on it. Its safety net, nothing to do with this machine's —
+  # without this, --delete tries to remove them and rsync copies ours over.
+  --exclude 'content-backups'
+  --exclude 'questdata.js'   # content: handled on its own, below
+  --exclude 'villagerdata.js'
+  --exclude 'itemdata.js'
   --exclude '.deployed'      # written after the copy, below
   --exclude '.DS_Store'
   --exclude 'node_modules')
 
 if [ -n "$DRY" ]; then
   say "Dry run — nothing will be written."
+  say 'Content:'
+  for f in "${CONTENT[@]}"; do
+    if ! ssh -o BatchMode=yes "$HOST" "test -f '$DIR/$f'"; then
+      say "    $f — not there yet, would be seeded"
+    elif ssh -o BatchMode=yes "$HOST" "cat '$DIR/$f'" | cmp -s - "$f"; then
+      say "    $f — same on both"
+    else
+      n=$(ssh -o BatchMode=yes "$HOST" "cat '$DIR/$f'" | diff - "$f" | grep -c '^[<>]' || true)
+      warn "    $f — $n line(s) differ, would stop the deploy"
+    fi
+  done
+  say 'Everything else:'
   "${RSYNC[@]}" --dry-run -v ./ "$HOST:$DIR/" | sed 's/^/    /'
   exit 0
 fi
+
+say "Reconciling content …"
+reconcile
 
 say "Copying $SHA to $HOST:$DIR …"
 "${RSYNC[@]}" ./ "$HOST:$DIR/"

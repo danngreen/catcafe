@@ -55,6 +55,25 @@ boxes for anybody's name and anything's id, and `validate.js` refuses to save
 content that does not hold together — an unknown giver, an item that is not an
 item, a step with no objective, two things with the same id.
 
+## Editing on the server, and deploying afterwards
+
+Once the editor is running on the house server, quests get written in two
+places: here, and there. The three content files are the only thing on the
+server that can be newer than what is in this repository — everything else
+travels one way — so `deploy/push.sh` never copies them over the top.
+
+    deploy/push.sh --dry-run       says which of the three differ, and by how much
+
+If they are the same, the deploy carries on. If they are missing, it is a first
+deployment and they are seeded. If they differ, it stops and makes you choose:
+
+    deploy/push.sh --take-theirs   bring the server's copies down here to commit
+    deploy/push.sh --keep-mine     overwrite them (the server keeps a copy first)
+
+`--take-theirs` stops after copying, on purpose: what it brought down is
+somebody's work that is not in git yet, and the next thing to do with it is
+look at it and commit it, not deploy it back where it came from.
+
 ## Backups
 
 Every save copies all three files to `content-backups/<date>-<time>/` first.
