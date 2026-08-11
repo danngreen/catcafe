@@ -125,6 +125,7 @@ const BUDGET = {
   cottages: 25000,
   content: 20000,
   questextras: 20000,
+  slidepad: 20000,
   netbookfields: 20000,
   bearshot: 20000,
   netnewvalley: 20000,
@@ -158,7 +159,7 @@ const GROUPS = {
   ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'exterior',
     'summarylines', 'journalstep', 'titleme', 'signkeys', 'patio', 'deaditems', 'booktabs', 'bigpieces', 'painting', 'friends', 'confirm', 'catvoices', 'delivery', 'deliverhouse', 'clearnight', 'wagekeys', 'patiorain'],
   cutscene: ['taxi', 'sleep', 'door'],
-  mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile', 'pickupmobile'],
+  mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile', 'pickupmobile', 'slidepad'],
   // Single-process networked runs. The paired ones need two browsers at once
   // and are listed in the README rather than here.
   // netclock goes first: only the sim owner cashes up a morning, ownership
@@ -259,16 +260,29 @@ async function main() {
   });
 
   // Phone emulation, so the touch layout can actually be inspected.
+  //
+  // Applied per scenario rather than once, because every scenario in the mobile
+  // group needs it whether it was asked for or not. Without it the touch
+  // overlay has no size, and a scenario about the d-pad measures a pad zero
+  // pixels wide: it does not fail, it quietly finds nothing, which in a sweep
+  // reads as a pass.
   const mobileIdx = args.indexOf('--mobile');
-  if (mobileIdx >= 0) {
-    const spec = args[mobileIdx + 1] && !args[mobileIdx + 1].startsWith('--') ? args[mobileIdx + 1] : '390x844';
-    const [mw, mh] = spec.split('x').map(Number);
-    await send('Emulation.setDeviceMetricsOverride', {
-      width: mw, height: mh, deviceScaleFactor: 2, mobile: true,
-    });
-    await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
-    await send('Emulation.setEmitTouchEventsForMouse', { enabled: true, configuration: 'mobile' });
-  }
+  const mobileSpec = mobileIdx >= 0
+    && args[mobileIdx + 1] && !args[mobileIdx + 1].startsWith('--')
+    ? args[mobileIdx + 1] : '390x844';
+  const asPhone = async (on) => {
+    if (on) {
+      const [mw, mh] = mobileSpec.split('x').map(Number);
+      await send('Emulation.setDeviceMetricsOverride', {
+        width: mw, height: mh, deviceScaleFactor: 2, mobile: true,
+      });
+      await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+      await send('Emulation.setEmitTouchEventsForMouse', { enabled: true, configuration: 'mobile' });
+    } else {
+      await send('Emulation.clearDeviceMetricsOverride');
+      await send('Emulation.setTouchEmulationEnabled', { enabled: false });
+    }
+  };
 
   await send('Runtime.enable');
   await send('Log.enable');
@@ -286,6 +300,7 @@ async function main() {
   let failed = 0;
   for (const sc of scenarios) {
     problems.length = 0;
+    await asPhone(mobileIdx >= 0 || GROUPS.mobile.includes(sc));
     // Title and lobby scenarios need the real screens, so they skip autostart.
     const params = [];
     if (!sc.includes('title') && !sc.includes('lobby')) params.push('autostart');

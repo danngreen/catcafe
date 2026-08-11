@@ -3592,6 +3592,69 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!afterOne) window.__errors.push('a step did not set its flags: ' + window.__extras);
         if (!cleared) window.__errors.push('a step did not clear what it should, or cleared too much: ' + window.__extras);
         if (withIt < 60) window.__errors.push('the journal line does not show on a finished quest: ' + window.__extras);
+      } else if (SCRIPT === 'slidepad') {
+        // A thumb that never leaves the glass. Changing direction used to mean
+        // lift, aim, press — and aiming is the whole problem on a phone, where
+        // the thumb cannot see what it is doing.
+        const st = g.state;
+        await wait(500);
+        const pad = document.querySelector('#touch .dpad');
+        const r = pad.getBoundingClientRect();
+        const mid = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        const reach = r.width * 0.42;
+        const at = (dx, dy, type, id = 7) => pad.dispatchEvent(new PointerEvent(type, {
+          bubbles: true, cancelable: true, pointerId: id, isPrimary: true,
+          clientX: mid.x + dx, clientY: mid.y + dy,
+        }));
+
+        // One press, then slide the whole way round without lifting.
+        const seen = [];
+        const held = () => ['up', 'down', 'left', 'right'].filter((d) => g.input.down(d)).sort().join('+');
+        at(0, -reach, 'pointerdown');
+        await wait(60); seen.push('down@up=' + held());
+        for (const [dx, dy, name] of [
+          [-reach, 0, 'left'], [0, reach, 'down'], [reach, 0, 'right'],
+          [-reach * 0.7, -reach * 0.7, 'up-left corner'], [0, 0, 'middle'],
+        ]) {
+          at(dx, dy, 'pointermove');
+          await wait(60);
+          seen.push(`${name}=${held() || 'none'}`);
+        }
+        // And it does actually walk: hold one way and watch the player move.
+        at(reach, 0, 'pointermove');
+        const x0 = g.player.x;
+        await wait(500);
+        const walked = Math.round(g.player.x - x0);
+        at(reach, 0, 'pointerup');
+        await wait(120);
+        const afterLift = held();
+
+        // The arrow under the thumb lights up, so you can see where you are
+        // without looking away from the game.
+        at(0, -reach, 'pointerdown');
+        await wait(60);
+        const litUp = document.querySelector('#touch .tb.up').classList.contains('on');
+        at(-reach, 0, 'pointermove');
+        await wait(60);
+        const stillLit = document.querySelector('#touch .tb.up').classList.contains('on');
+        const nowLeft = document.querySelector('#touch .tb.left').classList.contains('on');
+        at(-reach, 0, 'pointerup');
+        await wait(60);
+
+        window.__slide = `[${seen.join(' ')}] walked=${walked} afterLift="${afterLift}"`
+          + ` litUp=${litUp} upStillLitAfterSlide=${stillLit} leftLit=${nowLeft}`;
+        const want = { 'down@up': 'up', left: 'left', down: 'down', right: 'right',
+          'up-left corner': 'left+up', middle: 'none' };
+        for (const [where, expect] of Object.entries(want)) {
+          const got = seen.find((x) => x.startsWith(where + '='));
+          if (got !== `${where}=${expect}`) {
+            window.__errors.push(`sliding to ${where} gave "${got}", wanted ${expect}: ` + window.__slide);
+          }
+        }
+        if (walked < 8) window.__errors.push('holding a direction did not walk: ' + window.__slide);
+        if (afterLift) window.__errors.push('lifting the thumb did not stop: ' + window.__slide);
+        if (!litUp) window.__errors.push('the arrow under the thumb does not light up: ' + window.__slide);
+        if (stillLit || !nowLeft) window.__errors.push('the lit arrow does not follow the thumb: ' + window.__slide);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -5781,6 +5844,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__cots ? ` ${window.__cots}` : '')
         + (window.__content ? ` ${window.__content}` : '')
         + (window.__extras ? ` ${window.__extras}` : '')
+        + (window.__slide ? ` ${window.__slide}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

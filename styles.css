@@ -83,7 +83,10 @@ body.has-touch #touch { display: flex; }
   touch-action: none;
   backdrop-filter: blur(2px);
 }
-.tb:active { background: rgba(105,116,152,.95); transform: scale(0.96); }
+.tb:active,
+/* Set by the d-pad while the thumb is over an arrow. The browser only marks
+   the element a press landed on, and on this pad the press moves. */
+.tb.on { background: rgba(105,116,152,.95); transform: scale(0.96); }
 
 /* A compact cross: left and right sit close in so the pad is narrow. */
 .dpad { width: var(--pad); height: var(--pad); --btn: 46px; --pad: 128px; }
