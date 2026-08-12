@@ -763,9 +763,15 @@ function paintBear(buf, dir, frame, pose) {
   // ---- standing and walking ----
   const lift = frame % 4;
   const bodyY = ground - 10 + bob;
-  buf.ellipse(cx + 1, bodyY, 13.5, 7.0, F);
-  buf.ellipseBlend(cx + 1, bodyY - 3, 10.0, 4.0, L);
-  buf.ellipse(cx + 11, bodyY + 1, 4.2, 3.6, D);       // rump
+
+  // The long body and the rump belong to the side view alone. Drawn for every
+  // direction, as they were, a bear coming towards you is as wide as she is
+  // long and wears her own backside on her right hip.
+  if (dir === 'side') {
+    buf.ellipse(cx + 1, bodyY, 13.5, 7.0, F);
+    buf.ellipseBlend(cx + 1, bodyY - 3, 10.0, 4.0, L);
+    buf.ellipse(cx + 11, bodyY + 1, 4.2, 3.6, D);       // rump
+  }
 
   // Four legs from the side, where you can see all four.
   if (dir === 'side') {
@@ -783,8 +789,11 @@ function paintBear(buf, dir, frame, pose) {
     // Facing the camera she is a wall of shoulder with the head *in front of*
     // it, low and near the viewer — not on top, where a rider would sit on it
     // and she would read as a footstool with ears.
-    buf.ellipse(cx, bodyY - 2, 11.0, 7.0, F);
-    buf.ellipseBlend(cx, bodyY - 4, 8.0, 4.2, L);
+    // About the width of a person, not of a bear seen side-on. She is deep
+    // rather than wide from this angle, and drawing her at her own length made
+    // her read as a rug with ears.
+    buf.ellipse(cx, bodyY - 2, 7.6, 7.4, F);
+    buf.ellipseBlend(cx, bodyY - 4, 5.2, 4.2, L);
 
     // One pair of legs, not four. Coming towards you the front pair is what
     // you can see and the back pair is behind her; going away, the other way
@@ -792,7 +801,7 @@ function paintBear(buf, dir, frame, pose) {
     //
     // The stance differs because the halves of a bear do: she is narrow at the
     // shoulder and wide at the hip, so from behind the legs sit further apart.
-    const stance = dir === 'down' ? 5.5 : 7;
+    const stance = dir === 'down' ? 4 : 5;
     for (const side of [-1, 1]) {
       const lx = Math.round(cx + side * stance) - 1;
       // The two swing against each other, which is what walking looks like
@@ -803,20 +812,27 @@ function paintBear(buf, dir, frame, pose) {
     }
 
     if (dir === 'down') {
-      const fy = bodyY + 4;
-      buf.ellipse(cx, fy, 5.6, 4.4, F);
-      ears(cx, fy - 0.5, 5.4);
+      // Ears on top of the shoulders rather than on the head. The head is low
+      // and near the viewer from here, so its own ears would be behind her
+      // back — true, and unreadable at this size, which is worse than true.
+      ears(cx, bodyY - 6.5, 4.6);
+      const fy = bodyY + 4;   // whole pixels: the face is eyes and a mouth, and half a row of either is a smudge
+      buf.ellipse(cx, fy, 5.0, 4.2, F);
+      buf.ellipseBlend(cx, fy - 1, 3.4, 2.4, L);
       buf.rect(cx - 3, fy - 1, 2, 2, E);
       buf.rect(cx + 1, fy - 1, 2, 2, E);
-      buf.ellipse(cx, fy + 2.6, 3.2, 2.2, snout);
+      buf.ellipse(cx, fy + 2.4, 3.0, 2.0, snout);
       buf.rect(cx - 1, fy + 2, 2, 1, E);
     } else {
-      // Going away: the back of a head and two ears above the shoulders.
+      // Going away: the back of a head and two ears above the shoulders, and
+      // the tail where a tail is — in the middle, low down. From the front
+      // there is no tail to see, so none is drawn.
+      buf.ellipse(cx, bodyY + 3.5, 1.9, 1.6, D);
       buf.ellipse(cx, bodyY - 7, 4.6, 3.4, F);
       ears(cx, bodyY - 7.5, 4.6);
     }
     outline(buf);
-    shadow(9.5);
+    shadow(7);
     return;
   }
 

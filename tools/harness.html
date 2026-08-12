@@ -3346,9 +3346,76 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         for (const dir of ['down', 'up', 'left', 'right']) {
           legs[dir] = [0, 1, 2, 3].map((f) => count(dir, f));
         }
+
+        // How wide she is, and what is drawn where. Facing the camera she
+        // should be about as wide as the person riding her — she is deep from
+        // that angle, not broad — and side-on she is a bear's length.
+        const pixels = (dir, f = 0) => {
+          const spr = C.bearSprite(dir, f, 'walk');
+          const cnv = document.createElement('canvas');
+          cnv.width = spr.width; cnv.height = spr.height;
+          cnv.getContext('2d').drawImage(spr, 0, 0);
+          const d = cnv.getContext('2d').getImageData(0, 0, spr.width, spr.height).data;
+          return { d, w: spr.width, h: spr.height };
+        };
+        const spanOf = (dir) => {
+          const { d, w, h } = pixels(dir);
+          let lo = w, hi = -1;
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              if (d[(y * w + x) * 4 + 3] > 200) { if (x < lo) lo = x; if (x > hi) hi = x; }
+            }
+          }
+          return hi - lo + 1;
+        };
+        const person = C.charSprite('cat', 'ginger', '#5b8fd6', 'down', 0).width;
+        const wide = { down: spanOf('down'), up: spanOf('up'), left: spanOf('left') };
+
+        // Ink outside the body at all is a sign of a pixel that landed in the
+        // wrong column — which is exactly how a fractional coordinate used to
+        // fail, silently and sixteen columns away.
+        const edgeInk = (dir) => {
+          const { d, w, h } = pixels(dir);
+          let n = 0;
+          for (let y = 0; y < h; y++) {
+            for (const x of [0, 1, w - 2, w - 1]) if (d[(y * w + x) * 4 + 3] > 200) n++;
+          }
+          return n;
+        };
+
+        // The tail: a dark patch low and central, from behind only.
+        const tailInk = (dir) => {
+          const { d, w, h } = pixels(dir);
+          let n = 0;
+          // Just above the legs and below the belly. Lower than this and the
+          // band catches the muzzle, which is the same sort of dark and is
+          // supposed to be there when she is facing you.
+          for (let y = Math.round(h * 0.58); y < Math.round(h * 0.72); y++) {
+            for (let x = Math.round(w / 2) - 2; x <= Math.round(w / 2) + 1; x++) {
+              const i = (y * w + x) * 4;
+              // The rump shade, darker than the coat and not the near-black ink.
+              if (d[i + 3] > 200 && d[i] < 120 && d[i] > 60 && d[i + 1] < 90) n++;
+            }
+          }
+          return n;
+        };
         const facing = [...legs.down, ...legs.up];
         const across = [...legs.left, ...legs.right];
-        window.__legs = `down=[${legs.down}] up=[${legs.up}] left=[${legs.left}] right=[${legs.right}]`;
+        window.__legs = `down=[${legs.down}] up=[${legs.up}] left=[${legs.left}] right=[${legs.right}]`
+          + ` wide=${JSON.stringify(wide)} person=${person}`
+          + ` edgeInk=${edgeInk('down')}/${edgeInk('up')}`
+          + ` tail up=${tailInk('up')} down=${tailInk('down')}`;
+        if (wide.down > person + 6 || wide.up > person + 6) {
+          window.__errors.push('she is wider than a person head on: ' + window.__legs);
+        }
+        if (wide.left < wide.down * 1.5) {
+          window.__errors.push('side on she is no longer than she is wide: ' + window.__legs);
+        }
+        if (edgeInk('down') || edgeInk('up')) {
+          window.__errors.push('something is drawn out at the edge of the sprite: ' + window.__legs);
+        }
+        if (!tailInk('up')) window.__errors.push('no tail from behind: ' + window.__legs);
+        if (tailInk('down')) window.__errors.push('a tail on her front: ' + window.__legs);
         if (facing.some((n2) => n2 !== 2)) {
           window.__errors.push('coming or going she has the wrong number of legs: ' + window.__legs);
         }

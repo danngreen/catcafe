@@ -36,18 +36,30 @@ export class PixBuf {
     return ((alpha & 255) << 24) | (b << 16) | (g << 8) | r;
   }
 
+  /**
+   * One pixel.
+   *
+   * Coordinates are floored first. Without that, a fractional y indexes
+   * `y * w + x` at a fraction of a row and the pixel lands somewhere else
+   * entirely — sixteen columns away and wrapped onto the next line, in the
+   * case that found this. Callers pass the odd half-pixel all the time, and
+   * the failure is silent, far from the caller, and looks like stray ink.
+   */
   set(x, y, packed) {
+    x = Math.floor(x); y = Math.floor(y);
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
     this.data[y * this.w + x] = packed;
   }
 
   get(x, y) {
+    x = Math.floor(x); y = Math.floor(y);
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return 0;
     return this.data[y * this.w + x];
   }
 
   /** Alpha-blend `packed` over the existing pixel. */
   blend(x, y, packed) {
+    x = Math.floor(x); y = Math.floor(y);        // see set(), same trap
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
     const a = (packed >>> 24) & 255;
     if (a === 0) return;
