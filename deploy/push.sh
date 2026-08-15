@@ -92,7 +92,12 @@ if [ -z "$GAMES" ]; then
   warn "This script can restart the game but cannot start it: that needs sudo."
 elif echo "$GAMES" | grep -qE '"(playing|here)": [1-9]'; then
   echo "$GAMES" | grep -E '"(cafe|playing|here)"' | sed 's/^/    /'
-  if [ -n "$NORESTART" ]; then
+  if [ -n "$DRY" ]; then
+    # A dry run writes nothing and restarts nothing, so somebody playing is
+    # no reason to stop — and asking "what would this do" while the house is
+    # busy is exactly when you want an answer.
+    warn "Somebody is playing. A dry run changes nothing, so here it is anyway."
+  elif [ -n "$NORESTART" ]; then
     warn "Somebody is playing — copying the files and leaving them to it."
   elif [ -z "$FORCE" ]; then
     die "Somebody is playing. Wait for them, --force, or --no-restart to copy only."
