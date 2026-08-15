@@ -102,9 +102,10 @@ await check('a typo is caught wherever it is made', async () => {
     ['a quest with no offer', (c) => { c.quests[0].offer = ''; }, /no offer/],
     ['somebody with nothing to say', (c) => { c.villagers[0].lines = []; }, /nothing to say/],
     ['an id with a space in it', (c) => { c.villagers[0].id = 'two words'; }, /not a usable id/],
-    ['a hint nobody can give', (c) => {
-      c.quests[0].needsHint = c.villagers.find((v) => !v.hints?.length).id;
-    }, /no hint to give/],
+    ['waiting on a flag nothing sets', (c) => {
+      c.quests[0].requires = 'a_flag_nobody_ever_sets';
+    }, /nothing sets it/],
+    ['the old needsHint field', (c) => { c.quests[0].needsHint = 'shrimp'; }, /still uses needsHint/],
   ];
   for (const [what, breakIt, expect] of cases) {
     const copy = JSON.parse(JSON.stringify(content));

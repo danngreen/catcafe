@@ -185,6 +185,19 @@ export function progressText(q, st) {
  * what they asked for: once the collar is handed over you are not holding it,
  * and "are you holding the collar" is then false forever.
  */
+/**
+ * The flag a job waits on before anybody will offer it, if it waits on one.
+ *
+ * `requires` names the flag itself. It replaced `needsHint`, which named a
+ * person — fine while everybody knew one thing, useless once they can know
+ * several, because it could not say which of them was the one that mattered.
+ * The old field is still read so that content edited by hand and not yet
+ * saved through the editor keeps working.
+ */
+export function requiredFlag(q) {
+  return q.requires || (q.needsHint ? `heard_hint_${q.needsHint}` : null);
+}
+
 export function stepDone(step, st) {
   if (step.evidence && st.flags?.[step.evidence]) return true;
   return stepMet(step.objective, st);

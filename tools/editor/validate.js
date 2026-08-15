@@ -93,10 +93,15 @@ export function validate({ quests = [], villagers = [], items = {} }, places = {
     else if (!villagerIds.has(q.giver)) say(at, `is given by "${q.giver}", who is not in the cast`);
     if (!q.offer) say(at, 'has no offer — the words the giver says when they ask');
     if (!q.complete) say(at, 'has no completion — the words the giver says when you finish');
-    if (q.needsHint && !villagerIds.has(q.needsHint)) say(at, `waits on a hint from "${q.needsHint}", who is not in the cast`);
-    else if (q.needsHint) {
-      const who = villagers.find((v) => v.id === q.needsHint);
-      if (!hintsOf(who).length) say(at, `waits on a hint from ${q.needsHint}, who has no hint to give`);
+    // The flag a job waits on has to be one something can actually set,
+    // otherwise the job is simply never offered and looks like a bug in the
+    // game rather than a name typed wrong.
+    if (q.requires && !flagIsSet(q.requires, quests, villagers)) {
+      say(at, `is only offered once "${q.requires}" is set, and nothing sets it`);
+    }
+    if (q.needsHint) {
+      say(at, `still uses needsHint: "${q.needsHint}". Say which flag instead — `
+        + `probably heard_hint_${q.needsHint}.`);
     }
 
     const steps = q.steps?.length ? q.steps : [{ objective: q.objective, progress: q.progress }];

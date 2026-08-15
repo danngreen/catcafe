@@ -343,8 +343,9 @@ function questForm(box) {
   flags.className = 'row';
   flags.append(
     field('After dark only', toggle(q.night, 'giver only appears at night', (v) => { q.night = v; })),
-    field('Needs a hint from', choose(q.needsHint, villagerChoices(), (v) => { q.needsHint = v; }),
-      'The giver will not offer this until that person has told you their hint.'),
+    field('Only offered once this flag is set', flagBox(q.requires, (v) => { q.requires = v || undefined; }),
+      'Nobody will raise the job before then. A hint\'s flag is the usual one — '
+      + 'that is how Moth waits until Shrimp has said where the shell went.'),
   );
   box.append(flags);
 

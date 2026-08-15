@@ -212,7 +212,6 @@ export const QUESTS = [
     giver: 'moth',
     desc: 'Moth counts moths, and has run out of light to count them by.',
     night: true,
-    needsHint: 'shrimp',
     steps: [
       {
         note: 'Buy a storm lantern at the Chalk Pit Store in Hollowdown',
@@ -228,6 +227,7 @@ export const QUESTS = [
     reward: { money: 150, items: [['seashell', 1]], friendship: ['moth'] },
     offer: "You're up late. Good. Nobody's ever awake this late.\n\nI count them, you see. On the lamps. Only the lamps in this town are dreadful and half of them are out, and I'm fairly sure I've been counting the same moth eleven times.\n\nThere's a proper storm lantern to be had at the hardware place up in Hollowdown. Bring me one and I'll show you something.",
     complete: "*Moth holds the lantern up and the air fills — properly fills — with wings*\n\nFourteen. Fourteen species on one lamp. And there's the one I've never got a name for.\n\nTake this. Found it under the lamp at the crossroads, and it's no use to me.",
+    requires: 'heard_hint_shrimp',
   },
   {
     id: 'the_telephone',

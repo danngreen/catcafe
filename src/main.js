@@ -19,7 +19,7 @@ import { generateWorld, WORLD_W, WORLD_H } from './world/worldgen.js';
 import { Renderer, Camera } from './world/render.js';
 import { buildShopInterior, buildSpecialInterior, buildHouseInterior } from './world/interiors.js';
 import { SHOPS, VILLAGERS, TOWNS, GOSSIP, PLAYER_NAMES } from './world/places.js';
-import { secretMet, arrivesNow, nextHint } from './world/villagers.js';
+import { secretMet, arrivesNow, nextHint, hintsOf } from './world/villagers.js';
 
 import { GameState, seedStartingInventory } from './game/state.js';
 import { Player, Villager, RemotePlayer, Employee, canStand, Bear, riderOffset,
@@ -37,7 +37,7 @@ import {
 } from './game/deliveries.js';
 import { BOOK_BY_ID } from './world/places.js';
 import { QUESTS, QUESTS_BY_GIVER, objectiveMet, questSteps, currentStep, repairLostItems,
-  stepIndex, isLastStep, progressText, objectiveText, repairAllSteps } from './game/quests.js';
+  stepIndex, isLastStep, progressText, objectiveText, repairAllSteps, requiredFlag } from './game/quests.js';
 
 import { Dialogue, Hud, Fader, panel, panelTitle, dim, cursor } from './ui/core.js';
 import { SAFE, safeCenterX } from './engine/safe.js';
@@ -2311,8 +2311,12 @@ class Game {
     // where the shell went, and until he has said so Moth will not raise the
     // job that ends in it — so hearing his chatter first and his hint second
     // left the errand looking broken from both ends.
-    const gating = QUESTS.some((q) => q.needsHint === def.id && !st.quests[q.id])
-      || def.tellsFirst;
+    // Somebody whose hint is the only way on says it at once rather than on the
+    // second conversation. Matched on the flag the hint sets, so it is the one
+    // hint that unblocks the job that gets brought forward, not everything this
+    // person happens to know.
+    const gating = def.tellsFirst || hintsOf(def).some((h) => QUESTS.some(
+      (q) => requiredFlag(q) === h.sets && !st.quests[q.id]));
     // The next thing they know that you have not heard, and that they are
     // willing to say yet — a hint may wait on a flag, so somebody can have one
     // answer before you own a cat and a different one after.
@@ -2352,8 +2356,10 @@ class Game {
     // Moth has the shell somebody is after, but he is not going to bring it up
     // unaided — you have to have heard from Shrimp that it went to him. Without
     // this the shell errand sends you to a beach that has not had a shell on it
+    const needs = requiredFlag(q);
+    if (needs && !st.flags[needs]) return false;
     // in years, which is where it used to end.
-    if (q.needsHint && !st.flags[`heard_hint_${q.needsHint}`]) return false;
+
     return true;
   }
 

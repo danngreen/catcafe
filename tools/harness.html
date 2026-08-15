@@ -3645,11 +3645,24 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const without = 0;
         target.reward.journal = had;
 
-        window.__extras = `firstHint=${first && first.sets} afterFirst=${afterFirst && afterFirst.sets}`
+        // A job that waits on a flag is not offered before it, and is after.
+        const gatedJob = Q.QUEST_BY_ID.moth_count;
+        delete st.flags.heard_hint_shrimp;
+        st.clock.t = 22 * (1200 / 24);
+        await wait(250);
+        const beforeFlag = g.questAvailable(gatedJob);
+        st.flags.heard_hint_shrimp = true;
+        const afterFlag = g.questAvailable(gatedJob);
+        const named = Q.requiredFlag(gatedJob);
+
+        window.__extras = `gate=${named} offered ${beforeFlag}->${afterFlag} firstHint=${first && first.sets} afterFirst=${afterFirst && afterFirst.sets}`
           + ` gated=${gated && gated.sets} allSaid=${allSaid} oldShape=${oldShape.length}`
           + ` shrimpSaid1="${said[0]}" heard=${heardShrimp}`
           + ` stepSets=${afterOne} stepClears=${cleared}`
           + ` journalPixels=${withIt}`;
+        if (named !== 'heard_hint_shrimp') window.__errors.push('the gate is not named as a flag: ' + window.__extras);
+        if (beforeFlag) window.__errors.push('a gated job was offered before its flag: ' + window.__extras);
+        if (!afterFlag) window.__errors.push('setting the flag did not open the job: ' + window.__extras);
         if (!first || first.sets !== 'heard_hint_testcase') window.__errors.push('the first hint is not the one quests wait on: ' + window.__extras);
         if (afterFirst) window.__errors.push('a gated hint was offered before its flag: ' + window.__extras);
         if (!gated || gated.sets !== 'heard_hint_testcase_1') window.__errors.push('the gated hint never becomes available: ' + window.__extras);
