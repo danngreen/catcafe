@@ -3655,11 +3655,24 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const afterFlag = g.questAvailable(gatedJob);
         const named = Q.requiredFlag(gatedJob);
 
-        window.__extras = `gate=${named} offered ${beforeFlag}->${afterFlag} firstHint=${first && first.sets} afterFirst=${afterFirst && afterFirst.sets}`
+        // The line a finished job leaves you with is data now: it toasts, and it
+        // is in the journal, and no quest is special-cased in the code.
+        const M = await import('../src/main.js');
+        const src = await fetch('/src/main.js').then((r) => r.text());
+        const hardCoded = /reward\?\.hint|hint_\$\{/.test(src);
+        const taxi = Q.QUEST_BY_ID.flower_delivery;
+        const hasLine = !!taxi.reward.journal && /taxi/i.test(taxi.reward.journal);
+        const keptFlag = (taxi.reward.flags || []).includes('hint_taxi');
+
+        window.__extras = `taxiLine=${hasLine} keptFlag=${keptFlag} hardCoded=${hardCoded}`
+          + ` gate=${named} offered ${beforeFlag}->${afterFlag} firstHint=${first && first.sets} afterFirst=${afterFirst && afterFirst.sets}`
           + ` gated=${gated && gated.sets} allSaid=${allSaid} oldShape=${oldShape.length}`
           + ` shrimpSaid1="${said[0]}" heard=${heardShrimp}`
           + ` stepSets=${afterOne} stepClears=${cleared}`
           + ` journalPixels=${withIt}`;
+        if (!hasLine) window.__errors.push('the taxi quest lost what it used to tell you: ' + window.__extras);
+        if (!keptFlag) window.__errors.push('the flag it used to set is gone: ' + window.__extras);
+        if (hardCoded) window.__errors.push('a quest is still special-cased in the code: ' + window.__extras);
         if (named !== 'heard_hint_shrimp') window.__errors.push('the gate is not named as a flag: ' + window.__extras);
         if (beforeFlag) window.__errors.push('a gated job was offered before its flag: ' + window.__extras);
         if (!afterFlag) window.__errors.push('setting the flag did not open the job: ' + window.__extras);

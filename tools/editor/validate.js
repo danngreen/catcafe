@@ -127,6 +127,10 @@ export function validate({ quests = [], villagers = [], items = {} }, places = {
     }
 
     const r = q.reward || {};
+    if (r.hint) {
+      say(at, `still has reward.hint: "${r.hint}". All it ever did was set a flag `
+        + `called hint_${r.hint} — put that in the flags it sets, if it is wanted.`);
+    }
     for (const [id] of r.items || []) if (!itemIds.has(id)) say(at, `pays out "${id}", which is not an item`);
     for (const who of r.friendship || []) if (!villagerIds.has(who)) say(at, `makes a friend of "${who}", who is not in the cast`);
     // A negative reward is a bill, not a mistake: the telephone job ends with

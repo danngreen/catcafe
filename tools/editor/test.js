@@ -106,6 +106,7 @@ await check('a typo is caught wherever it is made', async () => {
       c.quests[0].requires = 'a_flag_nobody_ever_sets';
     }, /nothing sets it/],
     ['the old needsHint field', (c) => { c.quests[0].needsHint = 'shrimp'; }, /still uses needsHint/],
+    ['the old reward hint field', (c) => { c.quests[0].reward.hint = 'taxi'; }, /still has reward.hint/],
   ];
   for (const [what, breakIt, expect] of cases) {
     const copy = JSON.parse(JSON.stringify(content));

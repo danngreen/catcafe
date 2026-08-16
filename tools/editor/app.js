@@ -624,11 +624,6 @@ function rewardCard(q) {
     'Optional. Shown in the journal under the green "Finished." — what the job left '
     + 'you with, for the jobs that change what you can do rather than what you own.'));
 
-  card.append(field('Sets the flag hint_…', text(r.hint, (v) => { r.hint = v || undefined; }),
-    'Historic. Typing "fish" sets a flag called hint_fish, and nothing in the game '
-    + 'reads any hint_ flag. The one exception is "taxi", which prints a toast about '
-    + 'the taxi birds — who fly whether or not you have it. Use "Flags it sets" for '
-    + 'anything a quest should actually gate on.'));
   return card;
 }
 

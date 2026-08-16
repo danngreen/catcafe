@@ -2419,7 +2419,6 @@ class Game {
     if (r.flags) for (const f of r.flags) st.flags[f] = true;
     if (r.rep) st.reputation = clamp(st.reputation + r.rep, 0, 1);
     if (r.friendship) for (const f of r.friendship) st.friends[f] = clamp((st.friends[f] || 0) + 0.4, 0, 1);
-    if (r.hint) st.flags[`hint_${r.hint}`] = true;
     for (const k of ['flags', 'reputation', 'friends']) st.touch(k);
     audio.sfx('fanfare', { gain: 0.7 });
     const rewardLine = r.money ? `\n\n(+${money(r.money)})` : '';
@@ -2428,7 +2427,12 @@ class Game {
       onDone: () => { finish(); this.refreshQuestMarks(); },
     });
     this.hud.toast(`Finished: ${q.title}`, 'good');
-    if (q.reward?.hint === 'taxi') this.hud.toast('Taxi birds unlocked — look for the perches.', 'good');
+    // What a job leaves you with is written in its reward now, and shows in the
+    // journal where you can go back and read it. There used to be one line of
+    // code here for one quest, which said the taxi birds were unlocked — they
+    // were not; they had always been there, and nothing else could ever say
+    // anything of the kind.
+    if (q.reward?.journal) this.hud.toast(q.reward.journal, 'good', 8);
   }
 
   /** Would this person have something to say about `q` right now? */

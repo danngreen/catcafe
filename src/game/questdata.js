@@ -48,7 +48,12 @@ export const QUESTS = [
     desc: 'Nettle picked wildflowers for someone in Hollowdown but is too shy to deliver them.',
     objective: { type: 'deliver', item: 'wildflowers', to: 'chalk' },
     progress: 'Take the flowers to Chalk in Hollowdown, up on the chalk hills to the north.',
-    reward: { hint: 'taxi', money: 90, friendship: ['chalk', 'nettle'] },
+    reward: {
+      money: 90,
+      friendship: ['chalk', 'nettle'],
+      flags: ['hint_taxi'],
+      journal: 'The taxi birds will fly you anywhere you have already been. There is a perch in every town, and they work seven in the morning to seven at night.',
+    },
     offer: "So..... this is um, embarrassing. I picked these for someone up in Hollowdown and um... now I can't possibly hand them over myself.\n\nWould you? They're for Chalk. The cute squirrel. You'll know them.",
     complete: "Oh. Oh! From Nettle? Well. Well well well.\n\nHere's a tip: did you know the birds run a taxi service? There's a perch in every town.",
   },
@@ -110,7 +115,12 @@ export const QUESTS = [
     desc: 'Suds wants to see what proper food does to a cat, not just grooming.',
     objective: { type: 'coat', quality: 1.12 },
     progress: 'Feed a cat fresh fish or gourmet tins for a few days running. Kibble and good food will not do it.',
-    reward: { hint: 'fish', money: 240, items: [['brush', 1]] },
+    reward: {
+      money: 240,
+      items: [['brush', 1]],
+      flags: ['hint_fish'],
+      journal: 'Kelp lands fresh fish in Saltmere every morning, and is sold out by noon. A cat fed on it comes up glossy in under a week.',
+    },
     offer: "Everyone thinks grooming is the whole story. It isn't. Food's half of it.\n\nFeed your cats fish or the gourmet tins for a few days — the cheap stuff will not show — and bring one back to me.",
     complete: "*Now* look at that. That's what I'm talking about.\n\nRemember to brush them between visits. And go and see Kelp in Saltmere about fish. Before noon, mind.",
   },
@@ -212,6 +222,7 @@ export const QUESTS = [
     giver: 'moth',
     desc: 'Moth counts moths, and has run out of light to count them by.',
     night: true,
+    requires: 'heard_hint_shrimp',
     steps: [
       {
         note: 'Buy a storm lantern at the Chalk Pit Store in Hollowdown',
@@ -227,7 +238,6 @@ export const QUESTS = [
     reward: { money: 150, items: [['seashell', 1]], friendship: ['moth'] },
     offer: "You're up late. Good. Nobody's ever awake this late.\n\nI count them, you see. On the lamps. Only the lamps in this town are dreadful and half of them are out, and I'm fairly sure I've been counting the same moth eleven times.\n\nThere's a proper storm lantern to be had at the hardware place up in Hollowdown. Bring me one and I'll show you something.",
     complete: "*Moth holds the lantern up and the air fills — properly fills — with wings*\n\nFourteen. Fourteen species on one lamp. And there's the one I've never got a name for.\n\nTake this. Found it under the lamp at the crossroads, and it's no use to me.",
-    requires: 'heard_hint_shrimp',
   },
   {
     id: 'the_telephone',
