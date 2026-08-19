@@ -1738,7 +1738,7 @@ export class PauseScreen extends ListScreen {
 
 export class SoundScreen extends ListScreen {
   constructor(game) {
-    super(['Sound', 'Music', 'SFX', 'Less motion', 'Fullscreen', 'Back'], 7);
+    super(['Sound', 'Music', 'SFX', 'Animation', 'Fullscreen', 'Back'], 7);
     this.game = game;
   }
   update(dt, input) {
@@ -1774,13 +1774,13 @@ export class SoundScreen extends ListScreen {
       drawText(ctx, label, x + 22, ry, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
       if (i < 3) bar(ctx, x + 100, ry + 1, 84, 7, audio.volumes[keys[i]], P.uiGold);
       if (i === 3) {
-        drawText(ctx, setting('lowFx') ? 'ON' : 'off', x + 100, ry,
+        drawText(ctx, setting('lowFx') ? 'Reduce' : 'Full', x + 100, ry,
           { color: setting('lowFx') ? P.uiGreen : P.uiTextDim, shadow: P.uiShadow });
       }
     });
     drawTextCentered(ctx, setting('lowFx')
       ? 'Reduce animation.'
-      : 'Reduce animation.',
+      : 'All animations.',
     x + w / 2, y + h - 16, { color: P.uiTextDim, shadow: P.uiShadow });
   }
 }
