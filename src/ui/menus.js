@@ -1682,7 +1682,7 @@ export class FriendsScreen extends Screen {
 
 export class PauseScreen extends ListScreen {
   constructor(game) {
-    super(['Cafe book', 'Journal', 'Map', 'Friends', 'Bag', 'Save game', 'Exit', 'Sound', 'Back'], 9);
+    super(['Cafe book', 'Journal', 'Map', 'Friends', 'Bag', 'Save game', 'Exit', 'Settings', 'Back'], 9);
     this.game = game;
   }
   update(dt, input) {
@@ -1708,7 +1708,7 @@ export class PauseScreen extends ListScreen {
           no: 'Stay',
           onYes: () => this.game.leaveValley(),
         })); break;
-        case 'Sound': this.game.push(new SoundScreen(this.game)); break;
+        case 'Settings': this.game.push(new SoundScreen(this.game)); break;
         default: this.close(); break;
       }
     }
@@ -1765,7 +1765,7 @@ export class SoundScreen extends ListScreen {
     const w = 216, h = 148;
     const x = (VIEW_W - w) / 2, y = (VIEW_H - h) / 2;
     panel(ctx, x, y, w, h);
-    panelTitle(ctx, x, y, w, 'Sound & speed');
+    panelTitle(ctx, x, y, w, 'Settings');
     const keys = ['master', 'music', 'sfx'];
     this.items.forEach((label, i) => {
       const ry = y + 16 + i * 18;
