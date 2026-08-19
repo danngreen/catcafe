@@ -1710,9 +1710,8 @@ export class PauseScreen extends ListScreen {
         // playing in is still not something to do by brushing the wrong tile.
         case 'Exit': this.game.push(new ConfirmScreen({
           title: 'Leave the valley?',
-          lines: ['Your game is saved first.', 'You can come straight back in.'],
-          yes: 'Save and leave',
-          no: 'Stay',
+          yes: 'Save and exit',
+          no: 'Keep playing',
           onYes: () => this.game.leaveValley(),
         })); break;
         case 'Settings': this.game.push(new SoundScreen(this.game)); break;

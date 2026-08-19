@@ -663,9 +663,9 @@ class Game {
     this.hud.showLocation('Brambleford');
     this.dialogue.say(st.shared && this.joinedExisting
       ? `${st.cafe.name || 'The cafe'} is already open, and short-handed.\n\n`
-        + 'The books, the pantry and the cats are shared — anything you buy, everyone has.\n\n'
+        + 'The money, the pantry and the cats are shared — anything you buy, everyone has.\n\n'
         + 'Go and be useful.'
-      : "So this is it. Your grandmother's old tea room, three cats, and whatever you can carry.\n\n"
+      : "So this is it. Your grandmother's old tea room, two cats, and whatever you can carry.\n\n"
         + "The valley's out there. Somewhere in it is everything you need to make this place work.\n\n"
         + 'Best get started.',
       { speaker: st.shared && this.joinedExisting ? st.cafe.name || 'The cafe' : 'Brambleford' },
