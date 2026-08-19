@@ -590,11 +590,11 @@ export class BuildScreen extends Screen {
       ctx.fillStyle = sel ? P.uiGoldDk : '#2a2440';
       ctx.fillRect(tx, 4, tw, 14);
       drawText(ctx, m, tx + 6, 7, { color: sel ? P.uiText : P.uiTextDim, shadow: P.uiShadow });
-      // Remembered so a tap can select the tab directly — Tab is keyboard-only.
+      // Remembered so a tap can select the tab directly — the key is keyboard-only.
       this.tabRects.push({ x: tx, y: 2, w: tw, h: 18, mode: i });
       tx += tw + 4;
     });
-    drawText(ctx, 'Tab / tap', tx + 6, 7, { color: P.uiTextDim, shadow: P.uiShadow });
+    drawText(ctx, 'T / tap', tx + 6, 7, { color: P.uiTextDim, shadow: P.uiShadow });
 
     const area = this.areaOf(this.draft.rooms);
     const maxA = st.maxFloorArea();

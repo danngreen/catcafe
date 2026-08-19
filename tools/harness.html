@@ -3879,6 +3879,72 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (stillMoving > ripple / 4) window.__errors.push('smooth mode did not still the water: ' + window.__water);
         if (low.bake) window.__errors.push('smooth mode still re-bakes the water: ' + window.__water);
         if (low.ms95 > a.ms95) window.__errors.push('smooth mode is not smoother: ' + window.__water);
+      } else if (SCRIPT === 'menukeys') {
+        // Three small things, each of which is invisible until it is wrong.
+        const st = g.state;
+        await wait(500);
+
+        // 1. Tab opens the menu, and closes it. Escape still does both, because
+        // that is what everybody's hands already do — the reason for adding Tab
+        // is that the browser takes Escape to mean "leave fullscreen".
+        key('Tab', true); await wait(150); key('Tab', false); await wait(300);
+        const opened = g.topScreen && g.topScreen.constructor.name;
+        key('Tab', true); await wait(150); key('Tab', false); await wait(300);
+        const closed = g.screens.length;
+        key('Escape', true); await wait(150); key('Escape', false); await wait(300);
+        const stillEscape = g.topScreen && g.topScreen.constructor.name;
+        key('Escape', true); await wait(150); key('Escape', false); await wait(300);
+
+        // 2. The map's heading and its footnote do not sit on each other. Drawn
+        // twice — with a from-the-map place and without — and the heading's own
+        // pixels have to be the same either way.
+        const { MapScreen } = await import('../src/ui/menus.js');
+        st.visit('brambleford', 'Brambleford', 100, 180);
+        st.visit('saltmere', 'Saltmere', 60, 240);
+        const cnv = document.createElement('canvas');
+        cnv.width = 480; cnv.height = 270;
+        const cx = cnv.getContext('2d');
+        // The heading sits at y + 22 with the panel at y = 18, so the line is
+        // rows 40 to 49. Sampled exactly, so what is measured is the heading
+        // and never the list underneath it, which moves when the footnote
+        // appears and would otherwise look like the heading changing.
+        const headingInk = () => {
+          const m = new MapScreen(g);
+          cx.clearRect(0, 0, 480, 270);
+          m.draw(cx);
+          const d = cx.getImageData(0, 40, 480, 10).data;
+          let n = 0;
+          for (let i = 0; i < d.length; i += 4) if (d[i] > 150 && d[i + 1] > 120) n++;
+          return n;
+        };
+        const plain = headingInk();
+        // Give one place the star that brings the footnote out.
+        const known = Object.values(st.visited)[0];
+        if (known) known.fromMap = true;
+        const withNote = headingInk();
+        if (known) delete known.fromMap;
+
+        // 3. The hint under the picture, on a keyboard and not on a phone.
+        // The hint is markup on the game's own page, which this harness is not
+        // — so it is checked where it lives: in index.html, and in the rule
+        // that takes it away on a touchscreen.
+        const page = await fetch('/index.html').then((r) => r.text()).catch(() => '');
+        const css = await fetch('/styles.css').then((r) => r.text()).catch(() => '');
+        const hintShown = /id="keyhint"/.test(page);
+        const saysTab = /<kbd>Tab<\/kbd>/.test(page);
+        const hiddenOnTouch = /body\.has-touch\s+#keyhint\s*\{\s*display:\s*none/.test(css);
+
+        window.__keys = `tabOpened=${opened} tabClosed=${closed === 0} escapeOpened=${stillEscape}`
+          + ` headingInk plain=${plain} withNote=${withNote}`
+          + ` hint=${hintShown}/${saysTab} hiddenOnTouch=${hiddenOnTouch}`;
+        if (opened !== 'PauseScreen') window.__errors.push('Tab did not open the menu: ' + window.__keys);
+        if (closed !== 0) window.__errors.push('Tab did not close it again: ' + window.__keys);
+        if (stillEscape !== 'PauseScreen') window.__errors.push('Escape stopped opening the menu: ' + window.__keys);
+        if (!plain || Math.abs(plain - withNote) > 2) {
+          window.__errors.push('the map heading changes when the footnote appears — they overlap: ' + window.__keys);
+        }
+        if (!hintShown || !saysTab) window.__errors.push('no keyboard hint under the picture: ' + window.__keys);
+        if (!hiddenOnTouch) window.__errors.push('the keyboard hint shows on a touchscreen: ' + window.__keys);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -6070,6 +6136,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__extras ? ` ${window.__extras}` : '')
         + (window.__slide ? ` ${window.__slide}` : '')
         + (window.__water ? ` ${window.__water}` : '')
+        + (window.__keys ? ` ${window.__keys}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

@@ -176,3 +176,29 @@ body.controls-overlay .tb.menu { width: 44px; height: 44px; }
   touch-action: manipulation;
 }
 #fsbtn:active { background: rgba(105,116,152,.95); }
+
+/* The keyboard hint under the picture. Quiet enough to ignore once you know. */
+#keyhint {
+  /* Pinned to the bottom of the window rather than laid out under the canvas:
+     the canvas is sized from the window, so a line that took up room of its
+     own would shrink the picture to make space for itself. */
+  position: absolute;
+  bottom: 8px;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+  color: #6b6382;
+  letter-spacing: 0.3px;
+}
+#keyhint kbd {
+  background: #2a2440;
+  border: 1px solid #3d3557;
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: #a99fc0;
+  font: inherit;
+}
+/* A phone has a MENU button on the glass and no Tab key to press. */
+body.has-touch #keyhint { display: none; }

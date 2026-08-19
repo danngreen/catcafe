@@ -1411,15 +1411,22 @@ export class MapScreen extends Screen {
     // Side list: towns as headings, the shops inside them indented beneath.
     const lx = x + w - 128;
     drawText(ctx, this.pickMode ? 'Destinations' : 'Places found', lx, y + 22, { color: P.uiGold, shadow: P.uiShadow });
-    if (this.rows.some((r) => r.place && r.place.fromMap)) {
-      drawTextRight(ctx, '* from the map', x + w - 8, y + 22, { color: P.uiTextDim, shadow: P.uiShadow });
+    // The footnote goes under the heading, not beside it. There are 120 pixels
+    // of column and the two of them want 156, so side by side the one ran
+    // straight through the other.
+    const footnote = this.rows.some((r) => r.place && r.place.fromMap);
+    if (footnote) {
+      drawText(ctx, '* marked on the valley map', lx, y + 34, { color: P.uiTextDim, shadow: P.uiShadow });
     }
-    const VIS = 13;
+    // One fewer row when the footnote is there, so the list still ends where
+    // the panel does.
+    const listTop = y + (footnote ? 48 : 36);
+    const VIS = footnote ? 12 : 13;
     const selRow = this.rows.findIndex((r) => r.place === this.places[this.index]);
     const start = clamp(selRow - Math.floor(VIS / 2), 0, Math.max(0, this.rows.length - VIS));
     for (let i = start; i < Math.min(this.rows.length, start + VIS); i++) {
       const row = this.rows[i];
-      const ry = y + 36 + (i - start) * 12;
+      const ry = listTop + (i - start) * 12;
       if (row.header) {
         drawText(ctx, row.header, lx, ry, { color: P.uiTextDim, shadow: P.uiShadow });
         ctx.fillStyle = P.uiEdgeDk;

@@ -6,7 +6,12 @@ const KEYMAP = {
   KeyW: 'up', KeyS: 'down', KeyA: 'left', KeyD: 'right',
   Space: 'use', Enter: 'use', KeyE: 'use', KeyZ: 'use',
   Escape: 'menu', KeyX: 'cancel', Backspace: 'cancel', ShiftLeft: 'run', ShiftRight: 'run',
-  KeyM: 'map', KeyI: 'inventory', KeyC: 'cafe', KeyT: 'shift', Tab: 'shift',
+  KeyM: 'map', KeyI: 'inventory', KeyC: 'cafe', KeyT: 'shift',
+  // Tab opens the menu as well as Escape. Fullscreen is the reason: the
+  // browser takes Escape to mean "leave fullscreen", so the one key that
+  // opened the menu was also the one key that closed the game down to a
+  // window. Escape stays — it is what everybody's hands already do.
+  Tab: 'menu',
   F3: 'perf',                          // the frame counter, as in every other game
 };
 
