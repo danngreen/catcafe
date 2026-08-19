@@ -8,6 +8,7 @@ import { CHUNK } from './tilemap.js';
 import { objSprite, objFrame } from '../art/objects.js';
 import { emoteSprite } from '../art/chars.js';
 import { makeCanvas } from '../engine/pixel.js';
+import { setting } from '../engine/settings.js';
 import { VIEW_W, VIEW_H } from '../engine/display.js';
 import { clamp } from '../engine/util.js';
 import { P } from '../art/palette.js';
@@ -46,6 +47,8 @@ export class Renderer {
     this.lightLayer = makeCanvas(VIEW_W, VIEW_H);
     this.waterFrame = 0;
     this._waterT = 0;
+    this.bakeBudget = 3;              // chunks re-baked per frame; see composite()
+    this.baked = 0;
   }
 
   invalidateAll() {
@@ -127,7 +130,51 @@ export class Renderer {
       g.drawImage(spr, dx, dy);
     }
 
-    return { canvas, anim };
+    // Two canvases: this one, which never changes, and a copy with the current
+    // frame of water painted onto it. Drawing is then one blit per chunk
+    // instead of one per animated tile per frame — see composite().
+    return { base: canvas, canvas, anim, frame: -1 };
+  }
+
+  /**
+   * Paint the current frame of the animated tiles into a chunk's own canvas.
+   *
+   * The water animates six times a second and the screen draws sixty, so
+   * redrawing every ripple on every frame did the same work ten times over. A
+   * screenful of sea was six hundred drawImage calls a frame — nothing on a
+   * fast machine, and the reason the coast road stutters on an old one.
+   *
+   * Done per chunk and only when the frame it holds is stale, so the cost
+   * lands six times a second on the chunks you can actually see.
+   */
+  composite(c) {
+    if (!c.anim.length) return;
+    if (c.frame === this.waterFrame) return;
+    // Every visible chunk goes stale on the same tick, so re-baking them all
+    // at once turns a cheap frame into an expensive one six times a second —
+    // which is the stutter, not the average. A budget spreads the work over
+    // the frames that follow; a chunk waiting its turn shows the ripple it had
+    // a frame or two ago, which nobody can see and everybody can feel the
+    // absence of.
+    if (this.baked >= this.bakeBudget) return;
+    this.baked++;
+    if (!c.own) {
+      const made = makeCanvas(CHUNK_PX, CHUNK_PX);
+      c.own = made.canvas;
+      c.g = made.g;
+      c.canvas = made.canvas;
+    }
+    c.g.clearRect(0, 0, CHUNK_PX, CHUNK_PX);
+    c.g.drawImage(c.base, 0, 0);
+    for (const a of c.anim) {
+      const px = a.i * TILE, py = a.j * TILE;
+      c.g.drawImage(this.ts.tile(a.id, a.tx, a.ty, this.waterFrame), px, py);
+      // The fringes go back on top: the redraw would otherwise paint over the
+      // blend and every shoreline would come out hard-edged.
+      for (const img of a.edges) c.g.drawImage(img, px, py);
+      if (this.perf) this.perf.count('waterBake', 1 + a.edges.length);
+    }
+    c.frame = this.waterFrame;
   }
 
   /** Overlays that blend this tile into any higher-priority neighbours. */
@@ -172,6 +219,9 @@ export class Renderer {
 
   update(dt) {
     this.t = (this.t || 0) + dt;
+    // Still water costs nothing at all: the chunk is baked once and blitted
+    // from then on, with no re-compositing ever.
+    if (setting('lowFx')) return;
     this._waterT += dt;
     if (this._waterT > 0.16) { this._waterT = 0; this.waterFrame = (this.waterFrame + 1) % 6; }
   }
@@ -182,6 +232,8 @@ export class Renderer {
    * `light` is { night: 0..1, tint: hex, lights: [{x,y,r,color}] }.
    */
   draw(ctx, map, cam, actors, light) {
+    if (this.perf) this.perf.resetCounts();
+    this.baked = 0;
     if (this.currentMapId !== map.id) { this.invalidateAll(); this.currentMapId = map.id; }
     const ox = cam.ox, oy = cam.oy;
 
@@ -197,15 +249,10 @@ export class Renderer {
     for (let cy = c0y; cy <= c1y; cy++) {
       for (let cx = c0x; cx <= c1x; cx++) {
         const c = this.getChunk(map, cx, cy);
+        this.composite(c);
         const px = cx * CHUNK_PX - ox, py = cy * CHUNK_PX - oy;
         ctx.drawImage(c.canvas, px, py);
-        // Animated tiles ride on top of the baked chunk.
-        for (const a of c.anim) {
-          const sx = px + a.i * TILE, sy = py + a.j * TILE;
-          if (sx < -TILE || sy < -TILE || sx > VIEW_W || sy > VIEW_H) continue;
-          ctx.drawImage(this.ts.tile(a.id, a.tx, a.ty, this.waterFrame), sx, sy);
-          for (const img of a.edges) ctx.drawImage(img, sx, sy);
-        }
+        if (this.perf) this.perf.count('chunks', 1);
       }
     }
 

@@ -10,6 +10,7 @@
 // midnight so the sky doesn't snap between states while you're looking at it.
 
 import { clamp } from '../engine/util.js';
+import { setting } from '../engine/settings.js';
 
 /**
  * `crowd` multiplies how many people come out. `warmth` is what a fireplace
@@ -196,6 +197,7 @@ export class WeatherFx {
 
   update(dt, sky, indoor) {
     this.t += dt;
+    if (setting('lowFx')) return;
     const id = sky.now.id;
     const strength = indoor ? 0 : sky.blend;
     const prev = indoor ? 0 : 1 - sky.blend;
@@ -268,6 +270,9 @@ export class WeatherFx {
    */
   draw(ctx, sky, indoor) {
     if (indoor) return;
+    // The tint stays — that is the light, and it is a fill. What goes is the
+    // per-pixel work: every drop, every flake, every cloud shadow.
+    if (setting('lowFx')) return;
     const id = sky.now.id, fromId = sky.from.id;
     const at = (want) => (id === want ? sky.blend : 0) + (fromId === want ? 1 - sky.blend : 0);
 

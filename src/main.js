@@ -5,6 +5,7 @@ import {
   isTouchDevice, fullscreenSupported, isStandalone, toggleFullscreen,
 } from './engine/display.js';
 import { Input } from './engine/input.js';
+import { Perf } from './engine/perf.js';
 import { audio } from './engine/audio.js';
 import { drawText, drawTextCentered, drawTextRight, textWidth, LINE_H } from './engine/font.js';
 import { makeCanvas } from './engine/pixel.js';
@@ -229,6 +230,8 @@ class Game {
       },
     });
 
+    this.perf = new Perf();
+    // The renderer counts what it draws into the same meter.
     this.safe = SAFE;   // measured control insets, handy when debugging layout
     this.net = net;
     this.bear = null;         // the actor, built from the books when she exists
@@ -417,6 +420,7 @@ class Game {
   boot(seed = WORLD_SEED) {
     this.tileset = new Tileset();
     this.renderer = new Renderer(this.tileset);
+    this.renderer.perf = this.perf;
     this.cam = new Camera();
     this.buildWorld(seed);
 
@@ -964,9 +968,11 @@ class Game {
     const dt = Math.min(0.05, (ts - this.last) / 1000);
     this.last = ts;
     this.t += dt;
+    const t0 = performance.now();
     try {
       this.update(dt);
       this.draw();
+      this.perf.sample(ts, performance.now() - t0);
     } catch (err) {
       console.error(err);
       this.crash = err;
@@ -1022,6 +1028,7 @@ class Game {
       this.checkWarp();
       if (this.input.hit('use')) this.interact();
       if (this.input.hit('menu')) { this.push(new PauseScreen(this)); audio.sfx('ui_ok', { gain: 0.5 }); }
+      if (this.input.hit('perf')) { this.perf.show = !this.perf.show; this.perf.clear(); }
       if (this.input.hit('cafe')) { this.push(new CafeScreen(this)); audio.sfx('ui_ok', { gain: 0.5 }); }
       if (this.input.hit('map')) { this.push(new MapScreen(this)); audio.sfx('ui_ok', { gain: 0.5 }); }
       if (this.input.hit('inventory')) { this.push(new BagScreen(this)); audio.sfx('ui_ok', { gain: 0.5 }); }
@@ -2591,6 +2598,7 @@ class Game {
 
     for (const s of this.screens) s.draw(ctx, this, this.t);
     this.fader.draw(ctx);
+    this.perf.draw(ctx, drawText, P.uiGold, VIEW_W, VIEW_H);
   }
 
   /**

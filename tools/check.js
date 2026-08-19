@@ -126,6 +126,7 @@ const BUDGET = {
   content: 20000,
   questextras: 20000,
   slidepad: 20000,
+  waterperf: 30000,
   netbookfields: 20000,
   bearshot: 20000,
   netnewvalley: 20000,
@@ -156,6 +157,11 @@ const GROUPS = {
     'weathercafe', 'hourly'],
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',
     'barriers', 'eastpass', 'barrierreach', 'passcleared', 'debugpos', 'weather'],
+  // Frame times, and the things that are supposed to make them shorter. These
+  // report numbers as much as they pass or fail: a machine under load will
+  // read slower without anything being wrong, so they assert on what the code
+  // does — how much work it asks for — rather than on how long it took.
+  perf: ['waterperf'],
   ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'exterior',
     'summarylines', 'journalstep', 'titleme', 'signkeys', 'patio', 'deaditems', 'booktabs', 'bigpieces', 'painting', 'friends', 'confirm', 'catvoices', 'delivery', 'deliverhouse', 'clearnight', 'wagekeys', 'patiorain'],
   cutscene: ['taxi', 'sleep', 'door'],
@@ -172,7 +178,7 @@ const GROUPS = {
 };
 GROUPS.all = [...new Set([
   ...GROUPS.world, ...GROUPS.ui, ...GROUPS.cafe, ...GROUPS.quests,
-  ...GROUPS.cutscene, ...GROUPS.mobile, ...GROUPS.net,
+  ...GROUPS.cutscene, ...GROUPS.mobile, ...GROUPS.net, ...GROUPS.perf,
 ])];
 
 /** Expand any group names given on the command line. */

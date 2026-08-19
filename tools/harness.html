@@ -3748,6 +3748,137 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (afterLift) window.__errors.push('lifting the thumb did not stop: ' + window.__slide);
         if (!litUp) window.__errors.push('the arrow under the thumb does not light up: ' + window.__slide);
         if (stillLit || !nowLeft) window.__errors.push('the lit arrow does not follow the thumb: ' + window.__slide);
+      } else if (SCRIPT === 'waterperf') {
+        // What the sea costs. "It goes jumpy near the water on the old laptop"
+        // is a real report and an unarguable one until there is a number, so
+        // this stands in two places and reports both — a bay filling the screen
+        // and a field with none in it — because the difference between them is
+        // the thing to argue about.
+        const T2 = await import('../src/art/tiles.js');
+        const st = g.state;
+        st.clock.t = 12 * (1200 / 24);
+        await wait(600);
+
+        const waterAround = (tx, ty) => {
+          let n = 0;
+          for (let y = ty - 8; y <= ty + 8; y++) {
+            for (let x = tx - 15; x <= tx + 15; x++) {
+              if (T2.WATER_TILES.includes(g.overworld.get(x, y))) n++;
+            }
+          }
+          return n;
+        };
+        // The wettest screenful anywhere, and the driest.
+        let wet = { n: -1 }, dry = { n: 1e9 };
+        for (let ty = 30; ty < 300; ty += 8) {
+          for (let tx = 30; tx < 330; tx += 8) {
+            if (g.overworld.solid(tx, ty)) continue;
+            const n = waterAround(tx, ty);
+            if (n > wet.n) wet = { tx, ty, n };
+            if (n < dry.n) dry = { tx, ty, n };
+          }
+        }
+
+        const measure = async (where, label) => {
+          g.player.x = where.tx * 16 + 8;
+          g.player.y = (where.ty + 1) * 16 - 2;
+          g.cam.follow(g.overworld, g.player.x, g.player.y, true);
+          await wait(400);
+          g.perf.clear();
+          await wait(1600);                      // ~100 frames
+          const r = g.perf.report();
+          return { label, water: where.n, ms: r.ms, ms95: r.ms95, fps: r.fps,
+            bake: r.counts.waterBake || 0, chunks: r.counts.chunks || 0 };
+        };
+        const a = await measure(wet, 'by the water');
+        const b = await measure(dry, 'inland');
+
+        // And what the weather adds on top, since rain is the other thing
+        // drawn over every pixel of the screen.
+        const W2 = await import('../src/game/weather.js');
+        const seedFor = (want) => {
+          for (let k = 1; k < 8000; k++) if (W2.weatherOn(k, st.clock.day).id === want) return k;
+          return -1;
+        };
+        const asWeather = async (want) => {
+          g.worldSeed = seedFor(want);
+          st.worldSeed = g.worldSeed;
+          await wait(400);
+          g.perf.clear();
+          await wait(1200);
+          const r = g.perf.report();
+          return { want, ms: r.ms, ms95: r.ms95 };
+        };
+        const clear = await asWeather('sunny');
+        const rain = await asWeather('rain');
+
+        // The water still moves. Baking it into the chunk six times a second
+        // rather than sixty is invisible; baking it never, by mistake, is a
+        // pond of glass — and no frame-time number would notice.
+        // Find a patch that is nothing but open water, so that what changes in
+        // it is the water and not a cat walking past or the foam at a shoreline.
+        let block = null;
+        for (let ty = wet.ty - 6; ty <= wet.ty + 6 && !block; ty++) {
+          for (let tx = wet.tx - 10; tx <= wet.tx + 10 && !block; tx++) {
+            let all = true;
+            for (let j = 0; j < 2 && all; j++) {
+              for (let i = 0; i < 3 && all; i++) {
+                if (!T2.WATER_TILES.includes(g.overworld.get(tx + i, ty + j))) all = false;
+                // Its neighbours too, or the fringe of the shore creeps in.
+                if (!T2.WATER_TILES.includes(g.overworld.get(tx + i, ty + j - 1))) all = false;
+              }
+            }
+            if (all) block = { tx, ty };
+          }
+        }
+        const seaPatch = () => {
+          if (!block) return new Uint8ClampedArray(0);
+          const cnv = document.querySelector('canvas');
+          const cx2 = cnv.getContext('2d');
+          const scale = cnv.width / 480;
+          const sx = Math.round((block.tx * 16 - g.cam.ox) * scale);
+          const sy = Math.round((block.ty * 16 - g.cam.oy) * scale);
+          if (sx < 0 || sy < 0) return new Uint8ClampedArray(0);
+          return cx2.getImageData(sx, sy, Math.round(48 * scale), Math.round(32 * scale)).data;
+        };
+        g.player.x = wet.tx * 16 + 8;
+        g.player.y = (wet.ty + 1) * 16 - 2;
+        g.cam.follow(g.overworld, g.player.x, g.player.y, true);
+        await wait(400);
+        const sea1 = seaPatch();
+        await wait(400);
+        const sea2 = seaPatch();
+        let ripple = 0;
+        for (let i = 0; i < sea1.length; i += 4) if (sea1[i] !== sea2[i]) ripple++;
+
+        // And with the effects turned down, which is what a slow machine gets.
+        const S = await import('../src/engine/settings.js');
+        S.setSetting('lowFx', true);
+        const low = await measure(wet, 'by the water, smooth mode');
+        await wait(300);
+        const still1 = seaPatch();
+        await wait(400);
+        const still2 = seaPatch();
+        let stillMoving = 0;
+        for (let i = 0; i < still1.length; i += 4) if (still1[i] !== still2[i]) stillMoving++;
+        S.setSetting('lowFx', false);
+
+        window.__water = `ripple=${ripple} stillInSmooth=${stillMoving} `
+          + `patch=${block ? block.tx + ',' + block.ty : 'none'} smooth ${low.ms}ms (95th ${low.ms95}) bake ${low.bake} | `
+          + `${a.label}: ${a.ms}ms (95th ${a.ms95}) ${a.fps}fps `
+          + `bake ${a.bake}/frame, ${a.water} tiles nearby | `
+          + `${b.label}: ${b.ms}ms (95th ${b.ms95}) ${b.fps}fps | `
+          + `sunny ${clear.ms}ms rain ${rain.ms}ms (95th ${rain.ms95})`;
+        if (!a.water) window.__errors.push('could not find any water to stand by: ' + window.__water);
+        // Not a pass/fail on the numbers — this scenario exists to report them.
+        // Only the obviously broken cases fail: no frames measured at all.
+        if (!a.ms || !b.ms) window.__errors.push('measured nothing: ' + window.__water);
+        // Smooth mode has to actually stop the work, not merely hide it.
+        if (!block) window.__errors.push('found no open water to watch: ' + window.__water);
+        if (ripple < 100) window.__errors.push('the water has stopped moving: ' + window.__water);
+        if (stillMoving > ripple / 4) window.__errors.push('smooth mode did not still the water: ' + window.__water);
+        if (low.bake) window.__errors.push('smooth mode still re-bakes the water: ' + window.__water);
+        if (low.ms95 > a.ms95) window.__errors.push('smooth mode is not smoother: ' + window.__water);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -5938,6 +6069,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__content ? ` ${window.__content}` : '')
         + (window.__extras ? ` ${window.__extras}` : '')
         + (window.__slide ? ` ${window.__slide}` : '')
+        + (window.__water ? ` ${window.__water}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

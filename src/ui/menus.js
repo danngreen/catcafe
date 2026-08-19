@@ -13,6 +13,7 @@ import { iconSprite } from '../art/icons.js';
 import { objSprite, VARIANT_SWATCHES, VARIANT_NAMES } from '../art/objects.js';
 import { catSprite, playerCatSprite } from '../art/chars.js';
 import { audio } from '../engine/audio.js';
+import { setting, toggleSetting } from '../engine/settings.js';
 import { clamp, money, wrapText } from '../engine/util.js';
 import { QUESTS, objectiveText, progressText } from '../game/quests.js';
 import { HIRE_POOL, shiftHours, fmtHour } from '../game/cafe.js';
@@ -1737,7 +1738,7 @@ export class PauseScreen extends ListScreen {
 
 export class SoundScreen extends ListScreen {
   constructor(game) {
-    super(['Master', 'Music', 'Effects', 'Fullscreen', 'Back'], 6);
+    super(['Master', 'Music', 'Effects', 'Smooth mode', 'Fullscreen', 'Back'], 7);
     this.game = game;
   }
   update(dt, input) {
@@ -1748,23 +1749,38 @@ export class SoundScreen extends ListScreen {
       if (input.repeat('left', dt)) { audio.setVolume(keys[this.index], audio.volumes[keys[this.index]] - 0.1); audio.sfx('ui_move'); }
       if (input.repeat('right', dt)) { audio.setVolume(keys[this.index], audio.volumes[keys[this.index]] + 0.1); audio.sfx('ui_move'); }
     }
-    if (input.hit('use') && this.index === 3) { this.game.requestFullscreen(); audio.sfx('ui_ok'); }
-    if (input.hit('use') && this.index === 4) this.close();
+    // Smooth mode is a setting of this machine, not of the valley — one
+    // player's old laptop is nobody else's business, so it never goes near
+    // the shared books.
+    if (this.index === 3 && (input.hit('use') || input.repeat('left', dt) || input.repeat('right', dt))) {
+      toggleSetting('lowFx');
+      audio.sfx('ui_ok');
+    }
+    if (input.hit('use') && this.index === 4) { this.game.requestFullscreen(); audio.sfx('ui_ok'); }
+    if (input.hit('use') && this.index === 5) this.close();
     if (input.hit('cancel') || input.hit('menu')) this.close();
   }
   draw(ctx) {
     dim(ctx, 0.6);
-    const w = 200, h = 116;
+    const w = 216, h = 148;
     const x = (VIEW_W - w) / 2, y = (VIEW_H - h) / 2;
     panel(ctx, x, y, w, h);
-    panelTitle(ctx, x, y, w, 'Sound');
+    panelTitle(ctx, x, y, w, 'Sound & speed');
     const keys = ['master', 'music', 'sfx'];
     this.items.forEach((label, i) => {
       const ry = y + 16 + i * 18;
       const sel = i === this.index;
       if (sel) cursor(ctx, x + 8, ry, this.t);
       drawText(ctx, label, x + 22, ry, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
-      if (i < 3) bar(ctx, x + 90, ry + 1, 84, 7, audio.volumes[keys[i]], P.uiGold);
+      if (i < 3) bar(ctx, x + 100, ry + 1, 84, 7, audio.volumes[keys[i]], P.uiGold);
+      if (i === 3) {
+        drawText(ctx, setting('lowFx') ? 'ON' : 'off', x + 100, ry,
+          { color: setting('lowFx') ? P.uiGreen : P.uiTextDim, shadow: P.uiShadow });
+      }
     });
+    drawTextCentered(ctx, setting('lowFx')
+      ? 'Still water, no falling rain. Kinder to older machines.'
+      : 'Turn on if the game stutters near the water.',
+    x + w / 2, y + h - 16, { color: P.uiTextDim, shadow: P.uiShadow });
   }
 }

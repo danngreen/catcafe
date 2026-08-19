@@ -7,6 +7,7 @@ const KEYMAP = {
   Space: 'use', Enter: 'use', KeyE: 'use', KeyZ: 'use',
   Escape: 'menu', KeyX: 'cancel', Backspace: 'cancel', ShiftLeft: 'run', ShiftRight: 'run',
   KeyM: 'map', KeyI: 'inventory', KeyC: 'cafe', KeyT: 'shift', Tab: 'shift',
+  F3: 'perf',                          // the frame counter, as in every other game
 };
 
 // Touch buttons report key names rather than codes.
