@@ -1738,7 +1738,7 @@ export class PauseScreen extends ListScreen {
 
 export class SoundScreen extends ListScreen {
   constructor(game) {
-    super(['Master', 'Music', 'Effects', 'Smooth mode', 'Fullscreen', 'Back'], 7);
+    super(['Master', 'Music', 'Effects', 'Low animation', 'Fullscreen', 'Back'], 7);
     this.game = game;
   }
   update(dt, input) {
