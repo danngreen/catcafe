@@ -1738,7 +1738,7 @@ export class PauseScreen extends ListScreen {
 
 export class SoundScreen extends ListScreen {
   constructor(game) {
-    super(['Master', 'Music', 'Effects', 'Low animation', 'Fullscreen', 'Back'], 7);
+    super(['Sound', 'Music', 'SFX', 'Less motion', 'Fullscreen', 'Back'], 7);
     this.game = game;
   }
   update(dt, input) {
@@ -1779,8 +1779,8 @@ export class SoundScreen extends ListScreen {
       }
     });
     drawTextCentered(ctx, setting('lowFx')
-      ? 'Still water, no falling rain. Kinder to older machines.'
-      : 'Turn on if the game stutters near the water.',
+      ? 'Reduce animation.'
+      : 'Reduce animation.',
     x + w / 2, y + h - 16, { color: P.uiTextDim, shadow: P.uiShadow });
   }
 }
