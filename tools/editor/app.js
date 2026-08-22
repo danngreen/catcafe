@@ -442,7 +442,10 @@ function stepCard(step, i, total, opts) {
       } else if (f === 'place') {
         row.append(field('Furniture', choose(oo.place, content.options.furniture.map((x) => [x, x]), (v) => { oo.place = v; }, { blank: false })));
       } else if (f === 'give') {
-        row.append(field('Hand it over', toggle(oo.give !== false, 'the giver hands you the parcel', (v) => { oo.give = v ? undefined : false; })));
+        row.append(field('Given to you', toggle(oo.give !== false, 'the giver hands it over as this step starts', (v) => { oo.give = v ? undefined : false; }),
+          'On for an errand that begins with somebody putting something in your hands. '
+          + 'Off when you are already carrying it — found, bought, or handed to you on an '
+          + 'earlier step — in which case turning this on would give you a second one.'));
       } else if (f === 'flag') {
         row.append(field('Flag', flagBox(oo.flag, (v) => { oo.flag = v; }),
           'The step is done once this is set. Anything can set it: another quest\'s '
