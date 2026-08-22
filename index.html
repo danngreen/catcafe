@@ -40,6 +40,14 @@
     <p id="keyhint"><kbd>Tab</kbd> for the menu</p>
   </div>
 
+  <!--
+    What the browser says the window is. Plain HTML on purpose: when the
+    complaint is "the picture is small", anything drawn inside the picture is
+    small too, and unreadable on the device that has the problem. Opened from
+    Settings, or with ?diag on the address bar.
+  -->
+  <div id="diag" hidden><pre id="diagtext"></pre><button id="diagclose">close</button></div>
+
   <button id="fsbtn" hidden aria-label="Fullscreen">⛶</button>
 
   <div id="touch" hidden>

@@ -128,6 +128,7 @@ const BUDGET = {
   slidepad: 20000,
   waterperf: 30000,
   menukeys: 20000,
+  oldsafari: 20000,
   netbookfields: 20000,
   bearshot: 20000,
   netnewvalley: 20000,
@@ -164,7 +165,7 @@ const GROUPS = {
   // does — how much work it asks for — rather than on how long it took.
   perf: ['waterperf'],
   ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'exterior',
-    'summarylines', 'journalstep', 'titleme', 'signkeys', 'menukeys', 'patio', 'deaditems', 'booktabs', 'bigpieces', 'painting', 'friends', 'confirm', 'catvoices', 'delivery', 'deliverhouse', 'clearnight', 'wagekeys', 'patiorain'],
+    'summarylines', 'journalstep', 'titleme', 'signkeys', 'menukeys', 'oldsafari', 'patio', 'deaditems', 'booktabs', 'bigpieces', 'painting', 'friends', 'confirm', 'catvoices', 'delivery', 'deliverhouse', 'clearnight', 'wagekeys', 'patiorain'],
   cutscene: ['taxi', 'sleep', 'door'],
   mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile', 'pickupmobile', 'slidepad'],
   // Single-process networked runs. The paired ones need two browsers at once

@@ -14,6 +14,7 @@ import { objSprite, VARIANT_SWATCHES, VARIANT_NAMES } from '../art/objects.js';
 import { catSprite, playerCatSprite } from '../art/chars.js';
 import { audio } from '../engine/audio.js';
 import { setting, toggleSetting } from '../engine/settings.js';
+import { showDisplayReport } from '../engine/display.js';
 import { clamp, money, wrapText } from '../engine/util.js';
 import { QUESTS, objectiveText, progressText } from '../game/quests.js';
 import { HIRE_POOL, shiftHours, fmtHour } from '../game/cafe.js';
@@ -1744,7 +1745,7 @@ export class PauseScreen extends ListScreen {
 
 export class SoundScreen extends ListScreen {
   constructor(game) {
-    super(['Sound', 'Music', 'SFX', 'Animation', 'Fullscreen', 'Back'], 7);
+    super(['Sound', 'Music', 'SFX', 'Animation', 'Fullscreen', 'Display info', 'Back'], 8);
     this.game = game;
   }
   update(dt, input) {
@@ -1763,12 +1764,16 @@ export class SoundScreen extends ListScreen {
       audio.sfx('ui_ok');
     }
     if (input.hit('use') && this.index === 4) { this.game.requestFullscreen(); audio.sfx('ui_ok'); }
-    if (input.hit('use') && this.index === 5) this.close();
+    // Drawn as a page rather than on the canvas: the one time anybody wants
+    // this, the canvas is the wrong size, and everything on it is too small to
+    // read on the very device that has the problem.
+    if (input.hit('use') && this.index === 5) { showDisplayReport(this.game.display, true); audio.sfx('ui_ok'); }
+    if (input.hit('use') && this.index === 6) this.close();
     if (input.hit('cancel') || input.hit('menu')) this.close();
   }
   draw(ctx) {
     dim(ctx, 0.6);
-    const w = 216, h = 148;
+    const w = 216, h = 166;
     const x = (VIEW_W - w) / 2, y = (VIEW_H - h) / 2;
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, 'Settings');

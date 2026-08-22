@@ -80,6 +80,20 @@ counts these pairs assert on will not match.
   }
 } catch { /* nothing there: exactly what we want */ }
 
+// BASE is inherited by the browsers below, so a BASE left over from a sweep
+// sends them to a different server than the empty one started here — one full
+// of the money that sweep made. The pairs then fail on the numbers and read
+// exactly like a bug in sharing. Catch it here rather than in the results.
+if (process.env.BASE && !process.env.BASE.includes(`:${PORT}`)) {
+  console.error(`BASE is set to ${process.env.BASE}, and these pairs serve themselves on ${PORT}.
+
+The browsers would go to that one instead of the empty valley started here.
+
+  env -u BASE node tools/pairs.js            # what you want
+  PORT=8137 node tools/pairs.js              # or move the pairs' own server`);
+  process.exit(2);
+}
+
 let failed = 0;
 for (const pair of pairs) {
   // A fresh room each time, so a previous pair's players aren't still in it.

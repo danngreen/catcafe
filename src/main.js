@@ -2,7 +2,7 @@
 
 import {
   Display, VIEW_W, VIEW_H,
-  isTouchDevice, fullscreenSupported, isStandalone, toggleFullscreen,
+  isTouchDevice, fullscreenSupported, isStandalone, toggleFullscreen, showDisplayReport,
 } from './engine/display.js';
 import { Input } from './engine/input.js';
 import { Perf } from './engine/perf.js';
@@ -452,6 +452,13 @@ class Game {
     window.addEventListener('keydown', start);
 
     this.setupFullscreenButton();
+
+    // ?diag opens it straight away, for a browser that still has an address
+    // bar. A home-screen app has none, and reaches the same thing through
+    // Settings — which is the case that matters here.
+    const closeBtn = document.getElementById('diagclose');
+    if (closeBtn) closeBtn.addEventListener('click', () => showDisplayReport(this.display, false));
+    if (new URLSearchParams(location.search).has('diag')) showDisplayReport(this.display, true);
   }
 
   /**
@@ -968,6 +975,9 @@ class Game {
     const dt = Math.min(0.05, (ts - this.last) / 1000);
     this.last = ts;
     this.t += dt;
+    // Two reads and a comparison: cheap enough to do every frame, and the only
+    // thing that reliably rescues a browser which resized without saying so.
+    this.display.recheck();
     const t0 = performance.now();
     try {
       this.update(dt);

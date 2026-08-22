@@ -3945,6 +3945,122 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
         if (!hintShown || !saysTab) window.__errors.push('no keyboard hint under the picture: ' + window.__keys);
         if (!hiddenOnTouch) window.__errors.push('the keyboard hint shows on a touchscreen: ' + window.__keys);
+      } else if (SCRIPT === 'oldsafari') {
+        // The game is played on an eleven year old iPad, which is a browser
+        // from 2015 with a home screen icon. Three things it needs, none of
+        // which can be checked by looking at it on this machine.
+        const D = await import('../src/engine/display.js');
+
+        // 1. Nothing in the stylesheet that an old WebKit ignores in silence.
+        // `inset` is Safari 14.1, flexbox `gap` is Safari 14.1, and grid with
+        // `place-items` is younger than some of these iPads. Each of them
+        // fails by doing nothing at all, which is the hardest kind to see.
+        const css = await fetch('/styles.css', { cache: 'no-store' }).then((r) => r.text());
+        const modern = [];
+        for (const [what, re] of [
+          ['inset:', /(^|[;{])\s*inset\s*:/m],
+          ['place-items', /(^|[;{])\s*place-(items|content)\s*:/m],
+          ['flex gap', /(^|[;{])\s*(gap|row-gap|column-gap)\s*:/m],
+          ['dvh/svh units', /\d(dvh|svh|lvh)\b/],
+          [':has()', /:has\(/],
+          // `end` and `start` are box-alignment words; flexbox on these iPads
+          // knows `flex-end` and `flex-start` and drops the other two.
+          ['bare start/end', /(align|justify)-(items|content|self)\s*:\s*(start|end)\s*[;}]/],
+        ]) if (re.test(css)) modern.push(what);
+
+        // min(), max() and clamp() are Safari 13.1 and are dropped whole when
+        // they are not understood — taking the property with them. They are
+        // allowed here, but only where a plain declaration of the same
+        // property sits above them to be kept instead.
+        const bare = css.replace(/\/\*[\s\S]*?\*\//g, '');
+        for (const m of bare.matchAll(/(^|[;{])\s*([a-z-]+)\s*:[^;}]*\b(min|max|clamp)\(/gm)) {
+          const rule = bare.slice(0, m.index + 1);
+          const decls = rule.slice(rule.lastIndexOf('{') + 1);
+          if (!new RegExp(`(^|;)\\s*${m[2]}\\s*:`).test(decls)) {
+            modern.push(`${m[2]} with no plain value before its ${m[3]}()`);
+          }
+        }
+
+        // 2. The picture re-measures itself when the window changes without
+        // saying so. A home screen app on old iOS reports a size before the
+        // window has settled and then never fires an event about it, which is
+        // how the picture gets stuck small for the whole session.
+        const d = g.display;
+        const realW = d.viewportW.bind(d);
+        const realH = d.viewportH.bind(d);
+        const before = d.canvas.style.width;
+        d.viewportW = () => 640;
+        d.viewportH = () => 480;
+        d.recheck();
+        const afterShrink = d.canvas.style.width;
+        d.viewportW = realW;
+        d.viewportH = realH;
+        d.recheck();
+        const afterRestore = d.canvas.style.width;
+
+        // A window big enough for a scale of 1.6 must not draw at 1. Rounding
+        // down to whole pixels is right until it lands on 1, where it costs
+        // seven eighths of the picture — the small box on the old iPad, which
+        // happens whenever the touch check gets that device wrong.
+        const wasTouch = d.touch;
+        d.touch = false;
+        d.viewportW = () => 800;
+        d.viewportH = () => 600;
+        d.resize();
+        const nearlyTwo = parseInt(d.canvas.style.width, 10);
+        d.viewportW = () => 1400;
+        d.viewportH = () => 900;
+        d.resize();
+        const wellOverTwo = parseInt(d.canvas.style.width, 10);
+        d.touch = wasTouch;
+        d.viewportW = realW;
+        d.viewportH = realH;
+        d.resize();
+
+        // and the loop asks it every frame, which is the whole point: old iOS
+        // never says the window changed, so nobody would ever ask.
+        let ticks = 0;
+        const realRecheck = d.recheck.bind(d);
+        d.recheck = () => { ticks += 1; realRecheck(); };
+        await wait(120);
+        d.recheck = realRecheck;
+
+        // 3. The diagnostic says what the browser thinks, in the page rather
+        // than on the canvas — the canvas being the thing that is wrong.
+        const report = D.displayReport(d);
+        const shows = ['visualViewport', 'documentElement', 'window.inner', 'pixel ratio']
+          .filter((k) => report.includes(k));
+        // The panel lives in index.html, which is not the page these tests run
+        // in, so check the page has it and then give this page the same two
+        // elements to prove the function fills and shows them.
+        const page = await fetch('/index.html').then((r) => r.text());
+        const inPage = page.includes('id="diag"') && page.includes('id="diagtext"');
+        const box = document.createElement('div');
+        box.id = 'diag';
+        box.hidden = true;
+        box.innerHTML = '<pre id="diagtext"></pre>';
+        document.body.appendChild(box);
+        const shown = D.showDisplayReport(d, true);
+        const visible = !box.hidden && box.querySelector('#diagtext').textContent.includes('picture');
+        D.showDisplayReport(d, false);
+        const hidden = box.hidden;
+        box.remove();
+
+        window.__old = `modernCss=[${modern}] canvas ${before}->${afterShrink}->${afterRestore}`
+          + ` at800=${nearlyTwo} at1400=${wellOverTwo} ticks=${ticks}`
+          + ` reportHas=${shows.length}/4 panel=${shown && visible} inPage=${inPage} closes=${hidden}`;
+        if (modern.length) {
+          window.__errors.push('the stylesheet uses something an old iPad ignores: ' + window.__old);
+        }
+        if (afterShrink === before) window.__errors.push('a smaller window did not resize the picture: ' + window.__old);
+        if (afterRestore !== before) window.__errors.push('the picture did not come back: ' + window.__old);
+        if (nearlyTwo < 700) window.__errors.push('a 800px window draws the game tiny: ' + window.__old);
+        if (wellOverTwo !== 960) window.__errors.push('a roomy window stopped using whole pixels: ' + window.__old);
+        if (ticks < 2) window.__errors.push('nothing re-measures the window as it runs: ' + window.__old);
+        if (shows.length !== 4) window.__errors.push('the diagnostic leaves out what we would need: ' + window.__old);
+        if (!shown || !visible) window.__errors.push('the diagnostic does not show: ' + window.__old);
+        if (!hidden) window.__errors.push('the diagnostic does not close again: ' + window.__old);
+        if (!inPage) window.__errors.push('the page has no panel for the diagnostic: ' + window.__old);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get
@@ -6137,6 +6253,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__slide ? ` ${window.__slide}` : '')
         + (window.__water ? ` ${window.__water}` : '')
         + (window.__keys ? ` ${window.__keys}` : '')
+        + (window.__old ? ` ${window.__old}` : '')
         + (window.__pair ? ` ${window.__pair}` : '')
         + (window.__menus ? ` menus=${window.__menus}` : '')
         + (window.__m1 ? ` money[${window.__m1}] ${window.__m2} ${window.__bag} ${window.__pantry} flag=${window.__flag}` : '')

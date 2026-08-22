@@ -12,11 +12,17 @@ html, body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Long-hand offsets and flex centring on purpose. `inset` needs Safari 14.1
+   and `place-items` needs a grid implementation younger than some of the iPads
+   this is played on; both fail silently, which leaves the picture in a corner
+   of a box the size of nothing. Flex has worked since iOS 7. */
 #frame {
   position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
+  top: 0; right: 0; bottom: 0; left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 #screen {
@@ -29,9 +35,10 @@ html, body {
 
 #boot {
   position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
+  top: 0; right: 0; bottom: 0; left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: rgba(10,12,16,.92);
   cursor: pointer;
   z-index: 5;
@@ -60,19 +67,26 @@ html, body {
 
 #touch {
   position: fixed;
-  inset: auto 0 0 0;
+  top: auto; right: 0; bottom: 0; left: 0;
   display: none;
   justify-content: space-between;
   align-items: flex-end;
   z-index: 4;
   pointer-events: none;
+  /* Plain values first, then the notch-aware ones. CSS max() is Safari 13.1;
+     an older browser drops the second declaration and keeps the first, which
+     is the whole point of writing it twice. */
+  padding: 0 10px 12px;
   padding: 0 max(10px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-bottom))
            max(10px, env(safe-area-inset-right));
 }
 body.has-touch #touch { display: flex; }
 
 #touch .dpad { position: relative; pointer-events: auto; }
-#touch .abtns { display: flex; flex-direction: column-reverse; gap: 10px; align-items: center; pointer-events: auto; }
+/* Margins rather than `gap`: flexbox gap is Safari 14.1, and without it the
+   buttons sit on top of one another on an older iPad. */
+#touch .abtns { display: flex; flex-direction: column-reverse; align-items: center; pointer-events: auto; }
+#touch .abtns > * + * { margin-bottom: 10px; }
 
 .tb {
   background: rgba(45,50,68,.78);
@@ -109,8 +123,9 @@ body.has-touch #touch { display: flex; }
   font-family: ui-monospace, Menlo, monospace;
   background: rgba(32,36,52,.7);
   border-color: rgba(140,156,190,.35);
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .tb.run.on {
   background: rgba(255,207,107,.9);
@@ -125,8 +140,9 @@ body.has-touch #touch { display: flex; }
   font-size: 12px;
   letter-spacing: 0.5px;
   font-family: ui-monospace, Menlo, monospace;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .tb.act { width: 74px; height: 74px; color: #ffd9a0; border-color: rgba(255,207,107,.6); font-size: 14px; }
 .tb.back { width: 56px; height: 56px; }
@@ -136,7 +152,7 @@ body.has-touch #touch { display: flex; }
    `--band` is measured in JS, since the band's height depends on the buttons. */
 /* Sit the game directly above the controls rather than floating it in the
    middle: the interactive half of the screen stays together. */
-body.controls-band #frame { bottom: var(--band, 0px); align-items: end; padding-bottom: 6px; }
+body.controls-band #frame { bottom: var(--band, 0px); align-items: center; justify-content: flex-end; padding-bottom: 6px; }
 body.controls-band #touch {
   background: linear-gradient(to top, rgba(14,16,19,.94), rgba(14,16,19,0));
   padding-top: 10px;
@@ -146,10 +162,10 @@ body.controls-band #touch {
 body.controls-band .tb.act { width: 66px; height: 66px; }
 body.controls-band .tb.back { width: 50px; height: 50px; }
 body.controls-band .tb.menu { width: 44px; height: 44px; font-size: 9px; }
-body.controls-band .abtns { gap: 8px; }
+body.controls-band .abtns > * + * { margin-bottom: 8px; }
 
 /* Landscape: controls float over the game so the view keeps the full height. */
-body.controls-overlay #touch { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+body.controls-overlay #touch { padding-bottom: 8px; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
 body.controls-overlay .tb { background: rgba(45,50,68,.55); }
 body.controls-overlay .dpad { --btn: 42px; --pad: 118px; }
 body.controls-overlay .tb.up { left: 38px; top: 0; }
@@ -164,6 +180,11 @@ body.controls-overlay .tb.menu { width: 44px; height: 44px; }
 /* Fullscreen toggle, top-right, only where it can actually do something. */
 #fsbtn {
   position: fixed;
+  /* Both offsets in plain pixels first. Dropping these two on an old iPad
+     leaves a fixed element with auto offsets, which puts the button wherever
+     it happened to fall in the document instead of the corner. */
+  top: 8px;
+  right: 8px;
   top: max(8px, env(safe-area-inset-top));
   right: max(8px, env(safe-area-inset-right));
   width: 40px; height: 40px;
@@ -202,3 +223,30 @@ body.controls-overlay .tb.menu { width: 44px; height: 44px; }
 }
 /* A phone has a MENU button on the glass and no Tab key to press. */
 body.has-touch #keyhint { display: none; }
+
+/* The display diagnostic. Deliberately plain and deliberately large: it is read
+   off a screen that is misbehaving, often at arm's length. */
+#diag {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  background: rgba(10,12,16,.96);
+  color: #cfd8ea;
+  z-index: 20;
+  padding: 16px;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+#diag[hidden] { display: none; }
+#diagtext {
+  font: 14px/1.6 ui-monospace, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  margin: 0 0 14px;
+}
+#diagclose {
+  font: 14px/1 ui-monospace, Menlo, monospace;
+  padding: 10px 18px;
+  background: #2a2440;
+  color: #cfd8ea;
+  border: 1px solid #3d3557;
+  border-radius: 6px;
+}
