@@ -287,7 +287,8 @@ export class GameState {
    * undo having built the place up to forty.
    */
   noteSeatCount() {
-    const n = this.cafeMap?.meta?.seats?.length || 0;
+    const map = this.cafeMap;
+    const n = ((map && map.meta && map.meta.seats) || []).length;
     if (n > (this.flags.most_seats || 0)) {
       this.flags.most_seats = n;
       this.touch('flags');
@@ -299,7 +300,7 @@ export class GameState {
     this.refreshCatActors();
     this.cafeSim.reseatCustomers(this.cafeMap);
     this.noteSeatCount();
-    this.hooks.onCafeRebuilt?.(this.cafeMap);
+    if (this.hooks.onCafeRebuilt) this.hooks.onCafeRebuilt(this.cafeMap);
   }
 
   maxFloorArea() { return 88 + this.workers * 64; }
@@ -393,8 +394,8 @@ export class GameState {
 
   // ---------------------------------------------------------------- hooks
 
-  toast(text, tone) { this.hooks.toast?.(text, tone); }
-  floatText(text, x, y, color) { this.hooks.float?.(text, x, y, color); }
+  toast(text, tone) { if (this.hooks.toast) this.hooks.toast(text, tone); }
+  floatText(text, x, y, color) { if (this.hooks.float) this.hooks.float(text, x, y, color); }
 
   // ------------------------------------------------------------ day roll
 
@@ -498,7 +499,7 @@ export class GameState {
       playerName: this.playerName,
       mail: this.mail,
       pendingLetters: this.pendingLetters,
-      player: this.hooks.playerPos?.() || null,
+      player: (this.hooks.playerPos && this.hooks.playerPos()) || null,
     };
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -534,8 +535,8 @@ export class GameState {
     try { data = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch { return false; }
     if (!data) return false;
     this.clock.load(data.clock);
-    this.money = data.money ?? 480;
-    this.reputation = data.reputation ?? 0.12;
+    this.money = data.money != null ? data.money : 480;
+    this.reputation = data.reputation != null ? data.reputation : 0.12;
     this.inventory = data.inventory || {};
     this.stock = data.stock || {};
     this.cafe = data.cafe || startingCafe();
@@ -548,7 +549,7 @@ export class GameState {
     this.workers = data.workers || 0;
     this.materials = data.materials || 0;
     this.employee = data.employee || null;
-    this.shopOpen = data.shopOpen ?? true;
+    this.shopOpen = data.shopOpen != null ? data.shopOpen : true;
     this.shopHours = data.shopHours || [8, 18];
     this.visited = data.visited || {};
     this.deliveries = data.deliveries || [];

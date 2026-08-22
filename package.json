@@ -5,9 +5,10 @@
   "type": "module",
   "description": "Whimsical 16-bit cat cafe management & exploration game for the browser",
   "scripts": {
-    "start": "node tools/preflight.cjs && node server.js",
+    "start": "node tools/preflight.cjs && node tools/oldjs.cjs && node server.js",
     "check": "node tools/check.js",
-    "preflight": "node tools/preflight.cjs"
+    "preflight": "node tools/preflight.cjs",
+    "oldjs": "node tools/oldjs.cjs"
   },
   "engines": {
     "node": ">=16"

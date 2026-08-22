@@ -352,7 +352,7 @@ export class Hud {
     // Tile coordinates, not pixels: everything in the world — landmarks,
     // barriers, town rectangles — is authored in tiles, so these are the
     // numbers you can actually navigate by.
-    const p = st.hooks.playerPos?.();
+    const p = st.hooks.playerPos && st.hooks.playerPos();
     const where = p
       ? `${Math.floor(p.x / TILE)},${Math.floor(p.y / TILE)} on ${p.map}`
       : 'nowhere';

@@ -4,7 +4,7 @@ import {
   Display, VIEW_W, VIEW_H,
   isTouchDevice, fullscreenSupported, isStandalone, toggleFullscreen, showDisplayReport,
 } from './engine/display.js';
-import { Input } from './engine/input.js';
+import { Input, onPointer } from './engine/input.js';
 import { Perf } from './engine/perf.js';
 import { audio } from './engine/audio.js';
 import { drawText, drawTextCentered, drawTextRight, textWidth, LINE_H } from './engine/font.js';
@@ -75,7 +75,7 @@ const RESIDENT_NAMES = [
  */
 function stillNeeds(st, questId, item) {
   if (st.has(item)) return false;                       // one is enough
-  return st.quests?.[questId] !== 'done';               // otherwise it is there
+  return (st.quests && st.quests[questId]) !== 'done';               // otherwise it is there
 }
 
 /**
@@ -369,8 +369,8 @@ class Game {
     this.worldSeed = seed;
     if (this.state) this.state.worldSeed = seed;
     // Screen-space, so it survives a change of valley untouched.
-    this.weatherFx ||= new WeatherFx(VIEW_W, VIEW_H);
-    this.sky = weatherNow(seed, this.state?.clock || { day: 0, t: 999 });
+    if (!this.weatherFx) this.weatherFx = new WeatherFx(VIEW_W, VIEW_H);
+    this.sky = weatherNow(seed, (this.state && this.state.clock) || { day: 0, t: 999 });
     const world = generateWorld(seed);
     this.overworld = world.map;
     this.towns = world.towns;
@@ -444,11 +444,13 @@ class Game {
       audio.init();
       audio.resume();
       audio.setTrack('cafe', true);
-      bootEl?.classList.add('hidden');
-      window.removeEventListener('pointerdown', start);
+      if (bootEl) bootEl.classList.add('hidden');
+      stopTaps();
       window.removeEventListener('keydown', start);
     };
-    window.addEventListener('pointerdown', start);
+    // Through onPointer, because a tablet older than pointer events still has
+    // to be able to tap past this — see the note in input.js.
+    const stopTaps = onPointer(window, 'pointerdown', start);
     window.addEventListener('keydown', start);
 
     this.setupFullscreenButton();
@@ -1166,7 +1168,7 @@ class Game {
     const st = this.state;
     const map = st.cafeMap;
     if (!map) return;
-    map.villagers ||= [];
+    if (!map.villagers) map.villagers = [];
     for (const def of REGULARS) {
       const want = this.regularWelcome(def);
       const here = map.villagers.find((v) => v.def.id === def.id);
@@ -1203,7 +1205,8 @@ class Game {
 
   /** Seats of one kind, in the cafe as it is actually laid out. */
   seatsOfType(type) {
-    return (this.state.cafeMap?.meta?.seats || []).filter((s) => s.type === type);
+    const map = this.state.cafeMap;
+    return ((map && map.meta && map.meta.seats) || []).filter((s) => s.type === type);
   }
 
   /**
@@ -1772,7 +1775,7 @@ class Game {
   nudgeFurniture() {
     const st = this.state;
     if (st.flags.nudged_furniture) return;
-    const any = Object.keys(st.inventory).some((k) => ITEMS[baseId(k)]?.place && st.inventory[k] > 0);
+    const any = Object.keys(st.inventory).some((k) => (ITEMS[baseId(k)] || {}).place && st.inventory[k] > 0);
     if (!any) return;
     st.flags.nudged_furniture = true;
     this.hud.toast('Furniture in your bag — press C, then Space, to place it.', 'good', 7);
@@ -2047,7 +2050,7 @@ class Game {
       map = shop ? buildShopInterior(shopId) : buildSpecialInterior(shopId);
       if (!map) { this.dialogue.say('The door is locked.'); return; }
       // Put the shopkeeper behind the counter.
-      const keeperId = shop?.keeper;
+      const keeperId = shop && shop.keeper;
       const def = VILLAGERS.find((v) => v.id === keeperId);
       map.villagers = [];
       if (def && map.meta.keeperSpot) {
@@ -2422,7 +2425,7 @@ class Game {
     audio.sfx('quest', { gain: 0.55 });
     this.dialogue.say(step.done || 'Right. Next thing, then.', {
       speaker: v ? v.def.name : q.title,
-      onDone: () => { finish?.(); this.refreshQuestMarks(); },
+      onDone: () => { if (finish) finish(); this.refreshQuestMarks(); },
     });
     this.hud.toast(`${q.title}: ${objectiveText(q, st)}`, 'good', 6);
   }
@@ -2449,7 +2452,7 @@ class Game {
     // code here for one quest, which said the taxi birds were unlocked — they
     // were not; they had always been there, and nothing else could ever say
     // anything of the kind.
-    if (q.reward?.journal) this.hud.toast(q.reward.journal, 'good', 8);
+    if (q.reward && q.reward.journal) this.hud.toast(q.reward.journal, 'good', 8);
   }
 
   /** Would this person have something to say about `q` right now? */
@@ -2588,7 +2591,7 @@ class Game {
     // She sorts with everything else when she is lounging about. When she is
     // being ridden she is drawn as part of the rider instead — see Renderer,
     // which asks an actor for what goes underneath it.
-    if (this.bear && !this.riding && st.mapId === (st.bear?.map || 'overworld')) {
+    if (this.bear && !this.riding && st.mapId === ((st.bear && st.bear.map) || 'overworld')) {
       actors.push(this.bear);
     }
 
@@ -2651,7 +2654,7 @@ class Game {
         if (Math.hypot(c.x - this.player.x, c.y - this.player.y) >= 34) continue;
         // Say which it's going to be. You can see the icon over their head, but
         // you can't see the pantry from here, and that is the whole decision.
-        const want = ITEMS[c.order]?.name;
+        const want = (ITEMS[c.order] || {}).name;
         label = !want ? 'Serve them'
           : st.cafeSim.stockCount(c.order) > 0 ? `Serve ${want}` : `Out of ${want}`;
         break;
@@ -3223,10 +3226,10 @@ class TitleScreen extends Screen {
 
     // Four colour swatches in the right-hand column...
     const swatchRows = this.joining ? [
-      ['Your coat', COATS[this.look.coat]?.fur],
+      ['Your coat', (COATS[this.look.coat] || {}).fur],
       ['Your clothes', this.look.cloth],
     ] : [
-      ['Your coat', COATS[this.look.coat]?.fur],
+      ['Your coat', (COATS[this.look.coat] || {}).fur],
       ['Your clothes', this.look.cloth],
       ['Cafe roof', this.style.roof],
       ['Cafe awning', this.style.awning],
@@ -3279,11 +3282,19 @@ class TitleScreen extends Screen {
 
 // ---------------------------------------------------------------------------
 
+// The game got as far as running. The guard in index.html watches for this and
+// says so on the title card when it never arrives — see the note there.
+window.__catcafeStarted = true;
+
 window.game = new Game();
 
 // `?autostart` jumps straight into a new game, skipping the title. Used by the
 // headless smoke test in tools/ and handy when iterating on the world.
-if (location.search.includes('autostart')) {
+//
+// Wrapped in a function rather than awaited where it stands: top-level await is
+// younger than some of the tablets this runs on, and a module that uses it is
+// refused whole, before a line of it runs.
+if (location.search.includes('autostart')) (async () => {
   const g = window.game;
   await g.ready;
   // Nothing to skip past if a valley still has to be chosen: autostart means
@@ -3296,4 +3307,4 @@ if (location.search.includes('autostart')) {
     { wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], awning: AWNING_CHOICES[0],
       floor: T.FLOOR_WOOD, name: CAFE_NAMES[0] });
   g.dialogue.active = false;
-}
+})();

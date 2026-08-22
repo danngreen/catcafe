@@ -37,7 +37,7 @@ function hash(id, a, b) {
 export function visitOn(def, seed, day) {
   if (!def) return null;
   const roll = hash(def.id, seed, day);
-  if (roll > (def.visitChance ?? 0.4)) return null;
+  if (roll > (def.visitChance != null ? def.visitChance : 0.4)) return null;
   const night = def.when === 'night';
   const spread = hash(def.id, seed, day + 7777);
   const from = night ? 19 + spread * 3.5 : 11 + spread * 6;

@@ -4046,9 +4046,41 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const hidden = box.hidden;
         box.remove();
 
+        // 4. Taps still land on a browser with no pointer events. They came
+        // with iOS 13; before that there are touches and there are clicks, and
+        // a game listening only for pointers hears nothing at all — which is
+        // a title screen that will not go away. onPointer is the translation,
+        // so drive it with a touch and see the handler called.
+        const { onPointer } = await import('../src/engine/input.js');
+        window.__noPointer = true;
+        const surface = document.createElement('div');
+        document.body.appendChild(surface);
+        const got = [];
+        const offTaps = onPointer(surface, 'pointerdown', (e) => got.push(e));
+        const touch = new Touch({ identifier: 7, target: surface, clientX: 21, clientY: 34 });
+        surface.dispatchEvent(new TouchEvent('touchstart', { changedTouches: [touch], bubbles: true }));
+        // And a click on old desktop WebKit, which has no pointers either.
+        surface.dispatchEvent(new MouseEvent('mousedown', { clientX: 8, clientY: 9, bubbles: true }));
+        const tapAt = got.length ? `${got[0].clientX},${got[0].clientY}` : 'none';
+        // Old iOS follows every touch with a sympathy click. Taking both would
+        // press every button twice.
+        const doubled = got.length > 1;
+        offTaps();
+        surface.dispatchEvent(new TouchEvent('touchstart', { changedTouches: [touch], bubbles: true }));
+        const stopped = got.length === 1;
+        surface.remove();
+        window.__noPointer = false;
+
+        // 5. A browser too old to parse the game says so on the title card.
+        // Nothing else can: the module is refused whole, and a home screen app
+        // has no address bar and no console to look in.
+        const guarded = page.includes('id="booterr"') && page.includes('__catcafeStarted');
+        const guardOld = !/<script>[\s\S]*?\?\.|<script>[\s\S]*?\?\?/.test(page);
+
         window.__old = `modernCss=[${modern}] canvas ${before}->${afterShrink}->${afterRestore}`
           + ` at800=${nearlyTwo} at1400=${wellOverTwo} ticks=${ticks}`
-          + ` reportHas=${shows.length}/4 panel=${shown && visible} inPage=${inPage} closes=${hidden}`;
+          + ` reportHas=${shows.length}/4 panel=${shown && visible} inPage=${inPage} closes=${hidden}`
+          + ` tapAt=${tapAt} doubled=${doubled} stopped=${stopped} guard=${guarded}/${guardOld}`;
         if (modern.length) {
           window.__errors.push('the stylesheet uses something an old iPad ignores: ' + window.__old);
         }
@@ -4061,6 +4093,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!shown || !visible) window.__errors.push('the diagnostic does not show: ' + window.__old);
         if (!hidden) window.__errors.push('the diagnostic does not close again: ' + window.__old);
         if (!inPage) window.__errors.push('the page has no panel for the diagnostic: ' + window.__old);
+        if (tapAt !== '21,34') window.__errors.push('a touch does not reach the game without pointer events: ' + window.__old);
+        if (doubled) window.__errors.push('a touch and its sympathy click both count: ' + window.__old);
+        if (!stopped) window.__errors.push('a touch listener cannot be taken off again: ' + window.__old);
+        if (!guarded) window.__errors.push('nothing tells a too-old browser why it stopped: ' + window.__old);
+        if (!guardOld) window.__errors.push('the guard for old browsers is itself too modern: ' + window.__old);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get

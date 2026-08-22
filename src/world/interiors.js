@@ -21,7 +21,7 @@ const WALL_MOUNT = -6;
 function wallInRooms(map, rooms, floorId) {
   const roomAt = (x, y) => rooms.find((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
   const isFloor = (x, y) => !!roomAt(x, y);
-  const floorOf = (r) => r.floor ?? floorId;
+  const floorOf = (r) => (r.floor != null ? r.floor : floorId);
   const isOutside = (r) => r && OUTDOOR_FLOORS.has(floorOf(r));
 
   for (const r of rooms) map.fillRect(r.x, r.y, r.w, r.h, floorOf(r));
@@ -251,7 +251,7 @@ function furnishCottage(map, room, rng) {
     }
     // Leave the way in clear: a sofa across the door is a house you cannot
     // walk into, and the doormat is the one tile everybody arrives on.
-    const d = map.meta?.door || { x: -9, y: -9 };
+    const d = (map.meta && map.meta.door) || { x: -9, y: -9 };
     for (let i = 0; i < def.tw; i++) if (x + i === d.x && Math.abs(y - d.y) <= 1) return false;
     map.addObject(type, x, y, opts);
     for (let j = 0; j < def.th; j++) for (let i = 0; i < def.tw; i++) taken.add(key(x + i, y - j));
@@ -364,10 +364,10 @@ export function startingCafe(style = {}) {
       { type: 'plantPot', x: 0, y: 6 },
       { type: 'menuBoard', x: 0, y: 1 },
     ],
-    floor: style.floor ?? T.FLOOR_WOOD,
-    wall: style.wall ?? '#efe2c8',
-    awning: style.awning ?? '#c05a7a',
-    roof: style.roof ?? '#c86a4a',
+    floor: style.floor != null ? style.floor : T.FLOOR_WOOD,
+    wall: style.wall != null ? style.wall : '#efe2c8',
+    awning: style.awning != null ? style.awning : '#c05a7a',
+    roof: style.roof != null ? style.roof : '#c86a4a',
     doorX: 5,
     name: style.name || 'The Contented Cat',
   };
@@ -394,13 +394,14 @@ export function buildCafeMap(cafe) {
   });
 
   const rooms = cafe.rooms.map((r) => ({ x: r.x + offX, y: r.y + offY, w: r.w, h: r.h, name: r.name, floor: r.floor }));
-  wallInRooms(map, rooms, cafe.floor ?? T.FLOOR_WOOD);
+  wallInRooms(map, rooms, cafe.floor != null ? cafe.floor : T.FLOOR_WOOD);
 
   // Front door on the bottom edge of the first room.
   const home = rooms[0];
-  const doorX = home.x + Math.min(home.w - 1, Math.max(0, cafe.doorX ?? Math.floor(home.w / 2)));
+  const doorX = home.x + Math.min(home.w - 1, Math.max(0, cafe.doorX != null ? cafe.doorX : Math.floor(home.w / 2)));
   const doorY = home.y + home.h;
-  map.set(doorX, doorY, home.floor ?? cafe.floor ?? T.FLOOR_WOOD);
+  map.set(doorX, doorY, home.floor != null ? home.floor
+    : cafe.floor != null ? cafe.floor : T.FLOOR_WOOD);
   map.addObject('doormat', doorX, doorY, { flat: true });
   map.addWarp(doorX, doorY, 'overworld', 0, 0, { sound: 'door' });
   map.spawn = { x: doorX, y: doorY - 1 };

@@ -34,7 +34,7 @@ function groundShadow(buf, cx, cy, rx, ry) {
 /** Layered blob canopy with a lit top-left and a dark underside. */
 function canopy(buf, cx, cy, rx, ry, base, v, opts = {}) {
   const dk = shade(base, -0.3), lt = shade(base, 0.16), hi = shade(base, 0.33);
-  const lobes = opts.lobes ?? 5;
+  const lobes = opts.lobes != null ? opts.lobes : 5;
   buf.ellipse(cx, cy, rx, ry, rgb(dk));
   for (let i = 0; i < lobes; i++) {
     const a = (i / lobes) * Math.PI * 2 + n(i, v, 3) * 0.7;
@@ -1661,7 +1661,7 @@ export function buildingSprite(cfg) {
   // The board's colour is part of the picture, so it belongs in the key: two
   // shops sharing a glyph but not a paint pot must not share a sprite.
   const signBg = cfg.signBg || SIGN_BG[cfg.signKey] || P.plaster;
-  const key = `b|${cfg.tw}|${cfg.wall}|${cfg.roof}|${cfg.roofStyle}|${cfg.timbered ? 1 : 0}|${cfg.wallH}|${cfg.roofH}|${cfg.signKey || ''}|${signBg}|${cfg.awning || ''}|${cfg.v || 0}|${cfg.windows ?? 2}|${cfg.storeys || 1}|${cfg.lit ? 1 : 0}`;
+  const key = `b|${cfg.tw}|${cfg.wall}|${cfg.roof}|${cfg.roofStyle}|${cfg.timbered ? 1 : 0}|${cfg.wallH}|${cfg.roofH}|${cfg.signKey || ''}|${signBg}|${cfg.awning || ''}|${cfg.v || 0}|${cfg.windows != null ? cfg.windows : 2}|${cfg.storeys || 1}|${cfg.lit ? 1 : 0}`;
   return cache.get(key, () => {
     const w = cfg.tw * TILE + 16;
     const h = (cfg.wallH || 26) + (cfg.roofH || 22) + 16;
