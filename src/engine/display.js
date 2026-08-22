@@ -11,7 +11,17 @@ export const VIEW_W = 480;
 export const VIEW_H = 270;
 
 export function isTouchDevice() {
-  return matchMedia('(hover: none)').matches || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  // Order matters: the checks that work on old iOS (pre-13) come first, since
+  // `(hover)`, `(pointer)`, visualViewport and a non-zero maxTouchPoints all
+  // arrived in iOS 13. An old iPad that fails every modern check must still be
+  // recognised as touch, or it gets the desktop layout with no input surface.
+  return ('ontouchstart' in window)
+    || navigator.maxTouchPoints > 0
+    || (navigator.msMaxTouchPoints || 0) > 0
+    || /iPad|iPhone|iPod/.test(navigator.platform)
+    || (navigator.userAgent.includes('Mac') && 'ontouchend' in document) // iPadOS 13+
+    || (typeof matchMedia === 'function'
+        && (matchMedia('(hover: none)').matches || matchMedia('(pointer: coarse)').matches));
 }
 
 /** True when the browser can actually take us fullscreen (not iPhone Safari). */
@@ -70,8 +80,12 @@ export class Display {
 
   resize() {
     const body = document.body;
-    const vw = window.visualViewport ? window.visualViewport.width : window.innerWidth;
-    const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    // Old iOS (pre-13) has no visualViewport, and in a standalone PWA there its
+    // window.innerWidth/Height report the layout viewport at the wrong scale —
+    // which is what pinned the canvas to a quarter of the screen. The root
+    // element's clientWidth/Height track the real layout box far better there.
+    const vw = (window.visualViewport && window.visualViewport.width)  || document.documentElement.clientWidth  || window.innerWidth;
+    const vh = (window.visualViewport && window.visualViewport.height) || document.documentElement.clientHeight || window.innerHeight;
 
     // Decide where the controls live before measuring what's left for the game.
     if (this.touch) {
