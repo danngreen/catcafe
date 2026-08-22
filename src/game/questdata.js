@@ -185,7 +185,7 @@ export const QUESTS = [
         note: 'Speak to whatever is in the hedge',
         objective: { type: 'talk', to: 'woofers' },
         progress: 'Go back to the hedge after dark and talk to whatever is in it. It will not be me who does it.',
-        done: "*the shape in the hedge lifts its head*\n\nYou can see me? Nobody has been able to see me in a very long while.\n\nI lost my collar. It was gold, and it had my name upon it, and I've been looking in this hedge for — some time. I no longer recall where I had it last.\n\nI do not recall a great deal. I am fairly sure I was IMPORTANT.",
+        done: "*the shape in the hedge lifts its head*\n\nYou can see me? Nobody has been able to see me in a very long while.\n\nI lost my collar. It was gold, and it had my name upon it, and I've been looking in this hedge for — some time. I no longer recall where I had it last.\n\nI do not recall a great deal. I am fairly sure I was IMPORTANT ENOUGH TO APPEAR IN A HISTORY BOOK.",
       },
       {
         note: 'Read about Sir Woofers at the Reading Room in Brambleford',
@@ -196,7 +196,7 @@ export const QUESTS = [
       },
       {
         note: 'Search the mud at the end of Saltmere Pier',
-        objective: { type: 'item', item: 'golden_collar' },
+        objective: { type: 'item', item: 'golden_collar', count: 1 },
         evidence: 'got_collar',
         progress: 'Go to the end of the pier at Saltmere and search the mud under it, not on it.',
         done: 'Two hundred years in the mud, and still bright.',
@@ -210,9 +210,16 @@ export const QUESTS = [
           give: false,
         },
         progress: 'Take the collar back to the hedge after dark. He is always at the hedge.',
+        done: "My soul can rest now that I've been reunited with my prized golden collar.\n\nThis collar brings back cherished memories, I thank you.",
       },
     ],
-    reward: { money: 340, rep: 0.1, friendship: ['button'], items: [['catnip', 2]] },
+    reward: {
+      money: 400,
+      rep: 1,
+      friendship: ['button'],
+      items: [['catnip', 5]],
+      journal: "Sir Woofer's soul can rest now that he's been reunited with his golden collar.",
+    },
     offer: 'Right. Short legs, long opinions, and here is one of them.\n\nThe hedge at the end of my lane MOVES. At night. Not the wind — one bit of it, going up and down like something is working along the bottom of it looking for a sock.\n\nI have barked at it. I have barked at it a great deal. It does not care, which is frankly insulting. You have cats. You are used to nonsense. Would you go and look?',
     complete: 'Oh. Oh, that IS mine. That is my collar.\n\n*the very old dog stands still for the first time in two hundred years*\n\nThey put my name on it, you know. At the opening. There was a ribbon and everything.\n\nThank you. Thank you. I shall stop bothering the hedge.',
   },
@@ -226,7 +233,7 @@ export const QUESTS = [
     steps: [
       {
         note: 'Buy a storm lantern at the Chalk Pit Store in Hollowdown',
-        objective: { type: 'item', item: 'lantern' },
+        objective: { type: 'item', item: 'lantern', count: 1 },
         progress: 'Buy a storm lantern at the Chalk Pit Store in Hollowdown. Ask for a storm lantern, not a nice one.',
         done: "That's the one. Now — where's dark and still and has a lamp?",
       },
@@ -235,9 +242,15 @@ export const QUESTS = [
         objective: { type: 'deliver', item: 'lantern', to: 'moth', give: false },
       },
     ],
-    reward: { money: 150, items: [['seashell', 1]], friendship: ['moth'] },
-    offer: "You're up late. Good. Nobody's ever awake this late.\n\nI count them, you see. On the lamps. Only the lamps in this town are dreadful and half of them are out, and I'm fairly sure I've been counting the same moth eleven times.\n\nThere's a proper storm lantern to be had at the hardware place up in Hollowdown. Bring me one and I'll show you something.",
-    complete: "*Moth holds the lantern up and the air fills — properly fills — with wings*\n\nFourteen. Fourteen species on one lamp. And there's the one I've never got a name for.\n\nTake this. Found it under the lamp at the crossroads, and it's no use to me.",
+    reward: {
+      money: 150,
+      items: [['seashell', 1]],
+      friendship: ['moth'],
+      rep: 0.1,
+      journal: 'Moth counts moths at night. So when does he sleep? In any case, after helping him out with improved lighting for his night time pass time, he kindly rewarded me with a spiral seashell.',
+    },
+    offer: "You're up late. Good. Nobody's ever awake this late.\n\nI count moths, you see. On the lamps. But the lamps in this town are dreadful and half of them are out.\n\nI'm fairly sure I've been counting the same moth eleven times on account of poor lighting.\n\nThere's a proper storm lantern to be had at the hardware place up in Hollowdown. Bring me one and I'll show you something.",
+    complete: "*Moth holds the lantern up and the air fills — properly fills — with fluttering wings as moths draw close round the upheld lantern*\n\nFourteen. Fourteen species on one lamp. \n\nThere's one I've never named, the inspiration hasn't hit me yet. Maybe I'll name it after you... on second thought, maybe not.",
   },
   {
     id: 'the_telephone',

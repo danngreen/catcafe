@@ -60,7 +60,7 @@ export const VILLAGERS = [
     ],
     hints: [
       {
-        text: "Sable over in Thistlewick has breeds I can't get. Only opens some days. Bring money. Bring a lot of money.",
+        text: "Sable over in Thistlewick has breeds I can't get. Only opens some days. Bring money. Bring a LOT of money.",
       },
     ],
   },
@@ -975,10 +975,11 @@ export const VILLAGERS = [
     role: 'villager',
     regular: true,
     visitChance: 0.45,
+    seat: 'stool',
     lines: [
-      'I have a job. Afternoons. It is not a demanding job and I am not a demanding man.',
+      "I'm man of many words and many friends. I'm back from wandering the countryside and I've a yearning to whet my whistle with a cordial please.",
       'Do you have the cordial? You do not have the cordial. That is fine. I will wait.',
-      "I could go and get it myself, yes. I could. Let's both sit with that for a moment.",
+      'I could go and get it myself, yes. I could. But my feet are weary from my wanderings. I will be a customer for life if you stock the cordial.',
       '*settles into the nearest chair with the finality of a dropped sandbag*',
     ],
     hints: [
@@ -996,6 +997,7 @@ export const VILLAGERS = [
     when: 'night',
     regular: true,
     visitChance: 0.42,
+    seat: 'barStool',
     lines: [
       'I come for the grey one. I am not going to pretend otherwise.',
       'She used to sit with me. Every night, same chair. Then she stopped.',
