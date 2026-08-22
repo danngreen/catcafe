@@ -760,7 +760,7 @@ export class Tileset {
         // Rebuild a clean copy for carving (frame 0, variant 0).
         const src = new PixBuf(TILE, TILE);
         def.paint(src, 0, 0);
-        for (const d of EDGE_DIRS) e[d] = carveEdge(src, d, id, def.edgeDepth ?? 4, !!def.edgeSoft);
+        for (const d of EDGE_DIRS) e[d] = carveEdge(src, d, id, def.edgeDepth != null ? def.edgeDepth : 4, !!def.edgeSoft);
         this.edges[id] = e;
       }
     }

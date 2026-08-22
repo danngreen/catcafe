@@ -621,7 +621,8 @@ function placeShop(map, shop, x, y, townSpec, doors, rng) {
     wall: shop.wall || townSpec.style.wall,
     roof: shop.roof || townSpec.style.roofs[0],
     roofStyle,
-    timbered: shop.timbered ?? (townSpec.style.timbered && rng.chance(0.5)),
+    timbered: shop.timbered != null ? shop.timbered
+      : (townSpec.style.timbered && rng.chance(0.5)),
     wallH: shop.wallH || 28, roofH: shop.roofH || 24, windows: 2,
     storeys: shop.storeys || 1,
     signKey: shop.sign, signBg: shop.signBg || null,

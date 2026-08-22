@@ -61,6 +61,16 @@ html, body {
 }
 @keyframes blink { 50% { opacity: .25; } }
 
+/* Only ever seen when the game failed to start — see the guard in index.html. */
+.boot-err {
+  margin: 18px auto 0;
+  max-width: 22em;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ff9a8c;
+  word-wrap: break-word;
+}
+
 /* --------------------------------------------------------------------------
    Touch controls
    -------------------------------------------------------------------------- */

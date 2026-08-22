@@ -122,7 +122,7 @@ export function makeDelivery(place, from, now, rng = Math.random) {
 
 /** What the food alone is worth at the counter price. */
 export function goodsValue(items) {
-  return items.reduce((s, id) => s + (ITEMS[id]?.price || 0), 0);
+  return items.reduce((s, id) => s + ((ITEMS[id] || {}).price || 0), 0);
 }
 
 /** The most this run could pay, if you turn up with everything. */
@@ -178,6 +178,6 @@ export function orderText(items) {
   const counts = {};
   for (const id of items) counts[id] = (counts[id] || 0) + 1;
   return Object.entries(counts)
-    .map(([id, n]) => (n > 1 ? `${n} x ${ITEMS[id]?.name || id}` : ITEMS[id]?.name || id))
+    .map(([id, n]) => (n > 1 ? `${n} x ${(ITEMS[id] || {}).name || id}` : (ITEMS[id] || {}).name || id))
     .join(', ');
 }

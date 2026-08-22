@@ -43,7 +43,8 @@ export function isStandalone() {
 export function toggleFullscreen() {
   const el = document.documentElement;
   if (isFullscreen()) {
-    (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) exit.call(document);
     return true;
   }
   const req = el.requestFullscreen || el.webkitRequestFullscreen;

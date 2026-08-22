@@ -51,6 +51,12 @@ function hourDemand(h) {
   return clamp(0.18 + morning * 1.05 + evening * 0.85, 0, 2.2);
 }
 
+/** How much a sky likes a drink of this temperature. Silent about ones it has
+ *  no opinion on, which is most of them. */
+function liking(drink, temp) {
+  return drink && drink[temp] != null ? drink[temp] : 1;
+}
+
 export class Cafe {
   constructor(state) {
     this.state = state;          // shared game state (money, stock, cats...)
@@ -105,7 +111,10 @@ export class Cafe {
   }
 
   /** Seats that exist, and seats currently free. */
-  seats() { return this.state.cafeMap?.meta?.seats || []; }
+  seats() {
+    const map = this.state.cafeMap;
+    return (map && map.meta && map.meta.seats) || [];
+  }
   freeSeats() { return this.seats().filter((s) => !s.taken); }
 
   /** The headline number the player sees on the cafe screen. */
@@ -565,7 +574,7 @@ export class Cafe {
     const taste = (id) => {
       const t = ITEMS[id].temp;
       if (!t) return 1;
-      const a = sky.from.drink?.[t] ?? 1, b = sky.now.drink?.[t] ?? 1;
+      const a = liking(sky.from.drink, t), b = liking(sky.now.drink, t);
       return a + (b - a) * sky.blend;
     };
     const weights = pool.map((id) => (0.35 + ITEMS[id].appeal) * taste(id));
@@ -875,7 +884,7 @@ export class Cafe {
     // --- spoilage ---
     const lost = this.spoilCheck(st.clock.day);
     for (const l of lost) {
-      summary.lines.push({ text: `${l.qty} x ${ITEMS[l.id]?.name || l.id} went bad.`, tone: 'warn' });
+      summary.lines.push({ text: `${l.qty} x ${(ITEMS[l.id] || {}).name || l.id} went bad.`, tone: 'warn' });
     }
 
     st.spend(summary.costs);
@@ -887,7 +896,7 @@ export class Cafe {
     const wanted = Object.entries(this.missed).sort((a, b) => b[1] - a[1]).slice(0, 2);
     for (const [id, n] of wanted) {
       summary.lines.push({
-        text: `${n} asked for ${ITEMS[id]?.name || id}. You had none.`,
+        text: `${n} asked for ${(ITEMS[id] || {}).name || id}. You had none.`,
         tone: 'warn',
       });
     }
