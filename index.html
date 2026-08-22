@@ -19,20 +19,32 @@
 <link rel="stylesheet" href="styles.css">
 
 <!--
-  A browser too old for the game does not say so. It refuses to parse the
-  script and stops, with no error anywhere a home-screen app can show one: the
-  title card sits there, taps do nothing, and the report back is "it doesn't
-  start". This is a plain script — no modern syntax at all, so it runs
-  everywhere — and it prints the reason onto the card itself. The module sets
-  a flag when it gets going; if the flag is still unset a few seconds later,
-  nothing ran at all, which is worth saying even when there is no error to
-  quote.
+  A game that does not start says nothing about it. A browser too old to parse
+  the module refuses it whole, and a browser that cannot fetch it never gets
+  that far; either way the title card sits there, taps do nothing, and the
+  report back is "it doesn't start". This is a plain script — no modern syntax
+  at all, so it runs everywhere — and it prints the reason onto the card
+  itself. The module sets a flag when it gets going; if the flag is still unset
+  a few seconds later, nothing ran, and the script goes and finds out why
+  rather than guessing.
+
+  Two ways it can fail, and they want different answers:
+
+  A syntax error names itself, and means the browser is too old for the code.
+  Silence means the file never arrived — and the thing that fetches it is not
+  the thing that fetched this page. Old WebKit asks for module scripts without
+  the cookies it used for the page, so anything behind a login can serve the
+  page and then quietly answer every module with a login screen. The probe
+  below asks for the same file the plain old way, cookies and all: an answer
+  that is fine here and was not for the module is that story exactly.
 -->
 <script>
   (function () {
+    var spoke = false;
     function say(msg) {
       var el = document.getElementById('booterr');
       if (!el) return;
+      spoke = true;
       el.hidden = false;
       el.textContent = String(msg).slice(0, 400);
       var sub = document.querySelector('.boot-sub');
@@ -40,16 +52,50 @@
     }
     function unsay() {
       var el = document.getElementById('booterr');
+      spoke = false;
       if (el) { el.hidden = true; el.textContent = ''; }
       var sub = document.querySelector('.boot-sub');
       if (sub) sub.textContent = 'click to begin';
     }
+    // What the browser said, if it said anything. In the capture phase this
+    // also hears about files that failed to load, which arrive as a target
+    // with no message — for the game's own script that is worth knowing.
+    var refused = false;
     window.addEventListener('error', function (e) {
-      // Only real script errors. In the capture phase this also hears about
-      // any picture or icon that failed to load, which has a target and no
-      // message and is nothing like as serious.
-      if (e && e.message) say(e.message);
+      if (!e) return;
+      if (e.message) { say(e.message); return; }
+      // A file that failed to load has a target and no message. The only
+      // script this page asks for is the game.
+      var t = e.target;
+      if (t && t.tagName === 'SCRIPT') refused = true;
     }, true);
+
+    /**
+     * Ask for the game's script again, the oldest way there is.
+     *
+     * XMLHttpRequest sends the cookies for this site; old WebKit's module
+     * loader does not. So a 200 with JavaScript in it, for a file the module
+     * loader could not have, says the file is there and the difference is who
+     * asked — which is the whole answer when the game is behind a login.
+     */
+    function probe() {
+      var head = refused ? 'the game script was refused. ' : 'the game script never ran. ';
+      try {
+        var x = new XMLHttpRequest();
+        x.open('GET', 'src/main.js?probe=' + new Date().getTime(), true);
+        x.onreadystatechange = function () {
+          if (x.readyState !== 4) return;
+          var type = '';
+          try { type = x.getResponseHeader('content-type') || 'no type'; } catch (err) { type = '?'; }
+          var body = String(x.responseText || '').substring(0, 50).replace(/\s+/g, ' ');
+          say(head + 'asking for src/main.js gives ' + x.status + ' ' + type + ' — ' + body);
+        };
+        x.onerror = function () { say(head + 'src/main.js cannot be fetched at all.'); };
+        x.send();
+      } catch (err) {
+        say(head + 'could not even ask for src/main.js: ' + err);
+      }
+    }
     // Watched rather than timed once. An old tablet on a cold start can take
     // its time over forty modules, and a fixed deadline that fires just before
     // it finishes would put "too old" on the screen of a game that works —
@@ -59,7 +105,9 @@
     var timer = setInterval(function () {
       if (window.__catcafeStarted) { clearInterval(timer); unsay(); return; }
       waited += 500;
-      if (waited === 6000) say('this browser is too old to run the game');
+      // An error that named itself is a better answer than anything the probe
+      // could find, so it keeps the card.
+      if (waited === 6000 && !spoke) probe();
       if (waited >= 30000) clearInterval(timer);
     }, 500);
   })();
@@ -113,6 +161,15 @@
     </div>
   </div>
 
-  <script type="module" src="src/main.js"></script>
+  <!--
+    `crossorigin` says: fetch this, and everything it imports, with the cookies
+    for this site. Modern browsers already do — a module from your own server
+    is fetched as you. Old WebKit is from before that was settled and asks
+    anonymously, which is invisible on a server that lets anyone in and fatal
+    behind a login: the page arrives, and then every module it needs comes back
+    as a sign-in screen. The attribute is what that browser understands to mean
+    "as me", and costs a modern one nothing.
+  -->
+  <script type="module" src="src/main.js" crossorigin="use-credentials"></script>
 </body>
 </html>
