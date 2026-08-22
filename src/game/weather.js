@@ -123,8 +123,7 @@ export function weatherNow(seed, clock) {
 
 /** Blend one numeric property across the changeover. */
 export function mix(sky, key) {
-  const a = sky.from[key] != null ? sky.from[key] : 0;
-  const b = sky.now[key] != null ? sky.now[key] : 0;
+  const a = sky.from[key] ?? 0, b = sky.now[key] ?? 0;
   return a + (b - a) * sky.blend;
 }
 

@@ -14,7 +14,7 @@ export class GameMap {
     this.w = w;
     this.h = h;
     this.kind = opts.kind || 'outdoor';
-    this.ground = new Uint16Array(w * h).fill(opts.fill != null ? opts.fill : T.GRASS);
+    this.ground = new Uint16Array(w * h).fill(opts.fill ?? T.GRASS);
     this.blocked = new Uint8Array(w * h);   // extra solidity from objects/scripts
     this.objects = [];                       // y-sorted sprites
     this.decals = [];                        // drawn flat, baked into chunks
@@ -107,12 +107,11 @@ export class GameMap {
     if (!def) return null;
     const o = {
       type, tx, ty,
-      variant: opts.variant != null ? opts.variant : 0,
+      variant: opts.variant ?? 0,
       tw: def.tw, th: def.th,
       w: def.w, h: def.h,
-      solid: opts.solid != null ? opts.solid : def.solid,
-      flat: opts.flat != null ? opts.flat
-        : def.flat != null ? def.flat : false,
+      solid: opts.solid ?? def.solid,
+      flat: opts.flat ?? def.flat ?? false,
       light: def.light || opts.light,
       offX: opts.offX || 0,
       offY: opts.offY || 0,

@@ -60,7 +60,7 @@ export class TaxiFlight {
         this.stageT = 0;
         if (this.phase === 'pickup') {
           this.hidePlayer = true;            // now they climb into the basket
-          if (this.onBoarded) this.onBoarded();
+          this.onBoarded?.();
         }
         audio.sfx('wing', { gain: 0.75 });
       }
@@ -71,7 +71,7 @@ export class TaxiFlight {
       this.x = this.player.x + 90 * ease(k) * (this.phase === 'pickup' ? 1 : -1);
       if (k >= 1) {
         this.done = true;
-        if (this.onDone) this.onDone();
+        this.onDone?.();
       }
     }
   }
@@ -154,7 +154,7 @@ export class StairWalk {
     p.y -= dt * 14;
     if (this.fade >= 1) {
       this.done = true;
-      if (this.onDone) this.onDone();
+      this.onDone?.();
     }
   }
 

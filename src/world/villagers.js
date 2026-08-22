@@ -13,10 +13,10 @@
  */
 export function secretMet(secret, st) {
   if (!secret) return true;
-  if (secret.flag) return !!(st.flags && st.flags[secret.flag]);
+  if (secret.flag) return !!st.flags?.[secret.flag];
   if (secret.quest) {
-    if (st.quests && st.quests[secret.quest] === 'done') return true;
-    return ((st.questStep && st.questStep[secret.quest]) || 0) >= (secret.step || 1);
+    if (st.quests?.[secret.quest] === 'done') return true;
+    return (st.questStep?.[secret.quest] || 0) >= (secret.step || 1);
   }
   return true;
 }
@@ -27,9 +27,9 @@ export function secretMet(secret, st) {
  */
 export function arrivesNow(arrives, st) {
   if (!arrives) return false;
-  if (arrives.until && st.flags && st.flags[arrives.until]) return false;
+  if (arrives.until && st.flags?.[arrives.until]) return false;
   if (arrives.deliveries && (st.deliveriesRun || 0) < arrives.deliveries) return false;
-  if (arrives.flag && !(st.flags && st.flags[arrives.flag])) return false;
+  if (arrives.flag && !st.flags?.[arrives.flag]) return false;
   return true;
 }
 

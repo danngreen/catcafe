@@ -108,11 +108,7 @@ export class NetClient {
     return this.connected && this.joined && this.owner === this.id;
   }
 
-  on(evt, fn) {
-    if (!this.handlers[evt]) this.handlers[evt] = [];
-    this.handlers[evt].push(fn);
-    return this;
-  }
+  on(evt, fn) { (this.handlers[evt] ||= []).push(fn); return this; }
   emit(evt, ...a) { for (const fn of this.handlers[evt] || []) fn(...a); }
 
   /** Is there a session to reach at all? `?solo` says don't look. */

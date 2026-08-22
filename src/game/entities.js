@@ -26,7 +26,7 @@ function tileFree(map, px, py, swims) {
   // A bear treats the river as ground. Only the water, mind: the pier posts and
   // the rocks in it are blocked separately and stay blocked, or she would swim
   // through the harbour wall.
-  return !!swims && !(map.blockedAt && map.blockedAt(tx, ty)) && isLiquid(map.get(tx, ty));
+  return !!swims && !map.blockedAt?.(tx, ty) && isLiquid(map.get(tx, ty));
 }
 
 /**
@@ -233,7 +233,7 @@ export class Player extends Actor {
     const spr = this.sprite();
     let dx = Math.round(this.x - CHAR_W / 2 - ox);
     let dy = Math.round(this.y - CHAR_H - oy);
-    const a = this.alpha != null ? this.alpha : 1;
+    const a = this.alpha ?? 1;
     if (a < 1) ctx.globalAlpha = a;
     // Anyone on a mount is drawn as one animal: the bear first, at the rider's
     // feet, then the rider sitting on her back. Doing it here rather than as
@@ -573,9 +573,9 @@ export class Cat extends Actor {
     this.pose = 'sit';
     this.target = null;
     this.groomed = data.groomed || 0;   // days of grooming left
-    this.coatQuality = data.coatQuality != null ? data.coatQuality : 1;
-    this.happiness = data.happiness != null ? data.happiness : 0.7;
-    this.hunger = data.hunger != null ? data.hunger : 0;
+    this.coatQuality = data.coatQuality ?? 1;
+    this.happiness = data.happiness ?? 0.7;
+    this.hunger = data.hunger ?? 0;
     this.sick = data.sick || false;
     this.sickDays = data.sickDays || 0;
     this.accessory = data.accessory || null;
@@ -604,7 +604,7 @@ export class Cat extends Actor {
     const call = opts.call || calls[Math.floor(rng() * calls.length)];
     const mood = this.happiness > 0.6 ? 1.08 : this.happiness < 0.3 ? 0.88 : 1;
     audio.sfx(call, {
-      gain: 0.55 * v.gain * (opts.gain != null ? opts.gain : 1),
+      gain: 0.55 * v.gain * (opts.gain ?? 1),
       pitch: v.pitch * this.pitchBias * mood,
       pan,
     });

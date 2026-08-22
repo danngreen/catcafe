@@ -10,8 +10,7 @@ export { QUESTS };
 
 export const QUEST_BY_ID = Object.fromEntries(QUESTS.map((q) => [q.id, q]));
 export const QUESTS_BY_GIVER = QUESTS.reduce((m, q) => {
-  if (!m[q.giver]) m[q.giver] = [];
-  m[q.giver].push(q);
+  (m[q.giver] ||= []).push(q);
   return m;
 }, {});
 
@@ -33,7 +32,7 @@ export function questSteps(q) {
 /** Which step of `q` is in play. */
 export function stepIndex(q, st) {
   const n = questSteps(q).length;
-  return Math.min((st.questStep && st.questStep[q.id]) || 0, n - 1);
+  return Math.min(st.questStep?.[q.id] || 0, n - 1);
 }
 
 export function currentStep(q, st) { return questSteps(q)[stepIndex(q, st)]; }
@@ -164,7 +163,7 @@ export function progressText(q, st) {
   // written out to a file by the editor.
   const step = currentStep(q, st);
   const when = [...(step.progressWhen || []), ...(q.progressWhen || [])];
-  for (const alt of when) if (alt.flag && st.flags && st.flags[alt.flag]) return alt.text;
+  for (const alt of when) if (alt.flag && st.flags?.[alt.flag]) return alt.text;
   return step.progress || q.progress || 'Still on it, then?';
 }
 
@@ -200,7 +199,7 @@ export function requiredFlag(q) {
 }
 
 export function stepDone(step, st) {
-  if (step.evidence && st.flags && st.flags[step.evidence]) return true;
+  if (step.evidence && st.flags?.[step.evidence]) return true;
   return stepMet(step.objective, st);
 }
 
@@ -217,12 +216,12 @@ export function repairLostItems(st, give) {
   for (const q of QUESTS) {
     if (st.quests[q.id] !== 'active') continue;
     const steps = questSteps(q);
-    const cur = steps[Math.min((st.questStep && st.questStep[q.id]) || 0, steps.length - 1)];
+    const cur = steps[Math.min(st.questStep?.[q.id] || 0, steps.length - 1)];
     const o = cur.objective;
     const want = o.type === 'item' || o.type === 'deliver' ? o.item : null;
     if (!want || (st.inventory[want] || 0) > 0) continue;
     const proof = steps.find((s) => s.evidence && s.objective.item === want);
-    if (!proof || !st.flags || !st.flags[proof.evidence]) continue;
+    if (!proof || !st.flags?.[proof.evidence]) continue;
     give(want, 1);
     fixed++;
   }
@@ -246,7 +245,7 @@ export function repairStep(q, st) {
   // reward and the closing scene belong to that conversation.
   target = Math.min(target, steps.length - 1);
 
-  const from = (st.questStep && st.questStep[q.id]) || 0;
+  const from = st.questStep?.[q.id] || 0;
   if (target <= from) return 0;
   st.setQuestStep(q.id, target);
   return target - from;

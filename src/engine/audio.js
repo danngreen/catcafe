@@ -527,7 +527,7 @@ export class AudioEngine {
       }
       // An owl somewhere you can't see. Rare on purpose: the point of a sound
       // like this is that you look up, and you can't do that twice a minute.
-      this.owlTimer = (this.owlTimer != null ? this.owlTimer : 18) - dt;
+      this.owlTimer = (this.owlTimer ?? 18) - dt;
       if (this.owlTimer <= 0) {
         this.owlTimer = this.rng.range(22, 60);
         this.sfx('owl', { gain: 0.5, pan: this.rng.range(-0.8, 0.8) });
@@ -578,8 +578,8 @@ export class AudioEngine {
     if (!this.ready || !this.enabled) return true;
     const c = this.ctx;
     const t = c.currentTime + 0.005;
-    const vol = opts.gain != null ? opts.gain : 1;
-    const pitch = opts.pitch != null ? opts.pitch : 1;
+    const vol = opts.gain ?? 1;
+    const pitch = opts.pitch ?? 1;
     let dest = this.sfxBus;
     if (opts.pan !== undefined && c.createStereoPanner) {
       const p = c.createStereoPanner();

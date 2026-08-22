@@ -17,53 +17,6 @@
 <meta name="apple-mobile-web-app-title" content="Cat Cafe">
 <meta name="theme-color" content="#2a2438">
 <link rel="stylesheet" href="styles.css">
-
-<!--
-  A browser too old for the game does not say so. It refuses to parse the
-  script and stops, with no error anywhere a home-screen app can show one: the
-  title card sits there, taps do nothing, and the report back is "it doesn't
-  start". This is a plain script — no modern syntax at all, so it runs
-  everywhere — and it prints the reason onto the card itself. The module sets
-  a flag when it gets going; if the flag is still unset a few seconds later,
-  nothing ran at all, which is worth saying even when there is no error to
-  quote.
--->
-<script>
-  (function () {
-    function say(msg) {
-      var el = document.getElementById('booterr');
-      if (!el) return;
-      el.hidden = false;
-      el.textContent = String(msg).slice(0, 400);
-      var sub = document.querySelector('.boot-sub');
-      if (sub) sub.textContent = 'the game did not start';
-    }
-    function unsay() {
-      var el = document.getElementById('booterr');
-      if (el) { el.hidden = true; el.textContent = ''; }
-      var sub = document.querySelector('.boot-sub');
-      if (sub) sub.textContent = 'click to begin';
-    }
-    window.addEventListener('error', function (e) {
-      // Only real script errors. In the capture phase this also hears about
-      // any picture or icon that failed to load, which has a target and no
-      // message and is nothing like as serious.
-      if (e && e.message) say(e.message);
-    }, true);
-    // Watched rather than timed once. An old tablet on a cold start can take
-    // its time over forty modules, and a fixed deadline that fires just before
-    // it finishes would put "too old" on the screen of a game that works —
-    // which is worse than saying nothing. So the verdict is taken back the
-    // moment the flag arrives, however late that is.
-    var waited = 0;
-    var timer = setInterval(function () {
-      if (window.__catcafeStarted) { clearInterval(timer); unsay(); return; }
-      waited += 500;
-      if (waited === 6000) say('this browser is too old to run the game');
-      if (waited >= 30000) clearInterval(timer);
-    }, 500);
-  })();
-</script>
 </head>
 <body>
   <div id="frame">
@@ -72,7 +25,6 @@
       <div class="boot-inner">
         <div class="boot-title">Cat Cafe</div>
         <div class="boot-sub">click to begin</div>
-        <div class="boot-err" id="booterr" hidden></div>
       </div>
     </div>
 

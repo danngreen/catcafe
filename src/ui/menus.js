@@ -59,13 +59,13 @@ export class ConfirmScreen extends Screen {
     if (input.hit('use')) {
       this.done = true;
       if (this.choice) { audio.sfx('ui_ok'); this.onYes(); }
-      else { audio.sfx('ui_back'); if (this.onNo) this.onNo(); }
+      else { audio.sfx('ui_back'); this.onNo?.(); }
       return;
     }
     if (input.hit('cancel') || input.hit('menu')) {
       this.done = true;
       audio.sfx('ui_back');
-      if (this.onNo) this.onNo();
+      this.onNo?.();
     }
   }
 
@@ -160,7 +160,7 @@ export class ShopScreen extends ListScreen {
     super(stockIds, 7);
     this.game = game;
     this.shop = shop;
-    this.priceMult = opts.priceMult != null ? opts.priceMult : 1;
+    this.priceMult = opts.priceMult ?? 1;
     this.title = opts.title || shop.name;
     this.qtyMode = false;
     this.qty = 1;
@@ -169,7 +169,7 @@ export class ShopScreen extends ListScreen {
     this.msgT = 0;
   }
 
-  price(id) { return Math.max(1, Math.round(((ITEMS[id] || {}).cost || 0) * this.priceMult)); }
+  price(id) { return Math.max(1, Math.round((ITEMS[id]?.cost || 0) * this.priceMult)); }
 
   /** The placeable type of the highlighted row, if it is furniture. */
   colours(id) {
@@ -250,7 +250,7 @@ export class ShopScreen extends ListScreen {
     audio.sfx('buy', { gain: 0.8 });
     const shade = cols ? ` (${(VARIANT_NAMES[ITEMS[id].place] || [])[this.variant] || ''})` : '';
     this.flash(`Bought ${qty} x ${ITEMS[id].name}${shade}.`);
-    if (st.onPurchase) st.onPurchase(id, qty);
+    st.onPurchase?.(id, qty);
   }
 
   draw(ctx) {
@@ -464,7 +464,7 @@ export class ServiceScreen extends ListScreen {
   cost(cat) {
     if (this.kind === 'vet') return 120 + cat.sickDays * 30;
     const b = CAT_BREEDS[cat.breed];
-    return Math.round(45 + ((b && b.appeal) || 1) * 30);
+    return Math.round(45 + (b?.appeal || 1) * 30);
   }
 
   update(dt, input) {
@@ -683,7 +683,7 @@ export class CafeScreen extends Screen {
       if (this.index >= this.scroll + vis) this.scroll = this.index - vis + 1;
     }
 
-    if (this.tab === 3 && st.employee && (this.currentList()[this.index] || {}).kind === 'wage') {
+    if (this.tab === 3 && st.employee && this.currentList()[this.index]?.kind === 'wage') {
       // Wages go up and down by the hour, which is what they are now paid in.
       // They used to step by ten with a floor of ten, sized for a daily rate —
       // against an hourly one that made cutting a nine an hour into a rise.
@@ -760,9 +760,9 @@ export class CafeScreen extends Screen {
     if (st.employee) {
       const list = this.currentList();
       const row = list[this.index];
-      if (row && row.kind === 'wage') { this.flash('Left and right to change the wage.'); audio.sfx('ui_move', { gain: 0.4 }); }
-      else if (row && row.kind === 'duty') { st.employee.onDuty = !st.employee.onDuty; this.flash(st.employee.onDuty ? 'On the rota.' : 'Off the rota — no hours, no wages.'); audio.sfx('ui_ok'); }
-      else if (row && row.kind === 'fire') { this.flash(`${st.employee.name} packs up and goes.`); st.employee = null; audio.sfx('ui_back'); }
+      if (row?.kind === 'wage') { this.flash('Left and right to change the wage.'); audio.sfx('ui_move', { gain: 0.4 }); }
+      else if (row?.kind === 'duty') { st.employee.onDuty = !st.employee.onDuty; this.flash(st.employee.onDuty ? 'On the rota.' : 'Off the rota — no hours, no wages.'); audio.sfx('ui_ok'); }
+      else if (row?.kind === 'fire') { this.flash(`${st.employee.name} packs up and goes.`); st.employee = null; audio.sfx('ui_back'); }
       st.touch('employee');
     } else {
       const cand = HIRE_POOL[this.index];
@@ -790,7 +790,7 @@ export class CafeScreen extends Screen {
   ownsLeftRight() {
     if (this.tab === 4) return true;
     if (this.tab !== 3 || !this.game.state.employee) return false;
-    return (this.currentList()[this.index] || {}).kind === 'wage';
+    return this.currentList()[this.index]?.kind === 'wage';
   }
 
   currentList() {
@@ -874,7 +874,7 @@ export class CafeScreen extends Screen {
     ly += 18;
 
     // The way into build mode.
-    const waiting = Object.keys(st.inventory).filter((k) => (ITEMS[baseId(k)] || {}).place && st.inventory[k] > 0)
+    const waiting = Object.keys(st.inventory).filter((k) => ITEMS[baseId(k)]?.place && st.inventory[k] > 0)
       .reduce((n, k) => n + st.inventory[k], 0);
     const bw = 208;
     ctx.fillStyle = 'rgba(255,207,107,0.16)';
@@ -904,7 +904,7 @@ export class CafeScreen extends Screen {
   advice() {
     const st = this.game.state;
     const sim = st.cafeSim;
-    const unplaced = Object.keys(st.inventory).some((k) => (ITEMS[baseId(k)] || {}).place && st.inventory[k] > 0);
+    const unplaced = Object.keys(st.inventory).some((k) => ITEMS[baseId(k)]?.place && st.inventory[k] > 0);
     if (unplaced) return 'You have furniture in your bag. Press Space here to arrange it.';
     if (!sim.availableMenu().length) return 'Your menu board is empty. Buy coffee or cake from a shop.';
     if (sim.seats().length < 3) return 'Only a seat or two. More chairs means more customers at once — buy them at Velvet & Oak in Thistlewick.';
@@ -1119,7 +1119,7 @@ export class JournalScreen extends ListScreen {
         // What it left you with. A job often changes what you can do rather
         // than what you own, and the journal is the only place that can say so
         // after the dialogue box has gone.
-        for (const line of wrapText((q.reward && q.reward.journal) || '', Math.floor((dw - 16) / 6))) {
+        for (const line of wrapText(q.reward?.journal || '', Math.floor((dw - 16) / 6))) {
           drawText(ctx, line, dx + 8, ly, { color: P.uiText, shadow: P.uiShadow });
           ly += LINE_H;
         }
@@ -1183,7 +1183,7 @@ export class BagScreen extends ListScreen {
     if (id) {
       const it = ITEMS[baseId(id)];
       let ly = y + h - 44;
-      for (const line of wrapText((it && it.desc) || '', 70)) {
+      for (const line of wrapText(it?.desc || '', 70)) {
         drawText(ctx, line, x + 12, ly, { color: P.uiTextDim, shadow: P.uiShadow });
         ly += LINE_H;
       }

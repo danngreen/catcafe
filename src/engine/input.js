@@ -26,85 +26,6 @@ import { VIEW_W, VIEW_H } from './display.js';
 const DIRS = new Set(['up', 'down', 'left', 'right']);
 const DOUBLE_TAP_MS = 320;
 
-// ---------------------------------------------------------------------------
-// Pointer events, on a tablet that has never heard of them.
-//
-// Pointer events arrived in Safari with iOS 13. Before that there are touches
-// and there are mouse clicks, and a game that only listens for pointers hears
-// nothing at all — which on an old iPad looks exactly like a title screen that
-// will not go away. So every listener goes through here: where pointers exist
-// nothing changes, and where they don't, touch and mouse are dressed up to
-// look like them.
-//
-// Old iOS also fires a mouse click a moment after every touch, out of sympathy
-// for pages written before touchscreens. Taking both would press each button
-// twice, so a touch shuts the mouse out for the moment after it.
-
-// `?nopointer` on the address bar takes the old path on a modern browser,
-// which is the only way to try it without the iPad in your hands. The test
-// harness sets the flag instead, having no address bar to type in.
-function hasPointer() {
-  return typeof window !== 'undefined' && 'PointerEvent' in window
-    && !window.__noPointer && !location.search.includes('nopointer');
-}
-
-const FALLBACK = {
-  pointerdown: ['touchstart', 'mousedown'],
-  pointerup: ['touchend', 'mouseup'],
-  pointermove: ['touchmove', 'mousemove'],
-  pointercancel: ['touchcancel', null],
-  pointerleave: [null, 'mouseleave'],
-};
-
-const MOUSE_AFTER_TOUCH_MS = 700;
-let lastTouchAt = -Infinity;
-
-/** A touch, or a click, wearing a pointer event's clothes. */
-function shim(e, touch) {
-  const src = touch || e;
-  return {
-    clientX: src.clientX,
-    clientY: src.clientY,
-    target: src.target || e.target,
-    // A mouse is one pointer and always the same one; fingers come numbered.
-    pointerId: touch ? touch.identifier : -1,
-    preventDefault: () => e.preventDefault(),
-  };
-}
-
-/**
- * Listen for one pointer event. Returns the function that stops listening —
- * the wrappers below are not the handler that was passed in, so
- * removeEventListener on its own would not find them.
- */
-export function onPointer(el, type, fn) {
-  if (hasPointer()) {
-    el.addEventListener(type, fn);
-    return () => el.removeEventListener(type, fn);
-  }
-  const [touchName, mouseName] = FALLBACK[type];
-  const off = [];
-  if (touchName) {
-    const onTouch = (e) => {
-      lastTouchAt = performance.now();
-      const touches = e.changedTouches;
-      for (let i = 0; i < touches.length; i++) fn(shim(e, touches[i]));
-    };
-    // Not passive: the d-pad has to be able to say "this is not a scroll".
-    el.addEventListener(touchName, onTouch, { passive: false });
-    off.push(() => el.removeEventListener(touchName, onTouch));
-  }
-  if (mouseName) {
-    const onMouse = (e) => {
-      if (performance.now() - lastTouchAt < MOUSE_AFTER_TOUCH_MS) return;
-      fn(shim(e, null));
-    };
-    el.addEventListener(mouseName, onMouse);
-    off.push(() => el.removeEventListener(mouseName, onMouse));
-  }
-  return () => { for (const f of off) f(); };
-}
-
 export class Input {
   constructor() {
     this.held = new Set();
@@ -181,15 +102,15 @@ export class Input {
           // The burst lasts as long as you keep walking.
           if (DIRS.has(b) && ![...this.held].some((h) => DIRS.has(h))) this.tapRun = false;
         };
-        onPointer(btn, 'pointerdown', down);
-        onPointer(btn, 'pointerup', up);
-        onPointer(btn, 'pointercancel', up);
-        onPointer(btn, 'pointerleave', up);
+        btn.addEventListener('pointerdown', down);
+        btn.addEventListener('pointerup', up);
+        btn.addEventListener('pointercancel', up);
+        btn.addEventListener('pointerleave', up);
       }
 
       for (const btn of touch.querySelectorAll('[data-toggle]')) {
         if (btn.dataset.toggle !== 'run') continue;
-        onPointer(btn, 'pointerdown', (e) => {
+        btn.addEventListener('pointerdown', (e) => {
           e.preventDefault();
           this.runLatch = !this.runLatch;
           btn.classList.toggle('on', this.runLatch);
@@ -203,11 +124,11 @@ export class Input {
 
     const canvas = document.getElementById('screen');
     if (canvas) {
-      onPointer(canvas, 'pointerdown', (e) => {
+      canvas.addEventListener('pointerdown', (e) => {
         this.tapStart = this.canvasPoint(canvas, e);
         this.anyKeyPressed = true;
       });
-      onPointer(canvas, 'pointerup', (e) => {
+      canvas.addEventListener('pointerup', (e) => {
         const p = this.canvasPoint(canvas, e);
         // Only count it as a tap if the finger stayed put; a drag isn't a press.
         if (this.tapStart && Math.hypot(p.x - this.tapStart.x, p.y - this.tapStart.y) < 10) {
@@ -215,7 +136,7 @@ export class Input {
         }
         this.tapStart = null;
       });
-      onPointer(canvas, 'pointercancel', () => { this.tapStart = null; });
+      canvas.addEventListener('pointercancel', () => { this.tapStart = null; });
     }
   }
 
@@ -285,7 +206,7 @@ export class Input {
       if (want.length) this.anyKeyPressed = true;
     };
 
-    onPointer(pad, 'pointerdown', (e) => {
+    pad.addEventListener('pointerdown', (e) => {
       // The RUN button in the middle is its own thing and keeps its own handler.
       if (e.target.closest && e.target.closest('.tb.run')) return;
       e.preventDefault();
@@ -305,7 +226,7 @@ export class Input {
 
 
 
-    onPointer(pad, 'pointermove', (e) => {
+    pad.addEventListener('pointermove', (e) => {
       if (active !== e.pointerId) return;
       e.preventDefault();
       setDirs(dirsFor(e));
@@ -317,8 +238,8 @@ export class Input {
       try { pad.releasePointerCapture(e.pointerId); } catch { /* already gone */ }
       setDirs([]);
     };
-    onPointer(pad, 'pointerup', release);
-    onPointer(pad, 'pointercancel', release);
+    pad.addEventListener('pointerup', release);
+    pad.addEventListener('pointercancel', release);
   }
 
   isRunning() { return this.held.has('run') || this.runLatch || this.tapRun; }

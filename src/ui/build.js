@@ -286,8 +286,7 @@ export class BuildScreen extends Screen {
     const r = rooms[this.floorRoom];
     if (r && (input.repeat('left', dt) || input.repeat('right', dt))) {
       const d = input.repeat('right', dt) ? 1 : -1;
-      const cur = r.floor != null ? r.floor
-        : this.draft.floor != null ? this.draft.floor : FLOORS[0].id;
+      const cur = r.floor ?? this.draft.floor ?? FLOORS[0].id;
       const i = Math.max(0, FLOORS.findIndex((f) => f.id === cur));
       const pick = FLOORS[((i + d) % FLOORS.length + FLOORS.length) % FLOORS.length];
       r.floor = pick.id;
@@ -370,7 +369,7 @@ export class BuildScreen extends Screen {
       this.draft.furniture.splice(this.draft.furniture.indexOf(f), 1);
       this.rebuild();
       audio.sfx('ui_back');
-      this.flash(`${(ITEMS[Object.keys(ITEMS).find((k) => ITEMS[k].place === f.type)] || {}).name || 'It'} picked up.`);
+      this.flash(`${ITEMS[Object.keys(ITEMS).find((k) => ITEMS[k].place === f.type)]?.name || 'It'} picked up.`);
     }
   }
 
@@ -676,12 +675,12 @@ export class BuildScreen extends Screen {
       const ry = y + 24 + i * 14;
       const on = i === (this.floorRoom || 0);
       if (on) { ctx.fillStyle = 'rgba(255,207,107,0.14)'; ctx.fillRect(x + 5, ry - 2, w - 10, 13); }
-      const f = FLOORS.find((o) => o.id === (r.floor != null ? r.floor : this.draft.floor)) || FLOORS[0];
+      const f = FLOORS.find((o) => o.id === (r.floor ?? this.draft.floor)) || FLOORS[0];
       drawText(ctx, r.name, x + 10, ry, { color: on ? P.uiGold : P.uiText, shadow: P.uiShadow });
       drawTextRight(ctx, on ? `< ${f.name} >` : f.name, x + w - 10, ry,
         { color: on ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
     });
-    const cur = FLOORS.find((o) => o.id === (sel && sel.floor != null ? sel.floor : this.draft.floor)) || FLOORS[0];
+    const cur = FLOORS.find((o) => o.id === (sel?.floor ?? this.draft.floor)) || FLOORS[0];
     drawText(ctx, cur.outdoor ? 'Outside — railings, not walls' : 'Inside — plaster walls',
       x + 10, y + h - 18, { color: cur.outdoor ? P.uiGreen : P.uiTextDim, shadow: P.uiShadow });
     drawText(ctx, `Up/Down room   Left/Right floor   ${btn('menu')} done`,

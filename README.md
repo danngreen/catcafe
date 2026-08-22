@@ -371,19 +371,6 @@ src/
 server/      dependency-free WebSocket server and the shared room
 ```
 
-**The oldest browser it runs on** is Safari 12.1 — an iPad Air from 2013, which
-cannot install anything newer. No build step means no transpiler, so the source
-itself has to stay inside what that iPad understands: no `?.`, no `??`, no
-`||=`, no top-level `await`, and no pointer events. Those fail badly rather than
-quietly — a module with any of the syntax in it is refused whole, before a line
-runs, and the game sits on its title card saying nothing. `npm start` runs
-`tools/oldjs.cjs` first, which scans the source and names anything that would
-do it; `npm run check oldsafari` covers the stylesheet, the way the picture
-measures itself, and the touch fallback. Taps go through `onPointer()` in
-`engine/input.js`, which dresses touches and clicks up as pointer events where
-there are none — `?nopointer` on the address bar takes that path on any
-browser, which is how to try it without the iPad in your hands.
-
 **Art** is painted procedurally into small pixel buffers and baked once into
 canvases. Characters are a chibi template plus species-specific ears, muzzles
 and extras, recoloured per villager — which is how twenty species and a handful
