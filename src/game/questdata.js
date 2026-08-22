@@ -517,4 +517,15 @@ export const QUESTS = [
     offer: "I sing for anyone who'll listen, which out here is mostly sheep.\n\nPut a piano in that cafe of yours and I'll come every evening. Free. Ask the flea market, they get one now and then.",
     complete: "You *got* one.\n\nRight. I'm here every evening from now on. Your regulars are about to get very fond of this place.",
   },
+  {
+    id: 'cat_toys',
+    title: 'Cat enrichment',
+    giver: 'marigold',
+    desc: 'Marigold is concerned that the cats in the cafe will not be content until they have toys t play with.',
+    objective: { type: 'stock', any: ['toy_yarn'], count: 1 },
+    progress: '',
+    reward: { money: 0, rep: 1, friendship: ['marigold'] },
+    offer: "Cats who live boring lives will never be content. \n\nA good pet owner provides some excitement and stimulate the minds of their animal companions.\n\nBuy your cats some toys! The cats will be happier, and your customers will enjoy the improvement. It's a win win deal.",
+    complete: "Now you're a proper cat caretaker.\n\nYour cats are happier and more satisfied with life already.",
+  },
 ];
