@@ -344,8 +344,7 @@ function questForm(box) {
   flags.append(
     field('After dark only', toggle(q.night, 'giver only appears at night', (v) => { q.night = v; })),
     field('Only offered once this flag is set', flagBox(q.requires, (v) => { q.requires = v || undefined; }),
-      'Nobody will raise the job before then. A hint\'s flag is the usual one — '
-      + 'that is how Moth waits until Shrimp has said where the shell went.'),
+      'Typically the flag is from a hint (see Cast > Name > What they know > Saying it sets'),
   );
   box.append(flags);
 

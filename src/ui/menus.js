@@ -889,13 +889,26 @@ export class CafeScreen extends Screen {
     }
 
     // A hint panel that nudges you toward whatever is currently weakest.
+    //
+    // It hangs off the right edge, and everything to its left — the cafe's
+    // name at double size, the bars, the build row — is a fixed 236 wide
+    // however narrow the panel gets. So it takes what is left rather than
+    // whatever it would like, and steps aside entirely when what is left is
+    // not enough to read: a hint written over the top of the thing it is
+    // hinting about is worse than no hint. Any landscape phone or tablet
+    // where the controls float over the picture is narrower than a desktop
+    // window by however much of it is under a thumb.
     const advice = this.advice();
-    if (advice) {
-      panel(ctx, x + w - 176, y + 30, 166, 84, { fill: P.uiBg2 });
-      drawText(ctx, 'Something to try', x + w - 168, y + 38, { color: P.uiGold, shadow: P.uiShadow });
+    const aw = Math.min(166, w - 246);
+    if (advice && aw >= 96) {
+      const cols = Math.floor((aw - 16) / 6);
+      const lines = wrapText(advice, cols);
+      const ax = x + w - aw - 10;
+      panel(ctx, ax, y + 30, aw, Math.max(84, 30 + lines.length * LINE_H), { fill: P.uiBg2 });
+      drawText(ctx, 'Something to try', ax + 8, y + 38, { color: P.uiGold, shadow: P.uiShadow });
       let ay = y + 52;
-      for (const line of wrapText(advice, 26)) {
-        drawText(ctx, line, x + w - 168, ay, { color: P.uiTextDim, shadow: P.uiShadow });
+      for (const line of lines) {
+        drawText(ctx, line, ax + 8, ay, { color: P.uiTextDim, shadow: P.uiShadow });
         ay += LINE_H;
       }
     }

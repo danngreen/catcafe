@@ -4071,6 +4071,50 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         surface.remove();
         window.__noPointer = false;
 
+        // 6. A 4:3 tablet in landscape is the awkward one. The picture is
+        // 16:9, so it letterboxes deeply, the controls sit in the black band
+        // under it, and a picture nothing is covering wants no inset — where a
+        // phone, whose picture fills the height, genuinely does want one.
+        // Getting this wrong squeezes every panel in the game to its minimum
+        // width and then slides it off the side.
+        const { SAFE, fitRect } = await import('../src/engine/safe.js');
+        const wasTouch2 = d.touch;
+        const hadTouchClass = document.body.classList.contains('has-touch');
+        d.touch = true;
+        document.body.classList.add('has-touch');
+        const shape = (w, h) => {
+          d.viewportW = () => w;
+          d.viewportH = () => h;
+          d.resize();
+          const r = fitRect(16, 480 - 32, 280);       // the journal's panel
+          const c = fitRect(8, 480 - 16, 300);        // the cafe book's
+          return {
+            safe: Math.round(SAFE.left) + '/' + Math.round(SAFE.right),
+            eats: Math.round(SAFE.left + SAFE.right),
+            onScreen: r.x >= 16 && r.x + r.w <= 480 - 16,
+            // The cafe book is a fixed 236-wide left column and a hint panel
+            // hanging off the right edge. Narrow the book far enough and the
+            // hint lands on top of the cafe's own name.
+            hintFits: c.w - 246 >= 96,
+            // And the journal is a fixed 226-wide list with the description
+            // taking whatever is left, which has to stay wide enough to read.
+            noteCols: Math.floor((r.w - 238 - 16) / 6),
+          };
+        };
+        const tablet = shape(1024, 748);
+        const phone = shape(844, 390);
+        // And the floor case on its own terms: however wrong the measurement
+        // goes, a panel that has stopped shrinking must stop moving.
+        SAFE.left = 200; SAFE.right = 200;
+        const squeezed = fitRect(16, 480 - 32, 280);
+        const stays = squeezed.x >= 16 && squeezed.x + squeezed.w <= 480 - 16;
+        SAFE.left = SAFE.right = 0;
+        d.touch = wasTouch2;
+        if (!hadTouchClass) document.body.classList.remove('has-touch');
+        d.viewportW = realW;
+        d.viewportH = realH;
+        d.resize();
+
         // 5. A browser too old to parse the game says so on the title card.
         // Nothing else can: the module is refused whole, and a home screen app
         // has no address bar and no console to look in.
@@ -4080,7 +4124,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         window.__old = `modernCss=[${modern}] canvas ${before}->${afterShrink}->${afterRestore}`
           + ` at800=${nearlyTwo} at1400=${wellOverTwo} ticks=${ticks}`
           + ` reportHas=${shows.length}/4 panel=${shown && visible} inPage=${inPage} closes=${hidden}`
-          + ` tapAt=${tapAt} doubled=${doubled} stopped=${stopped} guard=${guarded}/${guardOld}`;
+          + ` tapAt=${tapAt} doubled=${doubled} stopped=${stopped} guard=${guarded}/${guardOld}`
+          + ` tablet=${tablet.safe}/${tablet.onScreen} phone=${phone.safe}/${phone.onScreen}`
+          + ` hint=${tablet.hintFits}/${phone.hintFits} noteCols=${tablet.noteCols}/${phone.noteCols}`
+          + ` floorStays=${stays}`;
         if (modern.length) {
           window.__errors.push('the stylesheet uses something an old iPad ignores: ' + window.__old);
         }
@@ -4098,6 +4145,12 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!stopped) window.__errors.push('a touch listener cannot be taken off again: ' + window.__old);
         if (!guarded) window.__errors.push('nothing tells a too-old browser why it stopped: ' + window.__old);
         if (!guardOld) window.__errors.push('the guard for old browsers is itself too modern: ' + window.__old);
+        if (tablet.eats > 160) window.__errors.push('a letterboxed tablet loses a third of every panel to the controls: ' + window.__old);
+        if (!tablet.onScreen) window.__errors.push('a panel hangs off the side of the picture on a tablet: ' + window.__old);
+        if (!phone.onScreen) window.__errors.push('a panel hangs off the side of the picture on a phone: ' + window.__old);
+        if (!stays) window.__errors.push('a panel that stopped shrinking kept sliding: ' + window.__old);
+        if (!tablet.hintFits || !phone.hintFits) window.__errors.push("the cafe book's hint panel lands on the cafe's name: " + window.__old);
+        if (tablet.noteCols < 14 || phone.noteCols < 14) window.__errors.push('the journal note is too narrow to read: ' + window.__old);
       } else if (SCRIPT === 'barrierreach') {
         // Every barrier has to be findable, reachable, and worth clearing.
         // A boulder you can walk around blocks nothing; one you cannot get

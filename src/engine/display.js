@@ -160,8 +160,21 @@ export class Display {
     // Kept so the diagnostic can show its working. Every one of these is a
     // number some browser somewhere gets wrong, and knowing which is the whole
     // difference between fixing this and guessing again.
+    const dpadEl = document.querySelector('.dpad');
+    const actEl = document.querySelector('.abtns');
+    const boxOf = (el) => (el ? `${el.offsetWidth}x${el.offsetHeight}` : 'none');
     this.info = {
       vw, vh, band, scale: s, touch: this.touch,
+      // The controls, and how far they are reckoned to reach into the picture.
+      // A panel that is too narrow on a device nobody can borrow is this
+      // measurement going wrong, and there is no other way to see it.
+      controls: body.classList.contains('controls-overlay') ? 'over the picture'
+        : body.classList.contains('controls-band') ? 'in a band below' : 'none',
+      dpad: boxOf(dpadEl),
+      abtns: boxOf(actEl),
+      safe: `${Math.round(SAFE.left)} left, ${Math.round(SAFE.right)} right`,
+      letterbox: `${Math.round(Math.max(0, (vw - VIEW_W * s) / 2))} beside, `
+        + `${Math.round(Math.max(0, (vh - VIEW_H * s) / 2))} under`,
       css: `${Math.round(VIEW_W * s)}x${Math.round(VIEW_H * s)}`,
       visual: window.visualViewport ? `${Math.round(window.visualViewport.width)}x${Math.round(window.visualViewport.height)}` : 'none',
       client: `${document.documentElement.clientWidth}x${document.documentElement.clientHeight}`,
@@ -175,27 +188,81 @@ export class Display {
   }
 
   /**
-   * Work out how far the floating controls reach into the canvas, in game
-   * pixels, by comparing their on-screen boxes with the canvas box. Only the
-   * horizontal reach matters: the pads sit in the bottom corners, so insetting
-   * the sides is enough and looks far better than lifting everything.
+   * Work out how far the floating controls reach into the picture, in game
+   * pixels. Only the horizontal reach matters: the pads sit in the bottom
+   * corners, so insetting the sides is enough and looks far better than
+   * lifting everything.
+   *
+   * Worked out from sizes rather than positions, which is the whole point.
+   * The controls are pinned to the bottom corners of the window by the
+   * stylesheet, so where they are is not in question — how wide they are, and
+   * how much black the picture leaves them to sit in, is. Asking a *fixed*
+   * element where it is means trusting the browser's idea of the viewport, and
+   * this is measured on a tablet that says its window is 1024 wide and 768 in
+   * the same breath. Widths and heights of elements are not viewport-relative
+   * and are not part of that argument.
+   *
+   * The other half is the letterbox. A 16:9 picture on a 4:3 tablet leaves a
+   * deep black band under it, the controls sit in the band, and a picture
+   * nothing is covering wants no inset at all. On a phone the picture fills
+   * the height, the thumbs are genuinely on top of it, and it does.
    */
   measureSafeArea() {
-    if (!document.body.classList.contains('controls-overlay')) {
+    const touch = document.getElementById('touch');
+    const pad = document.querySelector('.dpad');
+    const act = document.querySelector('.abtns');
+    // Whether they are on screen is asked of the buttons, not of `#touch`:
+    // that one is `position: fixed`, and a fixed element has no offsetParent
+    // even when it is perfectly visible. A hidden one has no width either way.
+    const off = !document.body.classList.contains('controls-overlay') || !touch;
+    if (off || !pad || !act || !pad.offsetWidth || !act.offsetWidth) {
       SAFE.left = SAFE.right = SAFE.bottom = 0;
       return;
     }
-    const r = this.canvas.getBoundingClientRect();
     const s = this.scale || 1;
-    const box = (sel) => {
-      const el = document.querySelector(sel);
-      return el && el.offsetParent !== null ? el.getBoundingClientRect() : null;
+    const vw = this.viewportW();
+    const vh = this.viewportH();
+    // Black either side of the picture, and under it. The controls have to get
+    // through their own band before they are on the picture at all.
+    const sideBand = Math.max(0, (vw - VIEW_W * s) / 2);
+    const underneath = Math.max(0, (vh - VIEW_H * s) / 2);
+
+    const cs = (window.getComputedStyle && getComputedStyle(touch)) || {};
+    const gap = (v, fallback) => {
+      const n = parseFloat(v);
+      return isNaN(n) ? fallback : n;
     };
-    const cap = VIEW_W * 0.34;
-    const pad = box('.dpad');
-    const act = box('.abtns');
-    SAFE.left = pad ? Math.max(0, Math.min(cap, (pad.right - r.left) / s + 4)) : 0;
-    SAFE.right = act ? Math.max(0, Math.min(cap, (r.right - act.left) / s + 4)) : 0;
+    const padL = gap(cs.paddingLeft, 10);
+    const padR = gap(cs.paddingRight, 10);
+    const padB = gap(cs.paddingBottom, 8);
+
+    // Nothing is covered if the controls never leave the black band.
+    const tall = padB + Math.max(pad.offsetHeight, act.offsetHeight);
+    if (tall <= underneath) {
+      SAFE.left = SAFE.right = SAFE.bottom = 0;
+      return;
+    }
+
+    // A quarter of the picture each is already generous for a thumb; more than
+    // that and it is the measurement that is wrong, not the buttons that are
+    // enormous.
+    const cap = VIEW_W * 0.25;
+    const reach = (wide) => Math.max(0, Math.min(cap, (wide - sideBand) / s + 4));
+    let left = reach(padL + pad.offsetWidth);
+    let right = reach(padR + act.offsetWidth);
+
+    // And a ceiling on the pair of them. Panels stop shrinking at a minimum
+    // width and from there on the inset only pushes them off the side, so the
+    // inset is worth having only while it is small enough that they still fit.
+    // Past that, giving one corner to a thumb is the better trade.
+    const total = VIEW_W * 0.29;
+    if (left + right > total) {
+      const k = total / (left + right);
+      left *= k;
+      right *= k;
+    }
+    SAFE.left = left;
+    SAFE.right = right;
     SAFE.bottom = 0;
   }
 
@@ -227,6 +294,10 @@ export function displayReport(display) {
     `  window.inner    ${i.inner}`,
     `  screen          ${i.screen}`,
     `  pixel ratio     ${i.dpr}`,
+    '',
+    `controls    ${i.controls}  (pad ${i.dpad}, buttons ${i.abtns})`,
+    `black bars  ${i.letterbox}`,
+    `ui inset    ${i.safe}`,
     '',
     `touch       ${i.touch ? 'yes' : 'no'}`,
     `home screen ${i.standalone ? 'yes' : 'no'}`,

@@ -8,10 +8,19 @@
 
 export const SAFE = { left: 0, right: 0, bottom: 0 };
 
-/** Shift and shrink a full-width rect clear of the controls. */
+/**
+ * Shift and shrink a full-width rect clear of the controls.
+ *
+ * `min` is a floor on the width: past a certain point a panel is better off
+ * with a thumb over one corner than squeezed until its contents will not fit.
+ * Once it stops shrinking it has to stop moving too — a panel that keeps
+ * sliding right after it has stopped narrowing hangs off the side of the
+ * picture, which is worse than either.
+ */
 export function fitRect(x, w, min = 120) {
-  const nx = x + SAFE.left;
-  return { x: nx, w: Math.max(min, w - SAFE.left - SAFE.right) };
+  const nw = Math.max(min, w - SAFE.left - SAFE.right);
+  const nx = Math.min(x + SAFE.left, x + w - nw);
+  return { x: Math.max(x, nx), w: nw };
 }
 
 /** Centre of the area that isn't covered. */
