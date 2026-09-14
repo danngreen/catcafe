@@ -96,7 +96,8 @@ export class Dialogue {
 
   /**
    * Show text. `text` may contain \n and is paged to fit.
-   * opts: { speaker, portrait (canvas), choices: [{label, value}], onDone(value) }
+   * opts: { speaker, portrait (canvas), choices: [{label, value}], onDone(value),
+   *         instant — show the first page whole, so one press dismisses it }
    */
   say(text, opts = {}) {
     const lines = wrapText(text, CHARS_PER_LINE);
@@ -104,7 +105,7 @@ export class Dialogue {
     for (let i = 0; i < lines.length; i += 3) this.pages.push(lines.slice(i, i + 3));
     if (!this.pages.length) this.pages = [['...']];
     this.page = 0;
-    this.shown = 0;
+    this.shown = opts.instant ? this.pages[0].join('\n').length : 0;
     this.active = true;
     this.speaker = opts.speaker || null;
     this.portrait = opts.portrait || null;

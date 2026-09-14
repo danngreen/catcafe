@@ -670,14 +670,14 @@ class Game {
     st.visit('cafe', 'Your Cat Cafe', this.homeDoor.x, this.homeDoor.y, 'brambleford');
     st.visit('brambleford', 'Brambleford', this.towns.brambleford.hub.x, this.towns.brambleford.hub.y);
     this.hud.showLocation('Brambleford');
+    // One page, shown whole: a single press and you're playing. The box holds
+    // three lines of 52, so no blank lines — each one costs a line.
     this.dialogue.say(st.shared && this.joinedExisting
-      ? `${st.cafe.name || 'The cafe'} is already open, and short-handed.\n\n`
-        + 'The money, the pantry and the cats are shared — anything you buy, everyone has.\n\n'
-        + 'Go and be useful.'
-      : "So this is it. Your grandmother's old tea room, two cats, and whatever you can carry.\n\n"
-        + "The valley's out there. Somewhere in it is everything you need to make this place work.\n\n"
-        + 'Best get started.',
-      { speaker: st.shared && this.joinedExisting ? st.cafe.name || 'The cafe' : 'Brambleford' },
+      ? `${st.cafe.name || 'The cafe'} welcomes you to the team! Buy snacks and beverages to keep our pantry full, serve customers, and `
+        + 'keep the cats happy and healthy. Explore the valley and talk to the villagers!'
+      : "Your grandmother's old tea room, two cats, and whatever you can carry. "
+        + 'Everything you need is out in the valley. Best get started.',
+      { speaker: st.shared && this.joinedExisting ? st.cafe.name || 'The cafe' : 'Brambleford', instant: true },
     );
   }
 
