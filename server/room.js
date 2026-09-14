@@ -3,7 +3,7 @@
 // client to run the customer simulation so the takings are counted once.
 
 import { readFileSync, writeFileSync, renameSync } from 'node:fs';
-import { applyOp, WorldClock } from './world.js';
+import { applyOp, applyRescue, WorldClock } from './world.js';
 
 const TICK_HZ = 15;
 // We ping each socket ourselves and the browser answers without involving the
@@ -185,6 +185,28 @@ export class Room {
       default:
         break;
     }
+  }
+
+  /**
+   * A change from the host rather than a player — see the admin port in
+   * server.js. It goes out exactly like any player's op, as a plain sync, so
+   * nobody's screen announces it: the till just has more in it.
+   */
+  rescue(op) {
+    if (!this.world) return { ok: false, why: 'nobody has opened the cafe in this valley yet' };
+    const changed = applyRescue(this.world, op);
+    this.dirty = true;
+    for (const k of changed) this.broadcast({ t: 'sync', k, v: this.world[k] });
+    const cats = Array.isArray(this.world.cats) ? this.world.cats : [];
+    return {
+      ok: true,
+      changed,
+      money: this.world.money,
+      cats: cats.length,
+      sick: cats.filter((c) => c.sick).length,
+      hungry: cats.filter((c) => c.hunger > 0).length,
+      playing: this.count,
+    };
   }
 
   /**

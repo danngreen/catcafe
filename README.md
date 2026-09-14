@@ -1,19 +1,57 @@
 # Cat Cafe
 
-A whimsical 16-bit-style browser game. You are a cat who walks on two legs and
-runs a cat cafe in a rural valley. Serve coffee, keep cats, explore five
-settlements, and slowly turn one small tea room into somewhere people go out of
-their way for.
+A whimsical 16-bit-style browser game. You're a cat who walks on two legs and
+runs a cat cafe in a rural valley. Serve coffee, keep your cats happy, explore 
+the villages, and slowly turn one small tea room into somewhere people go out
+of their way to visit. For multiplayer, you can play cooperatively with your
+friends and family, working behind the counter, going on quests for villagers,
+and seeking out rare teas and exotic cat breeds.
+
+This is a fun project my family has been working on together for a few months.
+We first came up with the idea for the game, writing out a detailed
+description, and then implemented it using an LLM. Then we played, tested,
+and fine-tuned it over the course of many creative family evenings. We're still
+adding new features, but the game itself is fairly stable.
+
+There's also a quest editor that lets you create and edit complex multi-step
+quests (NPC dialog, hints, rewards, etc). 
+
 
 ## Running it
 
+
+### Prerequisites
+
+You need Node 16 or newer installed. I recommend something newer. We've
+only tested it on Node 23.11 and Node 24.18. Download and install it from the
+[official NodeJS site here](https://nodejs.org/en/download).
+
+
+### Starting the game
+
+Once node is installed, you can run this from the terminal:
+
 ```bash
-npm start          # serves on http://localhost:8080
+npm start
 ```
 
-It prints every address it's reachable on. The game is plain ES modules with no
-build step, but it does need to be served over HTTP (modules don't load from
-`file://`).
+You should see something like this printed:
+
+```
+> cat-cafe@0.1.0 start
+> node tools/preflight.cjs && node tools/oldjs.cjs && node server.js
+
+Cat Cafe — http://localhost:8080
+  on this network: http://192.168.0.102:8080
+  game 001: not started yet
+  valleys kept in /home/username/games/catcafe/saves
+
+```
+
+Open your browser to any of the addresses listed:
+http://localhost:8080 or http://192.168.0.102:8080 in the example above
+(your address will be different depending on your local network configuration).
+
 
 ## Playing together on a LAN
 
@@ -450,6 +488,21 @@ crash mid-write cannot leave half a valley. An unclean kill costs at most the
 last twenty seconds.
 
 To update: `git pull && sudo systemctl restart catcafe`.
+
+**Bailing a valley out mid-game.** When somebody has spent the till on a
+fountain or every cat is sneezing, ssh into the server and:
+
+```bash
+node tools/rescue.js               # money, cats, how many sick, who is playing
+node tools/rescue.js money 500     # put 500 in the till
+node tools/rescue.js heal          # every cat well, fed and at least content
+```
+
+It changes the live valley, so nothing needs stopping, and nobody is told: the
+money on everyone's screen just goes up. It goes to whichever valley has people
+in it; `--game 002` when more than one does. The server listens for this on
+`127.0.0.1:8081` only, so it can't be reached from the LAN — you have to be on
+the box. `ADMIN_PORT` moves it, and `ADMIN_PORT=0` turns it off.
 
 ## Testing
 

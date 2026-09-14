@@ -126,6 +126,32 @@ export function applyOp(world, op) {
   }
 }
 
+/**
+ * Things only the host can do, from the admin port — never reachable from a
+ * client message. Same contract as applyOp: returns the fields it changed.
+ */
+export function applyRescue(world, op) {
+  switch (op.op) {
+    // Everyone better at once, as if the vet had seen them and they had been
+    // fed. A cat that was fine already is left exactly as it was.
+    case 'heal': {
+      if (!Array.isArray(world.cats)) return [];
+      let changed = 0;
+      for (const c of world.cats) {
+        if (!c.sick && !(c.hunger > 0) && !(c.happiness < 0.7)) continue;
+        c.sick = false;
+        c.sickDays = 0;
+        c.hunger = 0;
+        c.happiness = Math.max(c.happiness || 0, 0.7);
+        changed++;
+      }
+      return changed ? ['cats'] : [];
+    }
+    default:
+      return applyOp(world, op);
+  }
+}
+
 /** The server's clock. Only advances while somebody is actually playing. */
 export class WorldClock {
   constructor(day = 1, t = 8 * HOUR_SECONDS) {

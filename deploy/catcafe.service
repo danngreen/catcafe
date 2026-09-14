@@ -39,6 +39,8 @@ ExecStart=/home/orangepi/.nvm/versions/node/v24.18.0/bin/node /home/orangepi/cat
 # which is what the test harness wants and the opposite of what a house server
 # wants.
 Environment=PORT=8080
+# tools/rescue.js talks to this, on 127.0.0.1 only. 0 turns it off.
+# Environment=ADMIN_PORT=8081
 # Environment=SESSION_SAVE=/home/orangepi/catcafe/saves
 
 # `on-failure` would not bring it back from a clean exit, and this server exits

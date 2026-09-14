@@ -118,6 +118,51 @@ server.on('upgrade', (req, socket, head) => {
   if (ws) room.attach(ws);
 });
 
+// The host's back door, for tools/rescue.js: more money in the till, every cat
+// better. Bound to loopback on its own port, so nothing on the LAN can reach
+// it — you have to be on the box, which in practice means ssh'd into it.
+// ADMIN_PORT=0 turns it off.
+const ADMIN_PORT = Number(process.env.ADMIN_PORT ?? 8081);
+
+/**
+ * Which valley a rescue is for. Named, or else the only one anybody is in —
+ * at a party that's the one you mean, and guessing between two is not a thing
+ * to do to somebody's books.
+ */
+function rescueTarget(want) {
+  if (want) return games.get(want) ? { room: games.get(want) } : { why: `no valley ${want}` };
+  const busy = games.list().filter((g) => g.playing);
+  if (busy.length === 1) return { room: games.get(busy[0].id) };
+  const ids = games.ids();
+  if (!busy.length && ids.length === 1) return { room: games.get(ids[0]) };
+  return { why: `say which valley with --game (${(busy.length ? busy : games.list()).map((g) => g.id).join(', ')})` };
+}
+
+if (ADMIN_PORT) {
+  const admin = createServer((req, res) => {
+    const url = new URL(req.url, 'http://x');
+    const json = (body, code = 200) => {
+      res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(body, null, 2));
+    };
+    if (url.pathname === '/games' && req.method === 'GET') { json({ games: games.list() }); return; }
+    if (url.pathname !== '/rescue' || req.method !== 'POST') { json({ ok: false, why: 'not here' }, 404); return; }
+    let raw = '';
+    req.on('data', (c) => { raw += c; if (raw.length > 1e4) req.destroy(); });
+    req.on('end', () => {
+      let op;
+      try { op = JSON.parse(raw || '{}'); } catch { json({ ok: false, why: 'bad json' }, 400); return; }
+      const { room, why } = rescueTarget(url.searchParams.get('game'));
+      if (!room) { json({ ok: false, why }, 409); return; }
+      const out = room.rescue(op);
+      if (out.ok && out.changed.length) console.log(`[rescue] valley ${room.gameId}: ${JSON.stringify(op)}`);
+      json({ game: room.gameId, ...out }, out.ok ? 200 : 409);
+    });
+  });
+  admin.on('error', (err) => console.warn(`[rescue] admin port ${ADMIN_PORT} unavailable: ${err.message}`));
+  admin.listen(ADMIN_PORT, '127.0.0.1');
+}
+
 /** Every address a player on the LAN could type in. */
 function lanAddresses() {
   const out = [];
