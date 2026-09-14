@@ -19,8 +19,8 @@ export const VILLAGERS = [
     role: 'grocer',
     lines: [
       "Everything's fresher than it looks. That's not a high bar, admittedly.",
-      'Cats drink milk, cats drink cream, cats drink whatever you left out. Stock accordingly.',
-      'Buy the beans in bulk. Your customers can tell, honestly.',
+      "Kittens drink milk, cats eat fish... or kibble if you don't have fish. Stock accordingly.",
+      "Some customers like the cheap coffee, some customers won't drink anything but the fancy stuff. Stock accordingly.",
     ],
     hints: [
       {
@@ -54,7 +54,7 @@ export const VILLAGERS = [
     coat: 'rabbit',
     role: 'petshop',
     lines: [
-      'Every cat here is looking for somebody. Take your time.',
+      'Every cat here is looking for somebody. that somebody might just be you.',
       "A bored cat is a destructive cat. Buy toys. I'm biased, but I'm right.",
       "They'll pick you, you know. Not the other way round.",
     ],
@@ -72,13 +72,13 @@ export const VILLAGERS = [
     coat: 'brown',
     role: 'innkeeper',
     lines: [
-      "Sleep here any time, I'll not charge a neighbour.",
-      'Weekend crowds are the real test of a cafe. Be ready.',
+      "Sleep here any time, I'll not charge a neighbor. Don't let word get out though, I am trying to run a business.",
+      'Weekend crowds are the real test of a cafe. Be ready!',
       "There's a fellow comes through selling maps. Never has the one you want.",
     ],
     hints: [
       {
-        text: "You'll want Trowel up in Hollowdown before you knock any walls about. He's grumpy. He's also the only one.",
+        text: "You'll want to hire Trowel up in Hollowdown if you want to expand the cafe. He's grumpy. He's also the only carpenter in the Valley.",
       },
     ],
   },
@@ -90,9 +90,9 @@ export const VILLAGERS = [
     coat: 'brown',
     role: 'villager',
     lines: [
-      "Morning. Or afternoon. I've lost track, don't tell anyone.",
-      "The pond ducks are organised. I don't like it.",
-      "You're the one with the cats, aren't you? The whole lane smells of catnip.",
+      "Good morning. Or afternoon? I've lost track.",
+      "Your grandmother was a kindly lady. I'm glad you've re-opened the cafe. But cats are a kind of a bold business choice.",
+      'Cats get along with hedgehogs, right?',
     ],
   },
   {
@@ -106,6 +106,7 @@ export const VILLAGERS = [
       "Water's high after the rain. Good fishing, bad boots.",
       'I swim the river to Saltmere sometimes. Faster than the road, honestly.',
       'Ever tried sitting in a cafe with wet fur? Nobody thanks you for it.',
+      'A cafe with a fireplace is a fine thing on a rainy day.',
     ],
   },
   {
@@ -116,9 +117,9 @@ export const VILLAGERS = [
     coat: 'ginger',
     role: 'villager',
     lines: [
-      'Short legs, long opinions.',
+      "I'm short on legs. But, like most residents of the Valley, long on opinions.",
       "I'd visit your cafe more if there were somewhere comfy to sit.",
-      'Everyone says the hill town is nicer. Everyone is wrong.',
+      'Everyone says corgis are hard to live with. Everyone is wrong.',
     ],
   },
   {
@@ -130,8 +131,8 @@ export const VILLAGERS = [
     role: 'villager',
     lines: [
       "Careful, I'm very small and you are very not.",
-      "I count the cats when I walk past. It's my hobby. Don't judge me.",
-      'Four today. There were five yesterday. I worry.',
+      "I count the cats when I walk past. It's my hobby. ",
+      'A mouse has the right to choose their own hobby without judgement from others.',
     ],
   },
   {
@@ -155,9 +156,10 @@ export const VILLAGERS = [
     coat: 'green',
     role: 'villager',
     lines: [
-      "Pond's mine. I let the ducks use it.",
-      'Rain coming. My knees know.',
-      'You should put a table by a window. People like windows.',
+      "Pond's mine. I let the ducks use it. They won't bother anyone, I promise.",
+      'Rain must be coming. My knees know.',
+      "You should put a table by a window. People like windows. People don't like ducks.",
+      "I'll hop on in provided the cats behave themselves with frogs.",
     ],
   },
   {
@@ -168,9 +170,9 @@ export const VILLAGERS = [
     coat: 'white',
     role: 'villager',
     lines: [
-      'I do like a sit down.',
-      "Chairs. That's my review of your establishment. More chairs.",
-      "Wool's coming in nicely this year, thanks for asking.",
+      'I do like a good sit down.',
+      "More chairs. That's my review of your establishment. Needs more chairs.",
+      'My wool is coming in nicely this year, thanks for asking.',
     ],
   },
   {
@@ -181,7 +183,7 @@ export const VILLAGERS = [
     coat: 'grey',
     role: 'builder',
     lines: [
-      'You want an extension. Everyone wants an extension.',
+      'You want an expansion? Everyone wants to expand.',
       'Money first, then workers, then walls. In that order.',
       "I can put a roof on anything. Doesn't mean I should.",
     ],
@@ -200,7 +202,7 @@ export const VILLAGERS = [
     role: 'groomer',
     lines: [
       'A groomed cat is a cat that gets looked at. A cat that gets looked at earns you money.',
-      "Wears off after a week or so. Fur doesn't stay perfect. Nothing does.",
+      "Wears off after a week or so. Fur doesn't stay perfect. Nothing does. That's entropy for you.",
       "Bring them all in at once and I'll do you a rate. I'm generous on Tuesdays.",
     ],
   },
@@ -225,7 +227,7 @@ export const VILLAGERS = [
     coat: 'brown',
     role: 'villager',
     lines: [
-      'Mind the steps. Everyone minds the steps eventually.',
+      'Mind the steps. Everyone minds the steps... eventually.',
       'Built on a hill, we were. Nobody remembers why.',
       'Good view though. You can see the sea on a clear day.',
     ],
@@ -240,7 +242,7 @@ export const VILLAGERS = [
     lines: [
       'Letters! I carry letters. Anywhere in the valley, no matter the weather.',
       "Drop something in a postbox and I'll find whoever it's for.",
-      'People are much braver in writing than in person. I read the outsides only, mind.',
+      "People are much braver in writing than in person. So I've been told.",
     ],
     hints: [
       {
@@ -256,9 +258,9 @@ export const VILLAGERS = [
     coat: 'brown',
     role: 'villager',
     lines: [
-      "I eat the hedges so you don't have to.",
-      'That path east has been blocked since the storm. Big rock. Very rude.',
-      'Somebody strong could shift it. Not me. I have a bad knee and a good excuse.',
+      "I eat the hedges so you don't have to. You're welcome!",
+      'That path east has been blocked since the storm. Big rock. Very rude of it to block the way!',
+      'Somebody strong could move it. Not me. I have a bad knee and a good excuse.',
     ],
     hints: [
       {
@@ -274,9 +276,9 @@ export const VILLAGERS = [
     coat: 'owl',
     role: 'villager',
     lines: [
-      'Up late. Always up late.',
+      "I'm up late. I'm always up late.",
       "Your cafe's lovely at night. Very few people know that.",
-      'Try opening in the evening sometime. Different crowd. Quieter tippers.',
+      'Try opening in the evening sometime. And adding some lamps. A different crowd will come at night than would during the day.',
     ],
   },
   {
@@ -287,9 +289,9 @@ export const VILLAGERS = [
     coat: 'raven',
     role: 'villager',
     lines: [
-      'Caw. Sorry. Habit.',
-      "I collect shiny things. Professionally. It's called being a merchant.",
-      "There's a lighthouse down the coast nobody visits. Something's in it.",
+      "Caw caw. Sorry. It's habit. How do you do? It's a pleasure to meet your acquaintance. ",
+      "I collect shiny things. Professionally. It's called being a merchant. Except I don't want to sell anything I collect. I'm still figuring out what I'll do for a living.",
+      "There's a lighthouse down the coast nobody visits. Something's in it. But it's not shiny so I don't bother.",
     ],
   },
   {
@@ -306,7 +308,7 @@ export const VILLAGERS = [
     ],
     hints: [
       {
-        text: "Keep a sick cat away from the others, or bring them to me the same day. That's the whole of it.",
+        text: "Bring a sick cat to me the same day. That's the whole of it. One more thing, the more days a cat is sick the more expensive the cure will be. Sorry, that's just how modern veterinary medicine works.",
       },
     ],
   },
@@ -318,9 +320,9 @@ export const VILLAGERS = [
     coat: 'seal',
     role: 'fishmonger',
     lines: [
-      'Fresh. Very fresh. Was swimming an hour ago.',
-      "Cats know good fish. You can't fool a cat with yesterday's mackerel.",
-      'Sold out by noon most days. Early bird, and so on.',
+      'Fresh fish. The freshest. These fish were swimming in the sea an hour ago.',
+      "Cats know good fish. You can't fool a cat with fish sticks.",
+      'Sold out by noon most days. Early bird catches the worm, or in this case the fish.',
     ],
   },
   {
