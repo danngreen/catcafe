@@ -55,64 +55,63 @@ http://localhost:8080 or http://192.168.0.102:8080 in the example above
 
 ## Playing together on a LAN
 
-`npm start` also opens a shared session. Everyone on the same Wi-Fi points their
-browser at the host — `http://192.168.x.x:8080`, printed on startup — picks a
-name, a coat and an apron, and walks around the same valley. Up to eight; two or
-three is the sweet spot. It runs happily on a small box like an Orange Pi: the
-server only keeps state and relays messages, and each player's browser does all
-the drawing.
+`npm start` also opens a shared session. Everyone on the same network (e.g. your
+home Wi-Fi) can point their browser to the address — `http://192.168.x.x:8080`
+and play together.
+When you join a shared server, you pick a name, name, a color and an apron, and
+walk around the same valley as the other players. 
+
+It runs happily on a small box like an Orange Pi: the server only keeps state
+and relays messages, and each player's browser does all the drawing.
 
 The host owns the world seed, so every client generates a byte-identical valley
 from one number — no map is ever sent. Add `?solo` to the URL to play alone even
 when a session is running.
 
 **One cafe, one set of books.** The till, the pantry, the bag, the cats, the
-quest flags and the clock all live on the server. Buy beans and they're in
-everyone's pantry; take a fare and everyone's money goes down; sleep at the inn
-and morning comes for all of you. Whoever started the cafe picked its paint and
-its name — everyone after that just picks a face and a name for themselves.
+quest flags and the clock all live on the server. Buy muffins and they're in
+everyone's pantry; take a taxi and everyone's money goes down; sleep at the inn
+and morning comes for all of you. 
 
 **People come in wanting particular things.** Everyone arrives with three or
-four items in mind and asks for them in turn, fanciest first. Have it and they
-buy it and sit down; don't and they shrug, you hear it, and they ask for the
+four items in mind and asks for them in turn, fanciest first. If you have what
+they ask for, they buy it and sit down. If you don't have it, they ask for the
 next thing on the list. Get to the end of their list and they leave without
 buying anything.
 
-Every ask is a press of Space. Once you have had to tell somebody you're out
-of something, the next thing they ask for is yours to answer — they stand there
-waiting rather than working down the rest of the list on their own, which is
-both the moment and your chance to note the item down. An employee on duty does
-work the whole list by themselves; that is what you pay them for.
-
 That is what makes the pantry a decision rather than a chore. Basics sell to
-almost everyone but cheaply; the expensive things are what people ask for first,
-and are worth stocking precisely because that is where the money is. Not
-everyone has something plain they'll settle for, so some walk out no matter what.
-The morning card tells you what was asked for that you hadn't got, which is
+almost everyone but cheaply. The expensive things are what people ask for first,
+and are worth stocking because that is where the money is. Not everyone has
+something plain they'll settle for, so some walk out no matter what. The
+morning card tells you what was asked for that you hadn't got, which is
 tomorrow's shopping list.
 
 **Your employee** stands behind the counter during your posted hours, and works
 the queue whether or not you're in the room — customers ask for their list and
-your employee answers it, the same cycle you'd press Space for. They clock in
-and out on the hour and tell you when they do. Seeing them there is most of what
-you're paying for.
+your employee answers it. They clock in and out on the hour and tell you when
+they do.
 
 **Weather** decides how many people leave the house. Rain halves the crowd and
 snow more than halves it — unless you have a fireplace, which wins most of that
-back. It only helps when there is something to shelter from; on a sunny day a
-fire is just nice furniture. What people ask for follows the temperature too:
-on a hot day the orders run to lemonade, iced tea and ice cream and almost
-nobody wants cocoa, and when it snows that reverses completely. The morning card
-tells you what the day is going to do, so the shopping trip is a decision.
+back. Fireplaces only help when there is something to shelter from. On a sunny
+day a fire is just nice furniture. 
 
-The sky is worked out from the valley's seed and the date rather than stored, so
-everyone in a shared valley is standing in the same rain and none of it is sent
-over the network. Snow belongs to winter, and a wet week feels like a wet week.
+What people ask for follows the temperature too: on a hot day the orders run to
+lemonade, iced tea and ice cream and almost nobody wants cocoa, and when it
+snows that reverses completely. The morning card tells you what the day is
+going to do, so the shopping trip is a decision.
 
-Open the map in a shared valley and everyone else is on it, named, with anyone
-indoors greyed out. The browser remembers the name and colours you last played
-as and offers them back on the join screen. Two people can't be the same
-person: the server hands out a distinct name and tells you if it changed yours.
+The weather is worked out from the valley's seed and the date rather than
+stored, so everyone in a shared valley is standing in the same rain and none of
+it is sent over the network. Snow belongs to winter, and a wet week feels like
+a wet week.
+
+The map in a shared valley shows every player on it, with anyone indoors
+greyed out. 
+
+The browser remembers the name and colours you last played as and offers them
+back on the join screen. Two people can't have the same name: the server hands
+out a distinct name and tells you if it changed yours.
 
 The customer simulation runs on exactly one client (the longest-standing player),
 which publishes where its customers are standing so the rest can draw them. That
@@ -122,20 +121,14 @@ running the room to take the order.
 
 **Several valleys at once.** One server can host as many games as you like, and
 two groups can play different ones side by side without seeing each other. You
-land in a lobby first — always, even with one valley, since it is the only place
-you can start another or throw one away — listing each game
+land in a lobby first, listing each game
 with its cafe name, the day and time in there, how much money and how many cats,
-and when anybody last played it — for whichever row is highlighted, since this
-is played on a keyboard and on a phone and neither has a hover. "New valley"
-makes another, with its own seed.
+and when anybody last played it.
+"New valley" makes a new game, with its own seed.
 
-`X` on a highlighted valley deletes it, after a confirm that names the cafe and
-what day it had reached and starts on **No**. The server refuses while anybody
-is connected to that game, whether they're playing or still in the lobby for it
-— so you can't pull the ground out from under someone mid-afternoon, and the
-lobby's own idea of who is where can be a few seconds stale without it
-mattering. Ids are reused, so a deleted 002 is what the next new valley
-becomes.
+Pressing `X` on a highlighted valley deletes it (after a confirmation).
+The server refuses while anybody is connected to that game, whether they're
+playing or still in the lobby for it.
 
 Games are kept in `saves/valley-NNN.json`. A single `valley.json` from before
 this existed becomes game 001 on first run, so nothing is lost. `?game=002` in
