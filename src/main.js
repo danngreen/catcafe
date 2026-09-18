@@ -1813,7 +1813,12 @@ class Game {
     // press, which made the hedge — the first step of his own errand —
     // unreachable, so his quest could never start.
     const facing = map.interactAt(f.x, f.y);
-    const onIt = best && best.tx === f.x && best.ty === f.y;
+    // A door is the exception to the exception: somebody standing on the step
+    // would otherwise take every press meant for it, and a shop you cannot get
+    // into reads as a broken shop. They are still there to talk to from any
+    // other side.
+    const onIt = best && best.tx === f.x && best.ty === f.y
+      && !(facing && facing.kind === 'door');
     if (best && (!facing || onIt)) { this.talkTo(best); return; }
 
     // Then whatever tile we're facing, or the one we're standing on. Pass the

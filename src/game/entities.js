@@ -273,6 +273,29 @@ export function lookOf(def) {
   };
 }
 
+/** Is this tile a door — a shop, a cottage, your own cafe? */
+function onDoorstep(map, tx, ty) {
+  if (!map || !map.interactAt) return false;
+  const it = map.interactAt(tx, ty);
+  return !!it && it.kind === 'door';
+}
+
+/**
+ * Somewhere to stand that isn't the doorway. The tiles either side first, then
+ * the one in front of it, so somebody who has wandered onto a step shuffles
+ * aside rather than walking off through the building.
+ */
+function stepOffDoor(map, who) {
+  const tx = who.tx, ty = who.ty;
+  for (const [ox, oy] of [[-1, 0], [1, 0], [0, 1], [-1, 1], [1, 1], [0, -1]]) {
+    const nx = tx + ox, ny = ty + oy;
+    if (onDoorstep(map, nx, ny)) continue;
+    if (map.solid(nx, ny)) continue;
+    return { x: nx * TILE + TILE / 2, y: ny * TILE + TILE / 2 };
+  }
+  return null;
+}
+
 export class Villager extends Actor {
   constructor(def, x, y) {
     super(x, y);
@@ -357,6 +380,13 @@ export class Villager extends Actor {
     if (this.shift === 'away') return;
     if (this.shift === 'leaving' || this.shift === 'arriving') { this.updateShift(dt, map); return; }
     if (this.talking) { this.moving = false; this.animate(dt); return; }
+    // A doorstep is the one place nobody may settle on. Standing on one used
+    // to make the shop behind it unenterable, and even now that the door wins
+    // the keypress, somebody parked on it reads as a shop you can't get into.
+    if (onDoorstep(map, this.tx, this.ty)) {
+      const off = stepOffDoor(map, this);
+      if (off) { this.target = off; this.wanderT = Math.max(this.wanderT, 0.7); }
+    }
     this.wanderT -= dt;
     if (this.wanderT <= 0) {
       this.wanderT = 1.6 + rng() * 4.5;
@@ -364,108 +394,11 @@ export class Villager extends Actor {
       else {
         const a = rng() * Math.PI * 2;
         const d = 16 + rng() * this.range;
-        this.target = { x: this.home.x + Math.cos(a) * d, y: this.home.y + Math.sin(a) * d };
-      }
-    }
-    this.moving = false;
-    if (this.target) {
-      const dx = this.target.x - this.x, dy = this.target.y - this.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < 3) this.target = null;
-      else {
-        const step = this.speed * dt;
-        const before = { x: this.x, y: this.y };
-        moveActor(map, this, (dx / dist) * step, (dy / dist) * step);
-        this.moving = Math.hypot(this.x - before.x, this.y - before.y) > 0.05;
-        if (!this.moving) this.target = null;
-        if (Math.abs(dx) > Math.abs(dy)) this.dir = dx > 0 ? 'right' : 'left';
-        else this.dir = dy > 0 ? 'down' : 'up';
-      }
-    }
-    this.animate(dt);
-  }
-
-  /** Walking out to the treeline, or in from it, fading as they go. */
-  updateShift(dt, map) {
-    const t = this.target || this.burrow;
-    const dx = t.x - this.x, dy = t.y - this.y;
-    const dist = Math.hypot(dx, dy);
-    const arriving = this.shift === 'arriving';
-    this.alpha = clamp(arriving ? this.alpha + dt * 1.6 : this.alpha - dt * 0.9, 0, 1);
-
-    if (dist < 3 || (!arriving && this.alpha <= 0)) {
-      if (arriving) { this.shift = 'here'; this.alpha = 1; this.target = null; }
-      else { this.shift = 'away'; this.alpha = 0; this.target = null; }
-      this.moving = false;
-      return;
-    }
-    const step = this.speed * 1.25 * dt;
-    const before = { x: this.x, y: this.y };
-    moveActor(map, this, (dx / dist) * step, (dy / dist) * step);
-    this.moving = Math.hypot(this.x - before.x, this.y - before.y) > 0.05;
-
-    // Walls happen — this walk is a straight line, not a path. Rather than stand
-    // against a hedge forever, take what we've got: on the way out, finish
-    // fading where we are; on the way in, simply be here.
-    //
-    // The second half matters more than it looks. Somebody stuck mid-arrival is
-    // drawn but can't be talked to, which from the outside is indistinguishable
-    // from being stuck on the quest they're part of.
-    if (!this.moving) {
-      this.stuckT = (this.stuckT || 0) + dt;
-      if (arriving && this.stuckT > 1.2) {
-        this.shift = 'here';
-        this.alpha = 1;
-        this.target = null;
-        this.stuckT = 0;
-        return;
-      }
-      if (!arriving) this.alpha = Math.max(0, this.alpha - dt * 1.4);
-    } else {
-      this.stuckT = 0;
-    }
-    if (Math.abs(dx) > Math.abs(dy)) this.dir = dx > 0 ? 'right' : 'left';
-    else this.dir = dy > 0 ? 'down' : 'up';
-    this.animate(dt);
-  }
-
-  draw(ctx, ox, oy) {
-    if (this.shift === 'away') return;
-    const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, this.dir, this.frame);
-    // Ghosts hover, and you can see the hedge through them.
-    const a = this.alpha * (this.ghost ? 0.62 : 1);
-    const lift = this.ghost ? Math.sin(this.bobT * 1.7) * 1.5 - 2 : 0;
-    if (a < 1) ctx.globalAlpha = a;
-    ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - CHAR_H - oy + lift));
-    if (a < 1) ctx.globalAlpha = 1;
-  }
-
-  /** Send them home (or bring them back) through their own door. */
-  setShift(active) {
-    if (active && (this.shift === 'away' || this.shift === 'leaving')) {
-      if (this.shift === 'away') { this.x = this.burrow.x; this.y = this.burrow.y; this.alpha = 0; }
-      this.shift = 'arriving';
-      this.target = { x: this.home.x, y: this.home.y };
-    } else if (!active && (this.shift === 'here' || this.shift === 'arriving')) {
-      this.shift = 'leaving';
-      this.target = { x: this.burrow.x, y: this.burrow.y };
-    }
-  }
-
-  get present() { return this.shift !== 'away'; }
-
-  update(dt, map) {
-    if (this.shift === 'away') return;
-    if (this.shift === 'leaving' || this.shift === 'arriving') { this.updateShift(dt, map); return; }
-    if (this.talking) { this.moving = false; this.animate(dt); return; }
-    this.wanderT -= dt;
-    if (this.wanderT <= 0) {
-      this.wanderT = 1.6 + rng() * 4.5;
-      if (rng() < 0.42) this.target = null;
-      else {
-        const a = rng() * Math.PI * 2;
-        const d = 16 + rng() * this.range;
-        this.target = { x: this.home.x + Math.cos(a) * d, y: this.home.y + Math.sin(a) * d };
+        const want = { x: this.home.x + Math.cos(a) * d, y: this.home.y + Math.sin(a) * d };
+        // Somewhere else, rather than a step nudged off the door: the nudge
+        // would just walk them back next time their dice came up the same way.
+        this.target = onDoorstep(map, Math.floor(want.x / TILE), Math.floor(want.y / TILE))
+          ? null : want;
       }
     }
     this.moving = false;

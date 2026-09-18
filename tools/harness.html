@@ -6241,6 +6241,41 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (results.some((r) => r.includes('STUCK'))) {
           window.__errors.push('trapped after leaving a building: ' + window.__door);
         }
+      } else if (SCRIPT === 'doorblock') {
+        // Somebody standing on a doorstep used to own every keypress meant for
+        // the door, so the shop behind them could not be entered at all. Two
+        // things are checked: the door wins the press anyway, and whoever it is
+        // wanders off the step rather than settling on it.
+        const door = g.doorByShop.get('cafe');
+        const v = g.villagers.find((k) => k.shift === 'here' && !k.regular);
+        const onDoor = () => v.tx === door.x && v.ty === door.y;
+        // Stand them squarely on the mat, and the player below it facing up.
+        v.x = door.x * 16 + 8;
+        v.y = (door.y + 1) * 16 - 2;
+        v.target = null;
+        v.home = { x: v.x, y: v.y };
+        g.player.x = door.x * 16 + 8;
+        g.player.y = (door.y + 2) * 16 - 2;
+        g.player.dir = 'up';
+        const stoodOn = onDoor();
+        g.interact();
+        await wait(1200);
+        const entered = g.state.mapId;
+        // Back outside, then leave them to it: they should step off the step.
+        g.leaveInterior();
+        await wait(1200);
+        v.x = door.x * 16 + 8;
+        v.y = (door.y + 1) * 16 - 2;
+        v.target = null;
+        let cleared = false;
+        for (let i = 0; i < 40 && !cleared; i++) {
+          await wait(250);
+          if (!onDoor()) cleared = true;
+        }
+        window.__doorblock = `stoodOn=${stoodOn} entered=${entered} cleared=${cleared} at=${v.tx},${v.ty} door=${door.x},${door.y}`;
+        if (!stoodOn) window.__errors.push('could not stand anybody on the doorstep: ' + window.__doorblock);
+        if (entered !== 'cafe') window.__errors.push('a villager on the step blocked the door: ' + window.__doorblock);
+        if (!cleared) window.__errors.push('a villager settled on the doorstep: ' + window.__doorblock);
       } else if (SCRIPT.startsWith('title')) {
         const ts = g.screens[0];
         ts.index = ts.options.indexOf('New game');

@@ -45,6 +45,7 @@ const BUDGET = {
   taxi: 22000,
   sleep: 20000,
   door: 20000,
+  doorblock: 25000,
   ghostquest: 42000,
   deliverquest: 26000,
   wishlist: 30000,
@@ -158,7 +159,7 @@ const GROUPS = {
   cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers', 'employee',
     'weathercafe', 'hourly'],
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',
-    'barriers', 'eastpass', 'barrierreach', 'passcleared', 'debugpos', 'weather'],
+    'barriers', 'eastpass', 'barrierreach', 'passcleared', 'debugpos', 'weather', 'doorblock'],
   // Frame times, and the things that are supposed to make them shorter. These
   // report numbers as much as they pass or fail: a machine under load will
   // read slower without anything being wrong, so they assert on what the code
