@@ -14,6 +14,8 @@
 //   node tools/rescue.js heal              every cat well, fed and cheerful
 //   node tools/rescue.js heal --game 002   a particular valley
 //   node tools/rescue.js games             every valley and who is in it
+//   node tools/rescue.js lock              no new valleys, and none deleted
+//   node tools/rescue.js unlock            allow both again
 //
 // Nothing is announced to the players. The money on their screens just goes
 // up, and a sneezing cat stops sneezing.
@@ -56,12 +58,19 @@ async function main() {
     const d = Math.round(Number(amount));
     if (!Number.isFinite(d) || !d) { console.error('how much? e.g. node tools/rescue.js money 500'); process.exit(1); }
     show(await rescue({ op: 'money', d }));
+  } else if (cmd === 'lock' || cmd === 'unlock') {
+    const r = await call('POST', `/lock?on=${cmd === 'lock' ? 1 : 0}`, {});
+    console.log(r.locked
+      ? 'Locked. Nobody can make a new valley or delete one, and the lobby stops offering it.'
+      : 'Unlocked. New valleys and deleting are allowed again.');
   } else if (cmd === 'games') {
-    for (const g of (await call('GET', '/games')).games) {
+    const r = await call('GET', '/games');
+    if (r.locked) console.log('(the lobby is locked)');
+    for (const g of r.games) {
       console.log(`${g.id}  ${g.cafe || '(not opened)'}  day ${g.day}  money ${g.money}  cats ${g.cats}  ${g.playing} playing`);
     }
   } else {
-    console.error('commands: status, money <n>, heal, games   (and --game NNN)');
+    console.error('commands: status, money <n>, heal, lock, unlock, games   (and --game NNN)');
     process.exit(1);
   }
 }

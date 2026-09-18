@@ -143,6 +143,9 @@ export class NetClient {
       clearTimeout(t);
       if (!res.ok) return null;
       const data = await res.json();
+      // The host may have locked the lobby for a party. Remembered here rather
+      // than returned, so every existing caller is unchanged.
+      NetClient.locked = !!data.locked;
       return Array.isArray(data.games) ? data.games : null;
     } catch { return null; }
   }
@@ -479,5 +482,8 @@ export class NetClient {
 
   get count() { return this.remotes.size + (this.joined ? 1 : 0); }
 }
+
+// Set from the /games answer: true while the host has the lobby locked.
+NetClient.locked = false;
 
 export const net = new NetClient();

@@ -35,6 +35,12 @@ const TYPES = {
 const games = new Games(SAVES);
 const polls = new PollHub();
 
+// With a room full of people who have never played, "New valley" and the
+// delete key are two ways to end up somewhere nobody meant to be. Locking the
+// lobby takes both away — the valleys that exist stay joinable. Set
+// LOBBY_LOCK=1 to start locked; tools/rescue.js turns it on and off live.
+const lobby = { locked: process.env.LOBBY_LOCK === '1' };
+
 // A single-valley save from before there were several becomes game 001.
 const moved = games.adoptLegacy(SAVES ? join(ROOT, 'valley.json') : null);
 // There is always somewhere to play, so a fresh install has a game to join.
@@ -66,10 +72,15 @@ const server = createServer(async (req, res) => {
   }
   // What the lobby lists. Plain HTTP and no socket, so a player can read the
   // stats of every valley before deciding which one to walk into.
-  if (path === '/games' && req.method === 'GET') { json({ games: games.list() }); return; }
-  if (path === '/games/new' && req.method === 'POST') { json(games.create()); return; }
+  if (path === '/games' && req.method === 'GET') { json({ games: games.list(), locked: lobby.locked }); return; }
+  if (path === '/games/new' && req.method === 'POST') {
+    if (lobby.locked) { json({ ok: false, why: 'the lobby is locked' }, 403); return; }
+    json(games.create());
+    return;
+  }
   const del = /^\/games\/(\d{3})$/.exec(path);
   if (del && req.method === 'DELETE') {
+    if (lobby.locked) { json({ ok: false, why: 'the lobby is locked' }, 403); return; }
     const res2 = games.remove(del[1]);
     if (res2.ok) console.log(`[games] removed valley ${del[1]}`);
     json(res2, res2.ok ? 200 : 409);
@@ -145,7 +156,18 @@ if (ADMIN_PORT) {
       res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(body, null, 2));
     };
-    if (url.pathname === '/games' && req.method === 'GET') { json({ games: games.list() }); return; }
+    if (url.pathname === '/games' && req.method === 'GET') {
+      json({ games: games.list(), locked: lobby.locked });
+      return;
+    }
+    // The lobby lock, on and off without a restart: at a party the point is to
+    // change your mind about it while people are sitting there playing.
+    if (url.pathname === '/lock' && req.method === 'POST') {
+      lobby.locked = url.searchParams.get('on') !== '0';
+      console.log(`[rescue] lobby ${lobby.locked ? 'locked' : 'unlocked'}`);
+      json({ ok: true, locked: lobby.locked });
+      return;
+    }
     if (url.pathname !== '/rescue' || req.method !== 'POST') { json({ ok: false, why: 'not here' }, 404); return; }
     let raw = '';
     req.on('data', (c) => { raw += c; if (raw.length > 1e4) req.destroy(); });

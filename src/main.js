@@ -2847,10 +2847,21 @@ class LobbyScreen extends Screen {
     this.yes = false;         // which way the confirm is pointing
   }
 
-  get rows() { return [...this.games, { newGame: true }]; }
+  // With the lobby locked there is no "New valley" row at all: an option that
+  // can only fail is worse than no option, especially for somebody who has
+  // never seen this screen before.
+  // A lock with no valleys behind it would leave an empty screen and no way
+  // off it, so the row comes back if there is nothing to join.
+  get rows() {
+    if (NetClient.locked && this.games.length) return [...this.games];
+    return [...this.games, { newGame: true }];
+  }
 
   /** A valley can be deleted when it exists and nobody is connected to it. */
-  canDelete(row) { return !!row && !row.newGame && !row.playing && !row.here; }
+  canDelete(row) {
+    if (NetClient.locked) return false;
+    return !!row && !row.newGame && !row.playing && !row.here;
+  }
 
   update(dt, input) {
     this.t += dt;
@@ -2890,7 +2901,8 @@ class LobbyScreen extends Screen {
     const row = rows[this.index];
     if (input.hit('cancel')) {
       if (!this.canDelete(row)) {
-        if (row && !row.newGame) { this.msg = 'Somebody is in that one.'; audio.sfx('error'); }
+        if (NetClient.locked) { this.msg = 'The host has locked the valleys.'; audio.sfx('error'); }
+        else if (row && !row.newGame) { this.msg = 'Somebody is in that one.'; audio.sfx('error'); }
         return;
       }
       this.confirm = row;

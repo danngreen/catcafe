@@ -491,6 +491,19 @@ node tools/rescue.js money 500     # put 500 in the till
 node tools/rescue.js heal          # every cat well, fed and at least content
 ```
 
+**Locking the lobby.** With a room full of people who have never played, "New
+valley" and the delete key are two ways to end up somewhere nobody meant to be:
+
+```bash
+node tools/rescue.js lock          # no new valleys, and none deleted
+node tools/rescue.js unlock        # allow both again
+```
+
+The valleys that already exist stay joinable, and the lobby stops offering the
+"New valley" row rather than offering one that fails. It takes effect at once,
+including for people already sitting in the lobby, since the list is re-read
+every time that screen opens. `LOBBY_LOCK=1` starts the server locked.
+
 It changes the live valley, so nothing needs stopping, and nobody is told: the
 money on everyone's screen just goes up. It goes to whichever valley has people
 in it; `--game 002` when more than one does. The server listens for this on
