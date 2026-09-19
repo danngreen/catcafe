@@ -2731,11 +2731,11 @@ function shopKeeperName(shop) {
 }
 
 function catMood(cat) {
-  if (cat.sick) return 'They feel warm, and they sneeze. Small and miserable. The vet, then.';
+  if (cat.sick) return 'They feel warm, and they sneeze. Grumpy and miserable. They need a vet!';
   if (cat.happiness > 0.85) return 'Purring like a kettle.';
-  if (cat.happiness > 0.6) return 'Content. Mildly.';
-  if (cat.happiness > 0.35) return 'They want something. You are not sure what. Neither are they.';
-  return 'Unimpressed. Possibly hungry. Definitely judging you.';
+  if (cat.happiness > 0.6) return 'Mildly content.';
+  if (cat.happiness > 0.35) return 'They want something. You\'re not sure what...';
+  return 'Unimpressed. Probably hungry. Definitely judging you.';
 }
 
 function replyText(name) {
