@@ -374,6 +374,19 @@ groups everywhere you've been under its town, and tells you the opening hours of
 whatever is highlighted, and whether it is open at this moment — the thing you
 otherwise find out by walking across the valley.
 
+**The bear.** Drover Bell sells one bear, once, for five thousand, and she is
+the only way across deep water. One fresh fish a day and she will carry you
+anywhere; Space beside her gets you on, and Space again gets you down, on the
+nearest dry land if you asked in the middle of a river. There is one of her, and
+the valley's books hold only where she was last left and the day she was last
+fed — so whoever rode her last is where she is, for everybody.
+
+Which is also why several people can ride her at once in a shared valley: only a
+flag rides along with your position, and every client draws her under anyone
+carrying it. That is a glitch, it is deliberately left in, and the accounting
+that goes with it — one fish feeding the whole party — is left in with it. Do
+not fix it.
+
 The menu keeps a **Friends** page next to the map: everyone you have got to know,
 warmest first, with their face, how well you know them, and where to go and look
 for them — their shop if they keep one, their town otherwise, "after dark" if
