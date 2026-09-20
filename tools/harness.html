@@ -6241,6 +6241,124 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (results.some((r) => r.includes('STUCK'))) {
           window.__errors.push('trapped after leaving a building: ' + window.__door);
         }
+      } else if (SCRIPT === 'netghostmovepoll') {
+        // The real thing: close the tab without leaving, come back, and walk
+        // about while the player you just were is still stood in the valley.
+        const PHASE = 'catcafe.test.ghostmove';
+        let phase = null;
+        try { phase = localStorage.getItem(PHASE); } catch (e) {}
+        let waited = 0;
+        while (!(g.net && g.net.shared) && waited < 10000) { await wait(200); waited += 200; }
+        const door = g.doorByShop.get('cafe');
+        const home = () => { g.player.x = door.x * 16 + 8; g.player.y = (door.y + 4) * 16 - 2; };
+        const walk = async (code) => {
+          const before = { x: g.player.x, y: g.player.y };
+          key(code, true); await wait(900); key(code, false);
+          await wait(120);
+          return { dx: Math.round(g.player.x - before.x), dy: Math.round(g.player.y - before.y) };
+        };
+        if (!phase) {
+          home();
+          await wait(600);
+          const w = await walk('ArrowLeft');
+          home(); await wait(200);
+          const n = await walk('ArrowUp');
+          try { localStorage.setItem(PHASE, JSON.stringify({ w, n, name: g.net.name })); } catch (e) {}
+          // No goodbye at all — this is a tab being closed, not Exit.
+          location.reload();
+          await wait(25000);
+        } else {
+          let was = null;
+          try { was = JSON.parse(phase); localStorage.removeItem(PHASE); } catch (e) {}
+          // Long enough that the old connection would have shown up if it
+          // were going to: the roster is restated every five seconds.
+          await wait(6000);
+          const ghosts = [...g.net.remotes.values()].map((r) => r.n);
+          home(); await wait(300);
+          const w = await walk('ArrowLeft');
+          home(); await wait(200);
+          const n = await walk('ArrowUp');
+          window.__ghostmove = `before W=${was && was.w.dx},${was && was.w.dy}`
+            + ` N=${was && was.n.dx},${was && was.n.dy}`
+            + ` | after W=${w.dx},${w.dy} N=${n.dx},${n.dy}`
+            + ` ghosts=[${ghosts}] was=${was && was.name} now=${g.net.name}`;
+          // The old me must be gone the moment I say who I am, and my name
+          // must have come back with me rather than turning into "Otto 2".
+          if (was && ghosts.includes(was.name)) {
+            window.__errors.push('the player I just was is still in the valley: ' + window.__ghostmove);
+          }
+          // A trailing number is what the server does when the name you asked
+          // for is taken — and the only thing holding it would be the old you.
+          // (The name itself changes between runs here: a fresh browser picks
+          // one at random, where a real player's is remembered.)
+          if (/ \d+$/.test(g.net.name || '')) {
+            window.__errors.push('renamed around my own ghost: ' + window.__ghostmove);
+          }
+          if (was && (Math.abs(w.dx - was.w.dx) > 6 || Math.abs(w.dy) > 3)) {
+            window.__errors.push('walking west went wrong beside my old self: ' + window.__ghostmove);
+          }
+          if (was && (Math.abs(n.dy - was.n.dy) > 6 || Math.abs(n.dx) > 3)) {
+            window.__errors.push('walking north went wrong beside my old self: ' + window.__ghostmove);
+          }
+        }
+      } else if (SCRIPT === 'netghostmove') {
+        // A copy of you left standing in the valley must not affect how you
+        // walk. Measured rather than eyeballed: walk a second west and a second
+        // north, once alone and once with somebody standing on top of you.
+        let waited = 0;
+        while (!(g.net && g.net.shared) && waited < 10000) { await wait(200); waited += 200; }
+        const walk = async (code) => {
+          const before = { x: g.player.x, y: g.player.y };
+          key(code, true); await wait(900); key(code, false);
+          await wait(120);
+          return { dx: Math.round(g.player.x - before.x), dy: Math.round(g.player.y - before.y) };
+        };
+        // Somewhere with room to walk in every direction.
+        const door = g.doorByShop.get('cafe');
+        const home = () => { g.player.x = door.x * 16 + 8; g.player.y = (door.y + 4) * 16 - 2; };
+        home();
+        await wait(300);
+        const aloneW = await walk('ArrowLeft');
+        home(); await wait(200);
+        const aloneN = await walk('ArrowUp');
+
+        // Now a second player, standing exactly where we are.
+        home(); await wait(200);
+        const url = `${location.protocol}//${location.host}/poll${g.net.gameId ? '?game=' + g.net.gameId : ''}`;
+        const post = async (body) => {
+          const res = await fetch(url, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body), cache: 'no-store',
+          });
+          return res.json();
+        };
+        const hello = await post({});
+        const ghostId = hello.id;
+        await post({ id: ghostId, msgs: [JSON.stringify({
+          t: 'join', name: 'Ghost', look: g.state.playerLook,
+          x: Math.round(g.player.x), y: Math.round(g.player.y), map: 'overworld',
+        })] });
+        // Keep it alive for the duration, the way a real client would.
+        const keep = setInterval(() => { post({ id: ghostId, msgs: [] }).catch(() => {}); }, 1500);
+        let seen = 0;
+        while (!g.net.remotes.size && seen < 6000) { await wait(200); seen += 200; }
+        const withW = await walk('ArrowLeft');
+        home(); await wait(200);
+        const withN = await walk('ArrowUp');
+        clearInterval(keep);
+
+        window.__ghostmove = `alone W=${aloneW.dx},${aloneW.dy} N=${aloneN.dx},${aloneN.dy}`
+          + ` | ghost W=${withW.dx},${withW.dy} N=${withN.dx},${withN.dy}`
+          + ` remotes=${g.net.remotes.size}`;
+        if (!g.net.remotes.size) window.__errors.push('the ghost never arrived: ' + window.__ghostmove);
+        // West must be west, north must be north, and the same distance either
+        // way. Tolerance of a few pixels for one frame's worth of timing.
+        if (Math.abs(withW.dx - aloneW.dx) > 6 || Math.abs(withW.dy) > 3) {
+          window.__errors.push('walking west went wrong with a copy of me about: ' + window.__ghostmove);
+        }
+        if (Math.abs(withN.dy - aloneN.dy) > 6 || Math.abs(withN.dx) > 3) {
+          window.__errors.push('walking north went wrong with a copy of me about: ' + window.__ghostmove);
+        }
       } else if (SCRIPT === 'nettitleghost' || SCRIPT === 'nettitleghostpoll') {
         // Leave a valley properly and come back to it: there must be one of
         // you. A copy of yourself left standing where you logged out is the
@@ -6517,6 +6635,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__coat ? ` ${window.__coat}` : '')
         + (window.__newv ? ` ${window.__newv}` : '')
         + (window.__ghost ? ` ${window.__ghost}` : '')
+        + (window.__ghostmove ? ` ${window.__ghostmove}` : '')
+        + (window.__cont ? ` ${window.__cont}` : '')
+        + (window.__resume ? ` ${window.__resume}` : '')
+        + (window.__doorblock ? ` ${window.__doorblock}` : '')
         + (window.__shellw ? ` ${window.__shellw}` : '')
         + (window.__hint ? ` ${window.__hint}` : '')
         + (window.__exit ? ` ${window.__exit}` : '')
@@ -6587,6 +6709,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__two ? ` ${window.__two}` : '')
         + (window.__live ? ` ${window.__live}` : '')
         + (window.__ghost ? ` ${window.__ghost}` : '')
+        + (window.__ghostmove ? ` ${window.__ghostmove}` : '')
+        + (window.__cont ? ` ${window.__cont}` : '')
+        + (window.__resume ? ` ${window.__resume}` : '')
+        + (window.__doorblock ? ` ${window.__doorblock}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       if (window.__terrain) { out.textContent = window.__terrain; document.title = 'OK'; window.__done = true; return; }
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';

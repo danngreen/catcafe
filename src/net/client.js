@@ -9,6 +9,7 @@
 import { WsLink, PollLink } from './link.js';
 
 const TRANSPORT_KEY = 'catcafe.transport';
+const WHO_KEY = 'catcafe.who';
 const SEND_HZ = 15;
 const CUST_HZ = 10;
 // The server hangs up on a socket that has gone quiet, and a player choosing an
@@ -416,11 +417,39 @@ export class NetClient {
     if (this.link) this.link.send(JSON.stringify(obj));
   }
 
+  /**
+   * Who this browser is, across reloads and crashes.
+   *
+   * A socket id says which connection you are, which is a different question:
+   * close the lid or lose the wifi and you come back on a new one, while the
+   * old one stands in the valley wearing your name until it times out. The
+   * server uses this to recognise you and take the old one out at once.
+   *
+   * One per browser profile, so two tabs of the same browser are the same
+   * player — the second one replaces the first, which is what a person doing
+   * it actually meant.
+   */
+  static who() {
+    try {
+      let id = localStorage.getItem(WHO_KEY);
+      if (!id) {
+        id = `w${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+        localStorage.setItem(WHO_KEY, id);
+      }
+      return id;
+    } catch {
+      // Private mode, or storage turned off. Stable for this page at least,
+      // which still covers a reconnect without a reload.
+      if (!this.memWho) this.memWho = `w${Math.random().toString(36).slice(2, 12)}`;
+      return this.memWho;
+    }
+  }
+
   join(name, look, x, y, map) {
     if (!this.connected) return;
     this.joined = true;
     this.rejoin = { name, look, x, y, map };
-    this.send({ t: 'join', name, look, x: Math.round(x), y: Math.round(y), map });
+    this.send({ t: 'join', name, look, x: Math.round(x), y: Math.round(y), map, who: NetClient.who() });
   }
 
   /** Change something in the shared books. Silently local when playing alone. */

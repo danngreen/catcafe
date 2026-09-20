@@ -49,6 +49,8 @@ const BUDGET = {
   resumeplace: 25000,
   nettitlecontinue: 50000,
   nettitleghost: 60000,
+  netghostmove: 45000,
+  netghostmovepoll: 70000,
   nettitleghostpoll: 60000,
   ghostquest: 42000,
   deliverquest: 26000,
@@ -180,7 +182,7 @@ const GROUPS = {
   // and left a client connected takes it. Running it first is not a fix for
   // that — it is a way of not paying for it every sweep.
   net: ['netclock', 'net', 'netmobile', 'netbooks', 'netdrop', 'netforget',
-    'netpollbooks', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbydel', 'netlobbyone', 'netnewvalley', 'netexit', 'netbookfields', 'nettitlecontinue', 'nettitleghost', 'nettitleghostpoll', 'solo'],
+    'netpollbooks', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbydel', 'netlobbyone', 'netnewvalley', 'netexit', 'netbookfields', 'nettitlecontinue', 'nettitleghost', 'nettitleghostpoll', 'netghostmove', 'netghostmovepoll', 'solo'],
   slow: ['netidle', 'netping', 'netmute', 'netpollquiet', 'netidletitle'],
 };
 GROUPS.all = [...new Set([

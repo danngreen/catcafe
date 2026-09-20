@@ -102,6 +102,13 @@ export class Room {
   handle(player, msg) {
     switch (msg.t) {
       case 'join': {
+        // The same browser coming back. A lost connection is only noticed when
+        // it goes quiet, which takes a while and is a while spent standing next
+        // to a copy of yourself that has your name and is not you. Being told
+        // "this is me" is faster and surer than any timeout, so the old one
+        // goes now — and the name it was holding is free again for its owner.
+        player.who = typeof msg.who === 'string' ? msg.who.slice(0, 64) : null;
+        if (player.who) this.replaceSelf(player);
         player.name = this.uniqueName(String(msg.name || `Player ${player.number}`).slice(0, 16));
         player.look = msg.look || null;
         player.x = Number(msg.x) || 0;
@@ -207,6 +214,24 @@ export class Room {
       hungry: cats.filter((c) => c.hunger > 0).length,
       playing: this.count,
     };
+  }
+
+  /**
+   * Take out whoever this browser was before. Called as they join, so the
+   * valley never holds two of anybody: the old connection is dropped, everyone
+   * is told they left, and the name goes back on the shelf.
+   */
+  replaceSelf(player) {
+    for (const old of [...this.players.values()]) {
+      if (old === player || old.who !== player.who) continue;
+      this.players.delete(old.id);
+      if (old.joined) {
+        this.broadcast({ t: 'left', id: old.id });
+        console.log(`[room] ${old.name || old.id} came back on a new connection`);
+      }
+      if (this.owner === old.id) this.owner = null;
+      try { old.ws.close(1000, 'replaced'); } catch { /* already gone */ }
+    }
   }
 
   /**
