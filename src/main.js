@@ -623,7 +623,7 @@ class Game {
       if (v.when === 'always') continue;
       v.setShift((v.when === 'night') === dark);
     }
-    this.hud.toast(dark ? 'The valley settles. Something else is about.' : 'Morning. The lane fills up again.',
+    this.hud.toast(dark ? 'The sun is down and a calm comes over the valley.' : 'Morning time. The streets fill up again.',
       'info', 5);
   }
 
@@ -823,11 +823,11 @@ class Game {
       return;
     }
     const canPay = st.money >= BEAR_PRICE;
-    const pitch = 'That is her. She is nine years old, she is entirely reliable, and she has '
-      + 'never once been in a hurry.\n\n'
+    const pitch = 'That is her. She is nine years old, she is entirely reliable, and she is '
+      + 'quite fast.\n\n'
       + `${money(BEAR_PRICE)}. One fresh fish a day and she will carry you anywhere in this `
-      + 'valley, water included.'
-      + (canPay ? '' : `\n\nYou have ${money(st.money)}. Come back when you have the rest.`);
+      + 'valley, even over water.'
+      + (canPay ? '' : `\n\nYou only have ${money(st.money)}. Come back when you have enough.`);
     this.dialogue.say(pitch, {
       speaker: def.name,
       onDone: () => {
@@ -855,8 +855,7 @@ class Game {
     st.buyBear(at.x * TILE + TILE / 2, (at.y + 1) * TILE - 2, 'overworld');
     audio.sfx('levelup', { gain: 0.7 });
     this.dialogue.say('Right. I will walk her over myself — she does not like carts.\n\n'
-      + 'She will be outside your place by the time you get back. Do not run home. '
-      + 'She will be there.',
+      + 'She will be outside your place by the time you get back.',
     { speaker: def.name });
     this.hud.toast('Drover Bell is walking the bear to your cafe.', 'good', 7);
   }
@@ -919,7 +918,7 @@ class Game {
     const st = this.state;
     if (fedToday(st.bear, st.clock)) { this.mountBear(); return; }
     if (!this.takeFish()) {
-      this.hud.toast('She looks at you, then at your empty hands. Fresh fish.', 'info', 5);
+      this.hud.toast('She looks at you, then at your empty hands. Fresh fish, please!', 'info', 5);
       audio.sfx('ui_back');
       return;
     }
@@ -2804,11 +2803,12 @@ const AWNING_CHOICES = ['#c05a7a', '#5b8fd6', '#7fbe57', '#eec453', '#8a72d6', '
 export const CAFE_NOUNS = [
   'Bell', 'Bramble', 'Cat', 'Claw', 'Cream', 'Hearth', 'Kettle', 'Kitten',
   'Lantern', 'Paw', 'Saucer', 'Sparrow', 'Teapot', 'Thistle', 'Whisker',
-  'Windowsill',
+  'Windowsill', 'Cup', 'Milk', 'Bean', 'Purr', 'Mew', 'Hiss', 'Collar'
 ];
 export const CAFE_ADJECTIVES = [
-  'Contented', 'Cosy', 'Curious', 'Drowsy', 'Fluffy', 'Idle', 'Quiet',
-  'Sleepy', 'Velvet', 'Wandering', 'Warm',
+  'Contented', 'Cozy', 'Curious', 'Drowsy', 'Fluffy', 'Idle', 'Quiet',
+  'Sleepy', 'Velvet', 'Wandering', 'Warm', 'Furry', 'Fussy', 'Peaceful',
+  'Spoiled', 'Silky'
 ];
 // The first word may be either; the second is always a noun. Alphabetical, so
 // a word you are looking for is where you would look for it rather than where
@@ -3410,7 +3410,7 @@ class TitleScreen extends Screen {
     }
 
     drawTextCentered(ctx, 'Left / Right to change    Space to begin', x + w / 2, y + h - 16, { color: P.uiTextDim, shadow: P.uiShadow });
-    drawTextCentered(ctx, "(You can skip all this — it's only paint)", VIEW_W / 2, y + h + 10, { color: '#2f3d22' });
+    drawTextCentered(ctx, "(You can skip all this — it's only for looks)", VIEW_W / 2, y + h + 10, { color: '#2f3d22' });
   }
 }
 
