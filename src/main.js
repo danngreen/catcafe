@@ -215,7 +215,21 @@ class Game {
     this.state = new GameState({
       toast: (text, tone) => this.hud.toast(text, tone),
       float: (text, x, y, color) => this.hud.float(text, x, y, color),
-      playerPos: () => (this.player ? { x: this.player.x, y: this.player.y, map: this.state.mapId } : null),
+      // Where to put you when you come back. Inside a shop the answer is the
+      // doorstep you came in through, not the spot you are standing on: only
+      // the overworld and your own cafe are rebuilt on Continue, so interior
+      // coordinates read as overworld ones and land you in the top corner of
+      // the valley, a couple of hundred tiles from anywhere.
+      playerPos: () => {
+        if (!this.player) return null;
+        const map = this.state.mapId;
+        if (map === 'overworld' || map === 'cafe') {
+          return { x: this.player.x, y: this.player.y, map };
+        }
+        const back = this.returnPoint || this.homeDoor;
+        if (!back) return null;
+        return { x: back.x * TILE + TILE / 2, y: (back.y + 1) * TILE - 2, map: 'overworld' };
+      },
       onCafeRebuilt: (map) => {
         this.maps.set('cafe', map);
         this.refreshCafeExterior();
@@ -700,7 +714,10 @@ class Game {
       this.currentMap = st.cafeMap;
     } else {
       this.enterOverworld();
-      if (p) { this.player.x = p.x; this.player.y = p.y; }
+      // Only a position that was recorded out in the valley means anything
+      // here. An older save made inside a shop carries that shop's own
+      // coordinates, and honouring them strands you in the corner of the map.
+      if (p && (!p.map || p.map === 'overworld')) { this.player.x = p.x; this.player.y = p.y; }
     }
     this.mode = 'play';
     this.cam.follow(this.currentMap, this.player.x, this.player.y, true);
@@ -3099,7 +3116,12 @@ class TitleScreen extends Screen {
   /** There's a cafe already: show its colours, and drop the choices we can't make. */
   adoptOpenCafe() {
     this.joining = true;
-    this.options = ['Join the cafe'];
+    // Coming back to a valley this browser has played is still Continue, even
+    // though the cafe is somebody else's now: the books are the server's either
+    // way, and what the save is for is picking your own name, face and spot back
+    // up rather than starting again on the doorstep every time you rejoin.
+    this.options = GameState.hasSave(this.game.worldSeed)
+      ? ['Continue', 'Join the cafe'] : ['Join the cafe'];
     this.index = 0;
     this.row = Math.min(this.row, 2);
     const c = this.game.net.world.cafe;

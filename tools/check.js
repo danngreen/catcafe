@@ -46,6 +46,8 @@ const BUDGET = {
   sleep: 20000,
   door: 20000,
   doorblock: 25000,
+  resumeplace: 25000,
+  nettitlecontinue: 50000,
   ghostquest: 42000,
   deliverquest: 26000,
   wishlist: 30000,
@@ -159,7 +161,7 @@ const GROUPS = {
   cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers', 'employee',
     'weathercafe', 'hourly'],
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',
-    'barriers', 'eastpass', 'barrierreach', 'passcleared', 'debugpos', 'weather', 'doorblock'],
+    'barriers', 'eastpass', 'barrierreach', 'passcleared', 'debugpos', 'weather', 'doorblock', 'resumeplace'],
   // Frame times, and the things that are supposed to make them shorter. These
   // report numbers as much as they pass or fail: a machine under load will
   // read slower without anything being wrong, so they assert on what the code
@@ -176,7 +178,7 @@ const GROUPS = {
   // and left a client connected takes it. Running it first is not a fix for
   // that — it is a way of not paying for it every sweep.
   net: ['netclock', 'net', 'netmobile', 'netbooks', 'netdrop', 'netforget',
-    'netpollbooks', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbydel', 'netlobbyone', 'netnewvalley', 'netexit', 'netbookfields', 'solo'],
+    'netpollbooks', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbydel', 'netlobbyone', 'netnewvalley', 'netexit', 'netbookfields', 'nettitlecontinue', 'solo'],
   slow: ['netidle', 'netping', 'netmute', 'netpollquiet', 'netidletitle'],
 };
 GROUPS.all = [...new Set([

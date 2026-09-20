@@ -6241,6 +6241,115 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (results.some((r) => r.includes('STUCK'))) {
           window.__errors.push('trapped after leaving a building: ' + window.__door);
         }
+      } else if (SCRIPT === 'nettitlecontinue') {
+        // Rejoining a valley you have played before. The cafe is open — somebody
+        // else's paint — but this browser has a save of this valley, so Continue
+        // has to be on offer and has to put you back where you stood. Done
+        // across a real reload, which is what rejoining actually is.
+        const PHASE = 'catcafe.test.continue';
+        let phase = null;
+        try { phase = localStorage.getItem(PHASE); } catch (e) {}
+        let waited = 0;
+        while (!g.net.connected && waited < 8000) { await wait(200); waited += 200; }
+        if (!phase) {
+          // Open the cafe if nobody has, so the second half sees a real join.
+          if (!g.net.world) {
+            g.screens.length = 0;
+            g.startNewGame({ species: 'cat', coat: 'ginger', cloth: '#5b8fd6' },
+              { wall: '#efe2c8', roof: '#8a4b3c', awning: '#c05a7a', floor: 6, name: 'The Test Cat' });
+            await wait(1200);
+          }
+          const door = g.doorByShop.get('cafe');
+          g.state.mapId = 'overworld';
+          g.state.inCafe = false;
+          g.currentMap = g.overworld;
+          g.player.x = door.x * 16 + 8;
+          g.player.y = (door.y + 4) * 16 - 2;
+          const saved = g.state.save();
+          try {
+            localStorage.setItem(PHASE, JSON.stringify({ x: g.player.x, y: g.player.y, saved }));
+          } catch (e) {}
+          location.reload();
+          await wait(25000);          // the reload takes it from here
+        } else {
+          let want = null;
+          try { want = JSON.parse(phase); localStorage.removeItem(PHASE); } catch (e) {}
+          while (!g.net.world && waited < 14000) { await wait(250); waited += 250; }
+          const ts = g.screens[g.screens.length - 1];
+          const opts = (ts && ts.options) || [];
+          window.__cont = `saved=${want && want.saved} world=${!!g.net.world}`
+            + ` joining=${ts && ts.joining} opts=[${opts}]`;
+          if (!ts || !ts.options) window.__errors.push('no title screen to rejoin from: ' + window.__cont);
+          else if (!opts.includes('Continue')) {
+            window.__errors.push('no Continue when rejoining a valley this browser has played: ' + window.__cont);
+          } else {
+            ts.index = opts.indexOf('Continue');
+            key('Space', true); await wait(220); key('Space', false);
+            await wait(1400);
+            const off = want ? Math.round(Math.hypot(g.player.x - want.x, g.player.y - want.y)) : -1;
+            window.__cont += ` map=${g.state.mapId} off=${off}`;
+            if (g.state.mapId !== 'overworld' || off > 24) {
+              window.__errors.push('Continue did not put me back where I was: ' + window.__cont);
+            }
+          }
+        }
+      } else if (SCRIPT === 'resumeplace') {
+        // Save, leave, come back: you are supposed to be where you left off.
+        // The three places you can be when you press Save are the overworld,
+        // your own cafe, and somebody else's shop.
+        const results = [];
+        const door = g.doorByShop.get('cafe');
+        const away = (x, y) => Math.round(Math.hypot(g.player.x - x, g.player.y - y));
+
+        // 1. Out in the valley.
+        g.state.mapId = 'overworld';
+        g.state.inCafe = false;
+        g.currentMap = g.overworld;
+        const ox = door.x * 16 + 8, oy = (door.y + 3) * 16 - 2;
+        g.player.x = ox; g.player.y = oy;
+        g.state.save();
+        g.continueGame();
+        await wait(400);
+        const valleyOff = away(ox, oy);
+        results.push(`overworld:${g.state.mapId}@${valleyOff}`);
+
+        // 2. Inside your own cafe.
+        g.state.mapId = 'cafe';
+        g.state.inCafe = true;
+        g.currentMap = g.state.cafeMap;
+        const cx = g.player.x = 80, cy = g.player.y = 80;
+        g.state.save();
+        g.continueGame();
+        await wait(400);
+        const cafeOff = away(cx, cy);
+        results.push(`cafe:${g.state.mapId}@${cafeOff}`);
+
+        // 3. Inside a shop — an interior that is not the cafe.
+        const shop = g.doorByShop.get('inn') || g.doors[0];
+        g.returnPoint = { x: shop.x, y: shop.y + 1 };   // tiles, as enterInterior records them
+        g.state.mapId = 'shop:inn';
+        g.state.inCafe = false;
+        g.player.x = 120; g.player.y = 96;
+        g.state.save();
+        g.continueGame();
+        await wait(400);
+        const backAt = `${Math.round(g.player.x / 16)},${Math.round(g.player.y / 16)}`;
+        const nearDoor = away(shop.x * 16 + 8, (shop.y + 1) * 16 - 2);
+        results.push(`shop:${g.state.mapId}@${backAt} fromDoor=${nearDoor}`);
+
+        window.__resume = results.join(' ');
+        if (g.state.mapId !== 'overworld' || valleyOff > 24) {
+          window.__errors.push('did not come back to the same spot in the valley: ' + window.__resume);
+        }
+        if (!results[1].startsWith('cafe:cafe@') || cafeOff > 24) {
+          window.__errors.push('did not come back into the cafe: ' + window.__resume);
+        }
+        // Saving in a shop must not land you somewhere else entirely: interior
+        // coordinates read as overworld ones put you in the top corner of the
+        // map, half a valley from the door you walked in through.
+        if (nearDoor > 64) {
+          window.__errors.push('saved in a shop and came back miles away: ' + window.__resume);
+        }
       } else if (SCRIPT === 'doorblock') {
         // Somebody standing on a doorstep used to own every keypress meant for
         // the door, so the shop behind them could not be entered at all. Two
