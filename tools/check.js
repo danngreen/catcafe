@@ -71,6 +71,8 @@ const BUDGET = {
   ghoststuck: 22000,
   // Deliberately longer than any idle timeout, which is the point of them.
   takeover: 40000,
+  netpollgone: 60000,
+  netoffline: 30000,
   netidle: 60000,
   netidletitle: 58000,
   netping: 68000,
@@ -191,8 +193,8 @@ const GROUPS = {
   // goes to whoever joined the valley first, and a scenario that ran before it
   // and left a client connected takes it. Running it first is not a fix for
   // that — it is a way of not paying for it every sweep.
-  net: ['netclock', 'net', 'netmobile', 'netbooks', 'netdrop', 'netforget',
-    'netpollbooks', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbydel', 'netlobbyone', 'netnewvalley', 'netexit', 'netbookfields', 'nettitlecontinue', 'nettitleghost', 'nettitleghostpoll', 'netghostmove', 'netghostmovepoll', 'solo'],
+  net: ['netclock', 'net', 'netmobile', 'netbooks', 'netdrop', 'netoffline', 'netforget',
+    'netpollbooks', 'netpollgone', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbydel', 'netlobbyone', 'netnewvalley', 'netexit', 'netbookfields', 'nettitlecontinue', 'nettitleghost', 'nettitleghostpoll', 'netghostmove', 'netghostmovepoll', 'solo'],
   slow: ['netidle', 'netping', 'netmute', 'netpollquiet', 'netidletitle'],
 };
 GROUPS.all = [...new Set([

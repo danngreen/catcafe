@@ -7,6 +7,7 @@
 // resolves false, `shared` stays false, and every op is a no-op.
 
 import { WsLink, PollLink } from './link.js';
+import { merge3 } from './merge.js';
 
 const TRANSPORT_KEY = 'catcafe.transport';
 const WHO_KEY = 'catcafe.who';
@@ -16,6 +17,9 @@ const CUST_HZ = 10;
 // apron colour or standing still sends nothing at all — so say hello regularly.
 const PING_SECONDS = 8;
 const RETRY_SECONDS = 3;
+// Changes made while the link is down, kept to be sent when it is back. Far
+// more than anybody does in an outage; a bound all the same.
+const MAX_PENDING = 500;
 
 export class NetClient {
   constructor() {
@@ -43,6 +47,12 @@ export class NetClient {
     // title screen, an open menu and a backgrounded tab all still need them.
     this.everConnected = false;
     this.rejoin = null;       // what to send again after a drop
+    // Changes to the books made while we couldn't reach them — see op().
+    this.pending = [];
+    // The server's last word on each field, as text so that nothing the game
+    // does to the live object afterwards can reach it. It is what a change
+    // made offline is measured against.
+    this.baseJson = {};
     this.beats = 0;
     this.retryIn = 0;
     this.reconnecting = false;
@@ -88,6 +98,7 @@ export class NetClient {
         this.rejoinCount++;
         this.lastSent = { x: -1, y: -1, dir: '', map: '' };
         this.join(j.name, j.look, j.x, j.y, j.map);
+        this.caughtUp = this.flushPending();
       }
       this.emit('reconnected');
     });
@@ -238,6 +249,8 @@ export class NetClient {
         close: () => {
           if (this.link !== link) return;
           this.link = null;
+          // The HTTP link knows exactly what it never got through.
+          this.requeue(link.outbox);
           this.noteClose();
           done(false);
         },
@@ -274,6 +287,7 @@ export class NetClient {
    */
   leave() {
     this.rejoin = null;
+    this.pending = [];
     this.everConnected = false;
     // Said first, so that if we were running the cafe the server passes it on
     // at once instead of holding it for a return that is not coming.
@@ -315,6 +329,7 @@ export class NetClient {
         this.here = msg.here || 1;
         this.host = location.host;
         this.world = msg.world || null;
+        this.noteBase(this.world);
         this.clock = msg.clock || null;
         this.owner = msg.owner || null;
         this.connected = true;
@@ -326,6 +341,7 @@ export class NetClient {
       case 'world':
         // Somebody else opened the cafe first; theirs is the real one.
         this.world = msg.world;
+        this.noteBase(this.world);
         this.clock = msg.clock || null;
         this.emit('world', msg.world, msg.clock);
         break;
@@ -334,6 +350,7 @@ export class NetClient {
         // title screen: whoever starts later adopts this, and a snapshot frozen
         // at connect time would undo everything that happened since.
         if (this.world) this.world[msg.k] = msg.v;
+        this.baseJson[msg.k] = JSON.stringify(msg.v);
         this.emit('sync', msg.k, msg.v);
         break;
       case 'clock':
@@ -460,11 +477,86 @@ export class NetClient {
     this.send({ t: 'join', name, look, x: Math.round(x), y: Math.round(y), map, who: NetClient.who() });
   }
 
-  /** Change something in the shared books. Silently local when playing alone. */
-  op(o) { if (this.shared) this.send({ t: 'op', ...o }); }
+  /**
+   * Change something in the shared books. Silently local when playing alone.
+   *
+   * And kept for later when we are in a valley but can't reach it just now.
+   * The game has already made the change to its own copy by the time it gets
+   * here, and coming back takes the server's books wholesale — so a change
+   * that was simply dropped was undone a few seconds later: the chair bought
+   * during a wifi blip gone and the money back, the job finished and then
+   * not. Sent late instead, it sticks.
+   */
+  op(o) {
+    if (this.shared) { this.send({ t: 'op', ...o }); return; }
+    if (this.everConnected && this.rejoin) this.keep(o);
+  }
+
+  keep(o) {
+    if (o.op === 'set') {
+      // Only the last word on a field matters, measured against the first
+      // thing we knew about it.
+      const i = this.pending.findIndex((p) => p.o.op === 'set' && p.o.k === o.k);
+      const base = i >= 0 ? this.pending[i].base : this.baseJson[o.k];
+      if (i >= 0) this.pending.splice(i, 1);
+      this.pending.push({ o, base });
+    } else {
+      this.pending.push({ o });
+    }
+    if (this.pending.length > MAX_PENDING) this.pending.splice(0, this.pending.length - MAX_PENDING);
+  }
+
+  /** Messages a dead link never delivered: the changes among them are kept. */
+  requeue(texts) {
+    if (!this.rejoin) return;
+    for (const text of texts || []) {
+      let msg;
+      try { msg = JSON.parse(text); } catch { continue; }
+      if (!msg || msg.t !== 'op') continue;
+      delete msg.t;
+      this.keep(msg);
+    }
+  }
+
+  /**
+   * Back in the valley: send what was done while away. Small operations go as
+   * they are. A field written whole goes as the difference it made to what
+   * the books say now, so it doesn't undo what the others did meanwhile.
+   */
+  flushPending() {
+    const pending = this.pending;
+    this.pending = [];
+    if (!this.shared) return 0;
+    for (const p of pending) {
+      let o = p.o;
+      if (o.op === 'set' && p.base !== undefined && this.world && this.world[o.k] !== undefined) {
+        let base;
+        try { base = JSON.parse(p.base); } catch { base = undefined; }
+        // Through JSON, as it would have gone over the wire: cats and the
+        // like are plain data by then, and nothing here is the live object.
+        const ours = JSON.parse(JSON.stringify(o.v));
+        if (base !== undefined) o = { op: 'set', k: o.k, v: merge3(base, ours, this.world[o.k]) };
+      }
+      this.send({ t: 'op', ...o });
+    }
+    return pending.length;
+  }
+
+  /** What the server says the books are, field by field, for measuring against. */
+  noteBase(world) {
+    this.baseJson = {};
+    if (!world) return;
+    for (const k of Object.keys(world)) this.baseJson[k] = JSON.stringify(world[k]);
+  }
 
   /** Offer the world we just built. The server keeps only the first offer. */
-  seedWorld(world, clock) { if (this.shared) this.send({ t: 'seedworld', world, clock }); }
+  seedWorld(world, clock) {
+    if (!this.shared) return;
+    // If it is taken, this is what the books say; if it isn't, a `world`
+    // arrives a moment later and says otherwise.
+    this.noteBase(world);
+    this.send({ t: 'seedworld', world, clock });
+  }
 
   skipTo(hour) { if (this.shared) this.send({ t: 'skip', hour }); }
 

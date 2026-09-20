@@ -326,7 +326,10 @@ class Game {
       // We may have missed a whole afternoon of other people's changes, so take
       // the valley's books wholesale rather than trusting our stale copy.
       if (net.world && this.mode === 'play') st.adopt(net.world, net.clock);
-      this.hud.toast('Back in the valley.', 'good');
+      // Anything done while the line was down has just been sent after us, and
+      // comes back as ordinary syncs on top of what we adopted above.
+      this.hud.toast(net.caughtUp ? 'Back in the valley — what you did while away has been kept.'
+        : 'Back in the valley.', 'good');
     });
 
     // The shared books. Every one of these arrives because somebody — possibly

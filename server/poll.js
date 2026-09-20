@@ -19,7 +19,13 @@ export class PollConn {
     this.id = randomUUID().slice(0, 8);
     this.open = true;
     this.handlers = { message: [], close: [] };
-    this.out = [];                  // messages waiting for the next poll
+    // Messages the client has not yet said it has. Kept until it does, not
+    // until they are sent: a reply can be lost on the way back, and a `sync`
+    // or an `owner` that went with it used to be gone for good — after which
+    // that player's books quietly disagreed with everybody else's.
+    this.out = [];
+    this.outFirst = 0;              // the number of out[0]
+    this.recvNext = 0;              // the number of the next message we expect
     this.lastActivity = Date.now();
     this.onGone = onGone;
     // A poll connection is proved alive ten times a second, so silence means
@@ -36,7 +42,11 @@ export class PollConn {
     if (!this.open) return;
     this.out.push(text);
     // A client that has stopped collecting shouldn't cost us memory forever.
-    if (this.out.length > 400) this.out.splice(0, this.out.length - 400);
+    if (this.out.length > 400) {
+      const drop = this.out.length - 400;
+      this.out.splice(0, drop);
+      this.outFirst += drop;
+    }
   }
 
   sendJSON(obj) { this.send(JSON.stringify(obj)); }
@@ -44,11 +54,20 @@ export class PollConn {
   /** The poll itself is the proof of life, so there's nothing to ask. */
   ping() {}
 
-  /** Called by the request handler: hand over what's waiting. */
+  /** Called by the request handler: hand over everything, and forget it. */
   drain() {
     const out = this.out;
+    this.outFirst += out.length;
     this.out = [];
     return out;
+  }
+
+  /** The client has everything before `n`, so that much can go. */
+  acked(n) {
+    const drop = Math.min(this.out.length, Math.max(0, n - this.outFirst));
+    if (!drop) return;
+    this.out.splice(0, drop);
+    this.outFirst += drop;
   }
 
   close() {
@@ -73,6 +92,12 @@ export class PollHub {
    */
   handle(body, attach) {
     let conn = body.id ? this.conns.get(body.id) : null;
+    // Asking for a connection we don't have: it timed out while the tab was
+    // asleep, or the server was restarted. Say so. Quietly starting a new one
+    // under the same client left it believing it was still in the valley when
+    // the room had never heard of it — walking about and spending money,
+    // invisible to everybody. Told it is gone, it reconnects and rejoins.
+    if (body.id && !conn && !body.bye) return { id: body.id, gone: true, msgs: [] };
     // A client on its way out says so, since there is no socket to close and
     // nothing else would tell the room for a whole minute.
     if (body.bye) {
@@ -85,9 +110,24 @@ export class PollHub {
       attach(conn);                 // room sends `welcome` into conn.out
     }
     conn.lastActivity = Date.now();
-    for (const text of body.msgs || []) {
-      if (typeof text === 'string') conn.emit('message', text);
+    const msgs = Array.isArray(body.msgs) ? body.msgs : [];
+    // A client from before messages were numbered: everything once, as it was.
+    if (!Number.isFinite(body.first) || !Number.isFinite(body.ack)) {
+      for (const text of msgs) if (typeof text === 'string') conn.emit('message', text);
+      return { id: conn.id, msgs: conn.drain() };
     }
-    return { id: conn.id, msgs: conn.drain() };
+    // The client repeats whatever it hasn't heard we received, so a request
+    // whose reply went missing arrives again. Anything numbered below what
+    // we're expecting has been dealt with: spending the same money twice is
+    // exactly what this is here to prevent.
+    for (let i = 0; i < msgs.length; i++) {
+      const n = body.first + i;
+      if (n < conn.recvNext) continue;
+      conn.recvNext = n + 1;
+      if (typeof msgs[i] === 'string') conn.emit('message', msgs[i]);
+      if (!conn.open) break;               // that message got us hung up on
+    }
+    conn.acked(body.ack);
+    return { id: conn.id, got: conn.recvNext, first: conn.outFirst, msgs: conn.out.slice() };
   }
 }

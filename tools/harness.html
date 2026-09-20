@@ -5694,6 +5694,75 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!g.net.connected || !g.net.joined) window.__errors.push('never came back: ' + window.__drop);
         if (st.money !== before - 100) window.__errors.push('missed what happened while away: ' + window.__drop);
         bot.close();
+      } else if (SCRIPT === 'netoffline') {
+        // Things done while the link is down. The game changes its own books
+        // first and coming back takes the server's wholesale, so these used to
+        // be undone a few seconds after they were made: the money back, the
+        // flag unset. Now they are sent late — on top of, not instead of,
+        // whatever the other player did meanwhile.
+        const st = g.state;
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const bot = new WebSocket(`${proto}//${location.host}/ws`);
+        bot.onmessage = (ev) => {
+          const m = JSON.parse(ev.data);
+          if (m.t === 'welcome') bot.send(JSON.stringify({ t: 'join', name: 'Ledger', look: st.playerLook, x: 0, y: 0, map: 'overworld' }));
+        };
+        await wait(900);
+        const before = st.money;
+        const rejoins0 = g.net.rejoinCount;
+        g.net.link.ws.close();
+        for (let i = 0; i < 100 && g.net.connected; i++) await wait(10);
+        const wasDown = !g.net.connected;
+        // Offline: a purchase, a flag, a friendship and a place found.
+        st.spend(50);
+        st.give('f_chair', 1);
+        st.flags.offline_probe = true; st.touch('flags');
+        st.friends.offline_owl = 0.5; st.touch('friends');
+        const chairs = st.inventory.f_chair;
+        // Meanwhile, elsewhere.
+        bot.send(JSON.stringify({ t: 'op', op: 'money', d: -100 }));
+        bot.send(JSON.stringify({ t: 'op', op: 'set', k: 'flags', v: { ...JSON.parse(JSON.stringify(st.flags)), offline_probe: undefined, bot_probe: true } }));
+        let waited = 0;
+        while (g.net.rejoinCount === rejoins0 && waited < 12000) { await wait(250); waited += 250; }
+        await wait(1500);
+        const status = await (await fetch('/status' + (location.search.match(/game=\d+/) ? '?' + location.search.match(/game=\d+/)[0] : ''), { cache: 'no-store' })).json();
+        window.__offline = `down=${wasDown} back=${g.net.joined} after=${waited}ms kept=${g.net.caughtUp}`
+          + ` money ${before}->${st.money} (server ${status.money}) chairs=${st.inventory.f_chair}/${chairs}`
+          + ` flags mine=${!!st.flags.offline_probe} theirs=${!!st.flags.bot_probe} friend=${st.friends.offline_owl}`;
+        if (!wasDown) window.__errors.push('never went offline, so nothing was tested: ' + window.__offline);
+        if (st.money !== before - 150 || status.money !== before - 150) window.__errors.push('the money does not add up: ' + window.__offline);
+        if (st.inventory.f_chair !== chairs) window.__errors.push('the chair bought offline is gone: ' + window.__offline);
+        if (!st.flags.offline_probe) window.__errors.push('the flag set offline was undone: ' + window.__offline);
+        if (!st.flags.bot_probe) window.__errors.push('the flag set meanwhile was overwritten: ' + window.__offline);
+        if (st.friends.offline_owl !== 0.5) window.__errors.push('the friendship made offline was undone: ' + window.__offline);
+        bot.close();
+      } else if (SCRIPT === 'netpollgone') {
+        // A tab that slept through the server's patience. The server has hung
+        // up on a connection the client still believes in; the next poll used
+        // to be quietly given a new one, which left us walking about a valley
+        // that had never heard of us. Now it is told, and rejoins.
+        const link = g.net.link;
+        const id0 = g.net.id;
+        const rejoins0 = g.net.rejoinCount;
+        if (g.net.transport !== 'poll') window.__errors.push('not on the HTTP transport');
+        clearInterval(link.timer);                       // the tab goes to sleep
+        let gone = false;
+        for (let i = 0; i < 40 && !gone; i++) {
+          await wait(1000);
+          const status = await (await fetch('/status', { cache: 'no-store' })).json();
+          gone = !status.players.some((p) => p.id === id0);
+        }
+        link.timer = setInterval(() => link.tick(), 100);  // and wakes up
+        let waited = 0;
+        while (!(g.net.joined && g.net.id !== id0) && waited < 12000) { await wait(250); waited += 250; }
+        await wait(500);
+        const status = await (await fetch('/status', { cache: 'no-store' })).json();
+        const me = status.players.find((p) => p.id === g.net.id);
+        window.__gone = `hungUpOn=${gone} back=${g.net.connected}/${g.net.joined} after=${waited}ms`
+          + ` rejoins=${g.net.rejoinCount - rejoins0} serverHasUs=${!!(me && me.joined)}`;
+        if (!gone) window.__errors.push('the server never hung up, so nothing was tested: ' + window.__gone);
+        if (!me || !me.joined) window.__errors.push('in the valley as far as we know, and not as far as the server does: ' + window.__gone);
+        if (g.net.rejoinCount === rejoins0) window.__errors.push('never rejoined: ' + window.__gone);
       } else if (SCRIPT === 'netpollbooks') {
         // Everything the socket does, over plain HTTP requests instead. This is
         // what a machine whose content filter kills long-lived connections ends

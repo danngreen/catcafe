@@ -11,7 +11,13 @@
 // pair of callbacks. Nothing above here knows or cares which one is in use.
 
 const POLL_MS = 100;
-const POLL_GIVE_UP = 25;        // consecutive failures before we call it dead
+// A request that hasn't answered by now isn't going to, and nothing else can be
+// sent until it is given up on.
+const POLL_TIMEOUT_MS = 4000;
+// This long with no answer at all and the link is dead. By time rather than by
+// count: a refused connection fails in a millisecond and a black hole takes the
+// whole timeout, and both should be given the same chance.
+const POLL_GIVE_UP_MS = 10000;
 
 export class WsLink {
   constructor(url, h) {
@@ -48,10 +54,16 @@ export class PollLink {
     this.url = url;
     this.h = h;
     this.id = null;
+    // Everything the server hasn't said it has. Each message has a number —
+    // outFirst is the number of outbox[0] — and the whole lot is sent every
+    // time, so a request that fails, or works but loses its reply, costs
+    // nothing: the server skips what it has already seen.
     this.outbox = [];
+    this.outFirst = 0;
+    this.inNext = 0;                // the number of the next message we expect
     this.dead = false;
     this.busy = false;
-    this.fails = 0;
+    this.lastOk = Date.now();
     this.timer = setInterval(() => this.tick(), POLL_MS);
     this.tick();
   }
@@ -61,27 +73,55 @@ export class PollLink {
   async tick() {
     if (this.dead || this.busy) return;
     this.busy = true;
-    // Take the outbox now; if the request fails they go back on the front so
-    // nothing is lost to one bad moment.
-    const msgs = this.outbox;
-    this.outbox = [];
+    const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = ac ? setTimeout(() => ac.abort(), POLL_TIMEOUT_MS) : null;
     try {
       const res = await fetch(this.url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: this.id, msgs }),
+        body: JSON.stringify({
+          id: this.id, first: this.outFirst, ack: this.inNext, msgs: this.outbox.slice(),
+        }),
         cache: 'no-store',
+        signal: ac ? ac.signal : undefined,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      if (this.dead) return;
+      // The server has no such connection: we slept through its timeout, or it
+      // was restarted. This link is over; NetClient opens another and rejoins.
+      if (data.gone) { this.die(); return; }
       this.id = data.id;
-      this.fails = 0;
-      if (!this.dead) for (const m of data.msgs || []) this.h.message(m);
+      this.lastOk = Date.now();
+      this.receive(data);
     } catch {
-      this.outbox = msgs.concat(this.outbox);
-      if (++this.fails >= POLL_GIVE_UP) this.die();
+      if (Date.now() - this.lastOk >= POLL_GIVE_UP_MS) this.die();
     } finally {
+      if (timer) clearTimeout(timer);
       this.busy = false;
+    }
+  }
+
+  receive(data) {
+    // What the server has had from us can go.
+    if (typeof data.got === 'number') {
+      const drop = Math.min(this.outbox.length, Math.max(0, data.got - this.outFirst));
+      this.outbox.splice(0, drop);
+      this.outFirst += drop;
+    } else {
+      // A server from before messages were numbered took all of it.
+      this.outFirst += this.outbox.length;
+      this.outbox = [];
+    }
+    // It repeats whatever we haven't acknowledged, so skip what we've had.
+    const msgs = data.msgs || [];
+    const first = typeof data.first === 'number' ? data.first : this.inNext;
+    for (let i = 0; i < msgs.length; i++) {
+      const n = first + i;
+      if (n < this.inNext) continue;
+      this.inNext = n + 1;
+      if (this.dead) return;
+      this.h.message(msgs[i]);
     }
   }
 

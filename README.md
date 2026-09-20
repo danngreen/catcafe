@@ -151,6 +151,13 @@ strand anyone — you come back where you were, with the books as they are now.
 A client that has lost the link stops simulating rather than quietly running a
 second cafe, and says **OFFLINE** in the corner until it's back.
 
+What you do while it says OFFLINE is kept and sent when the link returns: the
+chair you bought, the job you finished. Small changes — money, the bag, the
+pantry, quest steps — are simply sent late. Fields that are published whole,
+like the flags, friendships and cats, are sent as the *difference* you made, on
+top of whatever the books say by then, so coming back doesn't undo what the
+others did while you were away (`src/net/merge.js`).
+
 **If a machine can't hold a socket open.** Some can't — macOS Screen Time's
 Content & Privacy Restrictions is the one this was written for. The filter lets
 the connection up and then kills it a few seconds later, over and over, so the
@@ -165,6 +172,14 @@ anyone doing anything. It remembers, so it doesn't relearn the lesson every
 time. Add `?poll` to skip straight to HTTP, or `?ws` to forget and try a socket
 again. `?netdebug` shows which one is in use. **You do not need to turn parental
 controls off.**
+
+HTTP requests get lost in ways a socket's messages don't, so over this transport
+every message is numbered in both directions and kept until the other end says
+it has it. A request that is acted on but whose reply goes missing is sent
+again and recognised, so nothing is spent twice; a reply that goes missing is
+repeated, so no change to the books is lost. And a client whose connection the
+server has given up on — a tab that slept too long, a server restart — is told
+so, and rejoins, rather than carrying on in a valley that can't see it.
 
 Staying in the game doesn't depend on the game: the server pings each socket
 itself and the browser answers in its own networking code, with no page script

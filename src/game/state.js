@@ -88,7 +88,7 @@ export class GameState {
    * Publish a change. Suppressed while we're applying one, or nobody would ever
    * stop echoing the same edit back and forth.
    */
-  pub(op) { if (this.shared && !this.applying) this.net.op(op); }
+  pub(op) { if (this.net && !this.applying) this.net.op(op); }
 
   /** Money moves as a delta so two tills can ring up at once without a clash. */
   earn(n) { this.money += n; this.pub({ op: 'money', d: n }); }
