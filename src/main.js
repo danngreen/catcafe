@@ -710,14 +710,18 @@ class Game {
     if (p && p.map === 'cafe') {
       this.state.mapId = 'cafe';
       this.state.inCafe = true;
-      this.player.x = p.x; this.player.y = p.y;
       this.currentMap = st.cafeMap;
+      // The exact spot if it is still a spot. The cafe you come back to is not
+      // always the cafe you left — somebody may have taken a room down while
+      // you were away — and outside the walls is solid, so landing there is
+      // landing unable to move. placeOn finds the nearest floor instead.
+      this.standAt(st.cafeMap, p);
     } else {
       this.enterOverworld();
       // Only a position that was recorded out in the valley means anything
       // here. An older save made inside a shop carries that shop's own
       // coordinates, and honouring them strands you in the corner of the map.
-      if (p && (!p.map || p.map === 'overworld')) { this.player.x = p.x; this.player.y = p.y; }
+      if (p && (!p.map || p.map === 'overworld')) this.standAt(this.overworld, p);
     }
     this.mode = 'play';
     this.cam.follow(this.currentMap, this.player.x, this.player.y, true);
@@ -1700,6 +1704,17 @@ class Game {
   }
 
   /**
+   * Put the player back on a remembered spot — exactly, when that spot is still
+   * somewhere a person can stand, and on the nearest floor to it when it is
+   * not. Keeping the pixels matters: a save is meant to put you back where you
+   * were, not half a tile off it.
+   */
+  standAt(map, p) {
+    if (canStand(map, p.x, p.y)) { this.player.x = p.x; this.player.y = p.y; return; }
+    this.placeOn(map, Math.floor(p.x / TILE), Math.floor(p.y / TILE));
+  }
+
+  /**
    * Stand the player on a tile, stepping to the nearest clear one if that tile
    * turns out to be blocked. Nothing should ever strand you inside a wall.
    */
@@ -1711,13 +1726,19 @@ class Game {
     set(tx, ty);
     if (canStand(map, this.player.x, this.player.y)) return;
     // Search outward, preferring straight down — you've just come out of a door.
-    for (let r = 1; r <= 4; r++) {
+    for (let r = 1; r <= 10; r++) {
       for (const [dx, dy] of [[0, r], [0, -r], [r, 0], [-r, 0], [r, r], [-r, r], [r, -r], [-r, -r]]) {
         const nx = tx + dx, ny = ty + dy;
         if (!map.inBounds(nx, ny)) continue;
         set(nx, ny);
         if (canStand(map, this.player.x, this.player.y)) return;
       }
+    }
+    // Nothing nearby is standable at all — the room this spot was in is gone.
+    // The way in is somewhere to be, and it is somewhere you recognise.
+    if (map.spawn) {
+      set(map.spawn.x, map.spawn.y);
+      if (canStand(map, this.player.x, this.player.y)) return;
     }
     set(tx, ty);
   }

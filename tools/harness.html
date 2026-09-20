@@ -6460,6 +6460,41 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             }
           }
         }
+      } else if (SCRIPT === 'cafestrand') {
+        // Coming back into a cafe that is not the shape it was. A saved spot
+        // can be outside the walls now — somebody took a room down while you
+        // were away — and outside the walls is solid, so you arrive stuck
+        // inside it, sliding diagonally off corners instead of walking.
+        const map = g.state.cafeMap;
+        // Somewhere solidly outside the rooms: the far corner of the plan.
+        let voidTile = null;
+        for (let y = map.h - 1; y >= 0 && !voidTile; y--) {
+          for (let x = map.w - 1; x >= 0; x--) {
+            if (map.solid(x, y) && map.get(x, y) === 0) { voidTile = { x, y }; break; }
+          }
+        }
+        g.state.mapId = 'cafe';
+        g.state.inCafe = true;
+        g.currentMap = map;
+        g.player.x = voidTile.x * 16 + 8;
+        g.player.y = (voidTile.y + 1) * 16 - 2;
+        const saved = g.state.save();
+        g.continueGame();
+        await wait(600);
+        const landed = { x: g.player.x, y: g.player.y };
+        // Can we actually walk? Try all four ways and take the best.
+        let best = 0;
+        for (const code of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']) {
+          const from = { x: g.player.x, y: g.player.y };
+          key(code, true); await wait(500); key(code, false);
+          await wait(80);
+          best = Math.max(best, Math.round(Math.hypot(g.player.x - from.x, g.player.y - from.y)));
+        }
+        window.__strand = `saved=${saved} void=${voidTile.x},${voidTile.y}`
+          + ` landed=${Math.round(landed.x / 16)},${Math.round(landed.y / 16)}`
+          + ` map=${g.state.mapId} moved=${best}`;
+        if (g.state.mapId !== 'cafe') window.__errors.push('did not come back into the cafe: ' + window.__strand);
+        if (best < 8) window.__errors.push('came back stuck in the walls: ' + window.__strand);
       } else if (SCRIPT === 'resumeplace') {
         // Save, leave, come back: you are supposed to be where you left off.
         // The three places you can be when you press Save are the overworld,
@@ -6639,6 +6674,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__cont ? ` ${window.__cont}` : '')
         + (window.__resume ? ` ${window.__resume}` : '')
         + (window.__doorblock ? ` ${window.__doorblock}` : '')
+        + (window.__strand ? ` ${window.__strand}` : '')
         + (window.__shellw ? ` ${window.__shellw}` : '')
         + (window.__hint ? ` ${window.__hint}` : '')
         + (window.__exit ? ` ${window.__exit}` : '')
@@ -6713,6 +6749,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__cont ? ` ${window.__cont}` : '')
         + (window.__resume ? ` ${window.__resume}` : '')
         + (window.__doorblock ? ` ${window.__doorblock}` : '')
+        + (window.__strand ? ` ${window.__strand}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       if (window.__terrain) { out.textContent = window.__terrain; document.title = 'OK'; window.__done = true; return; }
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';
