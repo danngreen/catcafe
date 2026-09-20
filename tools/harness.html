@@ -2549,6 +2549,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // Driven with the keys a player has, because the thing that went wrong
         // in the last menu of this kind was a keypress landing twice.
         const st = g.state;
+        const SLOT = `catcafe.save.v1.${g.worldSeed}`;   // this valley's own slot
+        localStorage.removeItem(SLOT);
         localStorage.removeItem('catcafe.save.v1');
         st.money = 4321;
         await wait(400);
@@ -2574,7 +2576,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // It opens on No, and No means stay.
         key('Space', true); await wait(150); key('Space', false); await wait(400);
         const stayed = g.topScreen && g.topScreen.constructor.name;
-        const savedAfterNo = !!localStorage.getItem('catcafe.save.v1');
+        const savedAfterNo = !!localStorage.getItem(SLOT);
         const reloadsAfterNo = reloads;
 
         // Now go through with it.
@@ -2596,7 +2598,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           await wait(250);
         }
 
-        const raw = localStorage.getItem('catcafe.save.v1');
+        const raw = localStorage.getItem(SLOT);
         const saved = raw ? JSON.parse(raw) : null;
         window.__exit = `after Save game="${after}" landedOn="${onExit}" asked=${asked}`
           + ` noKeeps=${stayed} savedOnNo=${savedAfterNo} reloadsOnNo=${reloadsAfterNo}`
@@ -4518,7 +4520,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.state.worldSeed = 111222333;
         g.state.money = 9999;
         g.state.save();
-        const savedSeed = JSON.parse(localStorage.getItem('catcafe.save.v1')).seed;
+        const savedSeed = JSON.parse(localStorage.getItem('catcafe.save.v1.111222333')).seed;
 
         const made = await NetClient.newGame();
         const ok = await g.enterGame(made.id);
@@ -4539,11 +4541,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!ok) window.__errors.push('could not join the new valley: ' + window.__newv);
         if (savedSeed !== 111222333) window.__errors.push('the save does not say which valley it is: ' + window.__newv);
         if (freshSeed === savedSeed) window.__errors.push('the new valley is the old one: ' + window.__newv);
-        if (opts.includes('Continue')) {
+        if (opts.includes('Resume Game')) {
           window.__errors.push('a brand new valley offers to continue an old one: ' + window.__newv);
         }
         if (!opts.includes('New game')) window.__errors.push('nothing to do in a new valley: ' + window.__newv);
-        if (!optsSame.includes('Continue')) {
+        if (!optsSame.includes('Resume Game')) {
           window.__errors.push('will not pick up a valley this browser saved: ' + window.__newv);
         }
       } else if (SCRIPT === 'netlobby') {
@@ -6389,7 +6391,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           while (!g.net.world && waited < 14000) { await wait(250); waited += 250; }
           const ts = g.screens[g.screens.length - 1];
           const opts = (ts && ts.options) || [];
-          if (opts.includes('Continue')) ts.index = opts.indexOf('Continue');
+          if (opts.includes('Resume Game')) ts.index = opts.indexOf('Resume Game');
           key('Space', true); await wait(220); key('Space', false);
           // Give the server long enough to have told us about anybody else.
           await wait(6000);
@@ -6447,10 +6449,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           window.__cont = `saved=${want && want.saved} world=${!!g.net.world}`
             + ` joining=${ts && ts.joining} opts=[${opts}]`;
           if (!ts || !ts.options) window.__errors.push('no title screen to rejoin from: ' + window.__cont);
-          else if (!opts.includes('Continue')) {
+          else if (!opts.includes('Resume Game')) {
             window.__errors.push('no Continue when rejoining a valley this browser has played: ' + window.__cont);
           } else {
-            ts.index = opts.indexOf('Continue');
+            ts.index = opts.indexOf('Resume Game');
             key('Space', true); await wait(220); key('Space', false);
             await wait(1400);
             const off = want ? Math.round(Math.hypot(g.player.x - want.x, g.player.y - want.y)) : -1;
@@ -6460,6 +6462,49 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             }
           }
         }
+      } else if (SCRIPT === 'catcolumns') {
+        // The Cats tab is a table, and a table has to fit the panel it is in.
+        // The book is as wide as the screen allows, and on a landscape phone
+        // the on-screen controls take a bite out of that.
+        const M = await import('../src/ui/menus.js');
+        const bad = [];
+        for (let w = 240; w <= 460; w += 4) {
+          const x = 16;
+          const c = M.catColumns(x, w);
+          const right = x + w - 8;
+          const ends = [
+            ['name', c.name + 60],
+            ['status', c.status + 66],
+            ['coat', c.coatLabel + 24],
+            ['coatBar', c.coatBar + c.meter],
+          ];
+          if (c.joyLabel != null) ends.push(['joy', c.joyLabel + 18], ['joyBar', c.joyBar + c.meter]);
+          for (const [what, end] of ends) if (end > right) bad.push(`${what}@${w}:${end}>${right}`);
+          if (c.breed != null && c.breed + 56 > c.status) bad.push(`breed@${w}`);
+          if (c.coatLabel + 26 > c.coatBar) bad.push(`coatlabel@${w}`);
+          if (c.joyLabel != null && c.joyLabel + 20 > c.joyBar) bad.push(`joylabel@${w}`);
+          if (c.status + 68 > c.coatLabel) bad.push(`status@${w}`);
+        }
+        window.__cols = `checked=56 bad=${bad.length}[${bad.slice(0, 4)}]`;
+        if (bad.length) window.__errors.push('the cats table runs off the panel: ' + window.__cols);
+      } else if (SCRIPT === 'bookmobile' || SCRIPT === 'staffmobile' || SCRIPT === 'hoursmobile') {
+        // Screenshots of the cafe book on a phone, for looking at.
+        const st = g.state;
+        st.adoptCat('tabby'); st.adoptCat('grey');
+        st.cats.forEach((c, i) => { c.sick = i % 2 === 0; c.groomed = i % 2 ? 3 : 0; });
+        st.money = 1702;
+        key('KeyC', true); await wait(200); key('KeyC', false);
+        await wait(500);
+        const tab = SCRIPT === 'bookmobile' ? 2 : SCRIPT === 'staffmobile' ? 3 : 4;
+        for (let i = 0; i < tab; i++) { key('ArrowRight', true); await wait(180); key('ArrowRight', false); await wait(120); }
+        // Put the cursor on the second row, which is where the highlight and
+        // its explaining line have to agree with each other.
+        key('ArrowDown', true); await wait(180); key('ArrowDown', false);
+        await wait(700);
+        const scr = g.topScreen;
+        window.__bookshot = `screen=${scr && scr.constructor.name} tab=${scr && scr.tab} index=${scr && scr.index}`;
+        if (!scr || scr.constructor.name !== 'CafeScreen') window.__errors.push('the book did not open: ' + window.__bookshot);
+        if (scr && scr.tab !== tab) window.__errors.push('landed on the wrong tab: ' + window.__bookshot);
       } else if (SCRIPT === 'savedvalley') {
         // One save slot per browser, and a server can hold half a dozen
         // valleys. A save of one must never be offered as the way back into
@@ -6476,19 +6521,38 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const loadedRight = g.state.load(here);
         // A save from before saves carried a seed belongs to whoever asks.
         let legacy = false;
+        let ownSlot = false;
+        let keptApart = false;
         try {
-          const raw = JSON.parse(localStorage.getItem('catcafe.save.v1'));
+          ownSlot = !!localStorage.getItem(S.GameState.keyFor(here));
+          // A second valley's save must sit beside this one, not on top of it.
+          const mySeed = g.state.worldSeed;
+          g.state.worldSeed = elsewhere;
+          g.state.money = 4242;
+          g.state.save();
+          g.state.worldSeed = mySeed;
+          keptApart = S.GameState.hasSave(here) && S.GameState.hasSave(elsewhere)
+            && S.GameState.readSlot(here).money !== 4242;
+          // And a browser whose only save is in the old single slot still gets
+          // it, whichever valley it is standing in.
+          const raw = JSON.parse(localStorage.getItem(S.GameState.keyFor(here)));
           delete raw.seed;
+          localStorage.removeItem(S.GameState.keyFor(here));
+          localStorage.removeItem(S.GameState.keyFor(elsewhere));
           localStorage.setItem('catcafe.save.v1', JSON.stringify(raw));
-          legacy = S.GameState.hasSave(elsewhere);
+          // Solo play still gets it; a valley on a server does not.
+          legacy = S.GameState.hasSave(elsewhere, true) && !S.GameState.hasSave(elsewhere);
         } catch (e) {}
         window.__valley = `mine=${mine} theirs=${theirs}`
-          + ` loadedWrong=${loadedWrong} loadedRight=${loadedRight} legacy=${legacy}`;
+          + ` loadedWrong=${loadedWrong} loadedRight=${loadedRight} legacy=${legacy}`
+          + ` ownSlot=${ownSlot} keptApart=${keptApart}`;
         if (!mine) window.__errors.push('no Continue for the valley I am in: ' + window.__valley);
         if (theirs) window.__errors.push('offered Continue from another valley: ' + window.__valley);
         if (loadedWrong) window.__errors.push('loaded the wrong valley\'s save: ' + window.__valley);
         if (!loadedRight) window.__errors.push('would not load my own valley: ' + window.__valley);
-        if (!legacy) window.__errors.push('a save from before seeds was refused: ' + window.__valley);
+        if (!legacy) window.__errors.push('a save from before seeds went to the wrong place: ' + window.__valley);
+        if (!ownSlot) window.__errors.push('the valley got no slot of its own: ' + window.__valley);
+        if (!keptApart) window.__errors.push('two valleys shared one slot: ' + window.__valley);
       } else if (SCRIPT === 'cafestrand') {
         // Coming back into a cafe that is not the shape it was. A saved spot
         // can be outside the walls now — somebody took a room down while you
@@ -6705,6 +6769,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__doorblock ? ` ${window.__doorblock}` : '')
         + (window.__strand ? ` ${window.__strand}` : '')
         + (window.__valley ? ` ${window.__valley}` : '')
+        + (window.__cols ? ` ${window.__cols}` : '')
+        + (window.__bookshot ? ` ${window.__bookshot}` : '')
         + (window.__shellw ? ` ${window.__shellw}` : '')
         + (window.__hint ? ` ${window.__hint}` : '')
         + (window.__exit ? ` ${window.__exit}` : '')
@@ -6781,6 +6847,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__doorblock ? ` ${window.__doorblock}` : '')
         + (window.__strand ? ` ${window.__strand}` : '')
         + (window.__valley ? ` ${window.__valley}` : '')
+        + (window.__cols ? ` ${window.__cols}` : '')
+        + (window.__bookshot ? ` ${window.__bookshot}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       if (window.__terrain) { out.textContent = window.__terrain; document.title = 'OK'; window.__done = true; return; }
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';

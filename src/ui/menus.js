@@ -634,6 +634,45 @@ export class BuilderScreen extends ListScreen {
 
 const TABS = ['Cafe', 'Pantry', 'Cats', 'Staff', 'Hours'];
 
+/**
+ * Two lines per row on the Staff tab: the label, and what it means underneath.
+ */
+export const STAFF_ROW = 30;
+
+/**
+ * Where the columns of the Cats tab go, for a panel `w` wide starting at `x`.
+ *
+ * Measured from the panel rather than written down as pixel positions: the book
+ * is as wide as the screen lets it be, and on a landscape phone the on-screen
+ * controls take a bite out of that. The fixed columns this replaces ran off the
+ * right-hand edge, so the joy meter was half a meter and then a wall.
+ *
+ * Narrow panels drop things rather than squashing everything: first joy, whose
+ * label is the least missed, then the breed.
+ */
+export function catColumns(x, w) {
+  const right = x + w - 14;
+  const meter = w >= 400 ? 50 : 36;
+  const joy = w >= 340;
+  const joyBar = right - meter;
+  const joyLabel = joyBar - 22;
+  const coatBar = (joy ? joyLabel - 10 : right) - meter;
+  const coatLabel = coatBar - 30;
+  // "groomed 12d" is the longest thing in the status column.
+  const status = Math.min(x + 200, coatLabel - 68);
+  const breed = status - (x + 104) >= 56 ? x + 104 : null;
+  return {
+    name: x + 38,
+    breed,
+    status,
+    coatLabel,
+    coatBar,
+    meter,
+    joyLabel: joy ? joyLabel : null,
+    joyBar: joy ? joyBar : null,
+  };
+}
+
 export class CafeScreen extends Screen {
   constructor(game) {
     super();
@@ -966,6 +1005,7 @@ export class CafeScreen extends Screen {
   }
 
   drawCats(ctx, x, y, w, h) {
+    const col = catColumns(x, w);
     const st = this.game.state;
     if (!st.cats.length) {
       drawTextCentered(ctx, 'No cats yet.', VIEW_W / 2, y + h / 2 - 6, { color: P.uiTextDim, shadow: P.uiShadow });
@@ -980,14 +1020,16 @@ export class CafeScreen extends Screen {
       const sel = idx === this.index;
       if (sel) { ctx.fillStyle = 'rgba(255,207,107,0.12)'; ctx.fillRect(x + 8, ry - 4, w - 20, 21); }
       ctx.drawImage(catSprite(cat.breed, 'right', 0, cat.sick ? 'loaf' : 'sit', cat.groomed > 0), x + 12, ry - 5);
-      drawText(ctx, cat.name, x + 38, ry + 3, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
-      drawText(ctx, cat.breedName, x + 104, ry + 3, { color: P.uiTextDim, shadow: P.uiShadow });
-      if (cat.sick) drawText(ctx, 'UNWELL', x + 200, ry + 3, { color: P.uiRed, shadow: P.uiShadow });
-      else if (cat.groomed > 0) drawText(ctx, `groomed ${cat.groomed}d`, x + 200, ry + 3, { color: P.uiGreen, shadow: P.uiShadow });
-      drawText(ctx, 'coat', x + 282, ry + 3, { color: P.uiTextDim, shadow: P.uiShadow });
-      bar(ctx, x + 308, ry + 4, 50, 6, cat.coatQuality / 1.5, P.uiPink);
-      drawText(ctx, 'joy', x + 366, ry + 3, { color: P.uiTextDim, shadow: P.uiShadow });
-      bar(ctx, x + 386, ry + 4, 50, 6, cat.happiness, P.uiGreen);
+      drawText(ctx, cat.name, col.name, ry + 3, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
+      if (col.breed) drawText(ctx, cat.breedName, col.breed, ry + 3, { color: P.uiTextDim, shadow: P.uiShadow });
+      if (cat.sick) drawText(ctx, 'UNWELL', col.status, ry + 3, { color: P.uiRed, shadow: P.uiShadow });
+      else if (cat.groomed > 0) drawText(ctx, `groomed ${cat.groomed}d`, col.status, ry + 3, { color: P.uiGreen, shadow: P.uiShadow });
+      drawText(ctx, 'coat', col.coatLabel, ry + 3, { color: P.uiTextDim, shadow: P.uiShadow });
+      bar(ctx, col.coatBar, ry + 4, col.meter, 6, cat.coatQuality / 1.5, P.uiPink);
+      if (col.joyLabel != null) {
+        drawText(ctx, 'joy', col.joyLabel, ry + 3, { color: P.uiTextDim, shadow: P.uiShadow });
+        bar(ctx, col.joyBar, ry + 4, col.meter, 6, cat.happiness, P.uiGreen);
+      }
     }
     // Say exactly what Space will do to the selected cat, and with what.
     const sel = st.cats[this.index];
@@ -1005,6 +1047,10 @@ export class CafeScreen extends Screen {
   drawStaff(ctx, x, y, w, h) {
     const st = this.game.state;
     const listY = y + 34;
+    // Rows are two lines tall, because the selected one says what it means
+    // underneath itself. At the old pitch that second line landed on top of
+    // the next row and the highlight covered half of each.
+    const ROW = STAFF_ROW;
     if (st.employee) {
       const e = st.employee;
       drawText(ctx, `${e.name} — your one and only employee`, x + 12, y + 20, { color: P.uiGold, shadow: P.uiShadow });
@@ -1018,9 +1064,9 @@ export class CafeScreen extends Screen {
         ['Let them go', 'No hard feelings.'],
       ];
       rows.forEach(([label, note], i) => {
-        const ry = listY + i * 22;
+        const ry = listY + i * ROW;
         const sel = i === this.index;
-        if (sel) { ctx.fillStyle = 'rgba(255,207,107,0.12)'; ctx.fillRect(x + 8, ry - 3, w - 20, 20); cursor(ctx, x + 8, ry + 3, this.t); }
+        if (sel) { ctx.fillStyle = 'rgba(255,207,107,0.12)'; ctx.fillRect(x + 8, ry - 4, w - 20, ROW - 4); cursor(ctx, x + 8, ry + 3, this.t); }
         drawText(ctx, label, x + 22, ry + 3, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
         if (sel) drawText(ctx, note, x + 22, ry + 13, { color: P.uiTextDim, shadow: P.uiShadow });
       });
@@ -1033,9 +1079,9 @@ export class CafeScreen extends Screen {
     } else {
       drawText(ctx, 'Looking for help', x + 12, y + 20, { color: P.uiGold, shadow: P.uiShadow });
       HIRE_POOL.forEach((c, i) => {
-        const ry = listY + i * 22;
+        const ry = listY + i * ROW;
         const sel = i === this.index;
-        if (sel) { ctx.fillStyle = 'rgba(255,207,107,0.12)'; ctx.fillRect(x + 8, ry - 3, w - 20, 20); cursor(ctx, x + 8, ry + 3, this.t); }
+        if (sel) { ctx.fillStyle = 'rgba(255,207,107,0.12)'; ctx.fillRect(x + 8, ry - 4, w - 20, ROW - 4); cursor(ctx, x + 8, ry + 3, this.t); }
         drawText(ctx, c.name, x + 22, ry + 3, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
         drawText(ctx, `${c.fairWage}/hour`, x + 90, ry + 3, { color: P.uiTextDim, shadow: P.uiShadow });
         if (sel) drawText(ctx, c.blurb, x + 22, ry + 13, { color: P.uiTextDim, shadow: P.uiShadow });
@@ -1049,23 +1095,32 @@ export class CafeScreen extends Screen {
 
   drawHours(ctx, x, y, w, h) {
     const st = this.game.state;
-    drawTextCentered(ctx, st.shopOpen ? 'OPEN' : 'CLOSED', VIEW_W / 2, y + 30,
+    // Down the middle of the panel, not of the screen. On a phone the controls
+    // push the panel off-centre, and a row highlighted at one centre with its
+    // hour written at the other is the offset you can see.
+    const cx = x + w / 2;
+    drawTextCentered(ctx, st.shopOpen ? 'OPEN' : 'CLOSED', cx, y + 30,
       { color: st.shopOpen ? P.uiGreen : P.uiRed, scale: 3, shadow: P.uiShadow });
-    drawTextCentered(ctx, 'Space to flip the sign', VIEW_W / 2, y + 58, { color: P.uiTextDim, shadow: P.uiShadow });
+    drawTextCentered(ctx, 'Space to flip the sign', cx, y + 58, { color: P.uiTextDim, shadow: P.uiShadow });
 
     const labels = ['Opens at', 'Closes at'];
     for (let i = 0; i < 2; i++) {
       const ry = y + 84 + i * 24;
       const sel = this.index % 2 === i;
-      if (sel) { ctx.fillStyle = 'rgba(255,207,107,0.12)'; ctx.fillRect(x + 60, ry - 4, w - 120, 22); }
-      drawText(ctx, labels[i], x + 78, ry + 3, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
+      // The bar spans the middle half of the panel; the label sits just inside
+      // its left end and the hour just inside its right, so the three move
+      // together however wide the panel is.
+      const barX = x + Math.round(w * 0.14);
+      const barW = w - Math.round(w * 0.28);
+      if (sel) { ctx.fillStyle = 'rgba(255,207,107,0.12)'; ctx.fillRect(barX, ry - 4, barW, 22); }
+      drawText(ctx, labels[i], barX + 18, ry + 3, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
       const hv = st.shopHours[i];
       const hh = hv % 12 === 0 ? 12 : hv % 12;
-      drawTextCentered(ctx, `< ${hh}${hv < 12 || hv === 24 ? 'am' : 'pm'} >`, VIEW_W / 2 + 60, ry + 3,
+      drawTextRight(ctx, `< ${hh}${hv < 12 || hv === 24 ? 'am' : 'pm'} >`, barX + barW - 18, ry + 3,
         { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
     }
     drawTextCentered(ctx, 'While you are out, only an employee can keep it open.',
-      VIEW_W / 2, y + h - 34, { color: P.uiTextDim, shadow: P.uiShadow });
+      cx, y + h - 34, { color: P.uiTextDim, shadow: P.uiShadow });
   }
 }
 

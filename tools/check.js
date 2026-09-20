@@ -49,6 +49,10 @@ const BUDGET = {
   resumeplace: 25000,
   cafestrand: 25000,
   savedvalley: 20000,
+  catcolumns: 15000,
+  bookmobile: 20000,
+  staffmobile: 20000,
+  hoursmobile: 20000,
   nettitlecontinue: 50000,
   nettitleghost: 60000,
   netghostmove: 45000,
@@ -167,7 +171,7 @@ const GROUPS = {
   cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers', 'employee',
     'weathercafe', 'hourly'],
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',
-    'barriers', 'eastpass', 'barrierreach', 'passcleared', 'debugpos', 'weather', 'doorblock', 'resumeplace', 'cafestrand', 'savedvalley'],
+    'barriers', 'eastpass', 'barrierreach', 'passcleared', 'debugpos', 'weather', 'doorblock', 'resumeplace', 'cafestrand', 'savedvalley', 'catcolumns'],
   // Frame times, and the things that are supposed to make them shorter. These
   // report numbers as much as they pass or fail: a machine under load will
   // read slower without anything being wrong, so they assert on what the code
@@ -176,7 +180,7 @@ const GROUPS = {
   ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'exterior',
     'summarylines', 'journalstep', 'titleme', 'signkeys', 'menukeys', 'oldsafari', 'patio', 'deaditems', 'booktabs', 'bigpieces', 'painting', 'friends', 'confirm', 'catvoices', 'delivery', 'deliverhouse', 'clearnight', 'wagekeys', 'patiorain'],
   cutscene: ['taxi', 'sleep', 'door'],
-  mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile', 'pickupmobile', 'slidepad'],
+  mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile', 'pickupmobile', 'slidepad', 'bookmobile', 'staffmobile', 'hoursmobile'],
   // Single-process networked runs. The paired ones need two browsers at once
   // and are listed in the README rather than here.
   // netclock goes first: only the sim owner cashes up a morning, ownership
