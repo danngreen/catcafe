@@ -697,7 +697,7 @@ class Game {
 
   continueGame() {
     const st = this.state;
-    if (!st.load(this.worldSeed)) {
+    if (!st.load(this.worldSeed, !NetClient.available())) {
       return this.startNewGame(st.playerLook, {
         wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], awning: AWNING_CHOICES[0],
         floor: T.FLOOR_WOOD, name: CAFE_NAMES[0],
@@ -3110,8 +3110,8 @@ class TitleScreen extends Screen {
     // Always against this valley's seed, connected or not. Asking "is there a
     // save at all" when we happen not to be connected is how a save of one
     // valley ends up being offered as the way back into another.
-    const mine = GameState.hasSave(game.worldSeed);
-    this.options = mine ? ['Continue', 'New game'] : ['New game'];
+    const mine = GameState.hasSave(game.worldSeed, !NetClient.available());
+    this.options = mine ? ['Resume Game', 'New game'] : ['New game'];
     // Whatever this browser played as last time, so the usual answer is just
     // to press Space.
     const me = loadMe();
@@ -3143,7 +3143,7 @@ class TitleScreen extends Screen {
     // way, and what the save is for is picking your own name, face and spot back
     // up rather than starting again on the doorstep every time you rejoin.
     this.options = GameState.hasSave(this.game.worldSeed)
-      ? ['Continue', 'Join the cafe'] : ['Join the cafe'];
+      ? ['Resume Game', 'Start new game in valley'] : ['Start new game in valley'];
     this.index = 0;
     this.row = Math.min(this.row, 2);
     const c = this.game.net.world.cafe;
@@ -3159,7 +3159,7 @@ class TitleScreen extends Screen {
       if (input.repeat('down', dt)) { this.index = (this.index + 1) % this.options.length; audio.sfx('ui_move'); }
       if (input.hit('use')) {
         audio.sfx('ui_ok');
-        if (this.options[this.index] === 'Continue') { this.done = true; this.game.continueGame(); }
+        if (this.options[this.index] === 'Resume Game') { this.done = true; this.game.continueGame(); }
         else this.stage = 'create';
       }
       return;
@@ -3208,7 +3208,11 @@ class TitleScreen extends Screen {
       const cs = catSprite('tabby', 'right', Math.floor(this.t * 3) % 4, 'sit');
       ctx.drawImage(cs, 0, 0, cs.width, cs.height, VIEW_W / 2 + 8, 192, cs.width * 2, cs.height * 2);
 
-      const w = 130;
+      // Wide enough for the longest thing on offer: "Start new game in
+      // valley" is half again the width of "New game", and a panel sized for
+      // the short one prints the long one out over its own edges.
+      let w = 130;
+      for (const o of this.options) w = Math.max(w, textWidth(o) + 46);
       const h = this.options.length * 18 + 16;
       const x = VIEW_W / 2 - w / 2, y = 118;
       panel(ctx, x, y, w, h);
