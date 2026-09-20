@@ -96,6 +96,63 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (waiting.length && waiting.some((c) => !c.emoteIcon)) {
           window.__errors.push('a waiting customer had no order bubble: ' + window.__bubbles);
         }
+      } else if (SCRIPT === 'takeover') {
+        // The cafe changing hands. The new owner has only ever had copies of
+        // the customers — a position and a state, no route, seat or list — and
+        // has to carry on with them. It used to sweep the room instead, which
+        // emptied the cafe for everybody whenever the owner's wifi blinked.
+        const sim = g.state.cafeSim;
+        g.enterInterior('cafe', g.state.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        await wait(600);
+        g.state.shopOpen = true;
+        g.state.clock.t = 11 * (1200 / 24);
+        for (let i = 0; i < 5; i++) { sim.trySpawn(g.state.cafeMap); await wait(300); }
+        // Until somebody is sitting down and somebody is at the counter.
+        for (let i = 0; i < 80; i++) {
+          const states = sim.customers.map((c) => c.state);
+          if (states.includes('seated') && states.includes('waiting')) break;
+          const w = sim.customers.find((c) => c.state === 'waiting');
+          if (w && !states.includes('seated')) sim.serveNearest(w.x, w.y);
+          await wait(250);
+        }
+        const before = sim.customers.map((c) => `${c.id}:${c.state}`);
+        // Exactly what goes over the wire, as another client would receive it.
+        const wire = JSON.parse(JSON.stringify(sim.customers.map((c) => [c.id, Math.round(c.x),
+          Math.round(c.y), c.dir, c.frame, c.look, c.state, c.order || null,
+          Math.round(c.spend || 0), Math.round((c.satisfaction || 0) * 100)])));
+        const spent = sim.customers.reduce((n, c) => n + Math.round(c.spend || 0), 0);
+        // First the owner's own side of it: the link drops, it stops running
+        // the room for a couple of seconds, and gets the room back. Nobody
+        // should have moved, and the seats should still be theirs.
+        const stood = sim.customers.map((c) => `${Math.round(c.x)},${Math.round(c.y)}`).join(' ');
+        for (let i = 0; i < 6; i++) sim.updatePuppets(0.4);
+        const still = sim.customers.map((c) => `${Math.round(c.x)},${Math.round(c.y)}`).join(' ');
+        if (still !== stood) window.__errors.push(`customers wandered off while the link was down: ${stood} -> ${still}`);
+        sim.takeOver();
+        if (sim.customers.length !== before.length || sim.customers.some((c) => c.puppet)) {
+          window.__errors.push('the owner did not get its own room back');
+        }
+        sim.clearCustomers();
+        sim.applyCustomers(wire);
+        sim.takeOver();
+        const after = sim.customers.map((c) => `${c.id}:${c.state}`);
+        const seatedOk = sim.customers.filter((c) => c.state === 'seated')
+          .every((c) => c.seat && c.seat.taken === c);
+        const kept = sim.customers.reduce((n, c) => n + (c.spend || 0), 0);
+        await wait(5000);
+        const later = sim.customers.map((c) => c.state);
+        const waiting = sim.customers.filter((c) => c.state === 'waiting');
+        window.__takeover = `before=[${before}] after=[${after}] later=[${later}]`
+          + ` spend ${spent}->${kept} seatedOk=${seatedOk}`;
+        if (after.length !== before.length) window.__errors.push('customers were lost in the handover: ' + window.__takeover);
+        if (sim.customers.some((c) => c.puppet)) window.__errors.push('still a copy after taking over: ' + window.__takeover);
+        if (!before.some((b) => b.endsWith(':seated'))) window.__errors.push('nobody was seated, so nothing was tested: ' + window.__takeover);
+        if (!seatedOk) window.__errors.push('a seated customer holds no seat: ' + window.__takeover);
+        if (kept !== spent) window.__errors.push('what they had spent was forgotten: ' + window.__takeover);
+        if (!waiting.length && !later.includes('seated') && !later.includes('toSeat')) {
+          window.__errors.push('the room did not carry on: ' + window.__takeover);
+        }
+        if (waiting.some((c) => !c.emoteIcon)) window.__errors.push('back at the counter with nothing to ask for: ' + window.__takeover);
       } else if (SCRIPT === 'summarylines') {
         // A busy night's card: it has to hold every line it shows, above the
         // Space prompt rather than over it.

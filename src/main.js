@@ -347,12 +347,23 @@ class Game {
     net.on('clock', (c) => { st.clock.day = c.day; st.clock.t = c.t; });
     net.on('newday', (m) => {
       if (m.by) this.hud.toast(`${m.by} slept until morning.`, 'info');
-      this.onNewDay({ slept: !!m.by, shared: true });
+      this.onNewDay({ slept: !!m.by, shared: true, day: m.day });
     });
+    // The server asking for a morning's books that never arrived: whoever ran
+    // the cafe was away when the day turned, and it is ours to do now.
+    net.on('cashup', (m) => this.onNewDay({ shared: true, day: m.day }));
     net.on('summary', (s) => this.showSummary(s));
-    // Whoever runs the sim owns the customers, so on a handover everybody's
-    // current lot are stale: the new owner starts the room fresh.
-    net.on('owner', () => st.cafeSim.clearCustomers());
+    // Whoever runs the sim owns the customers. The new owner carries on with
+    // the copies it was already drawing; everybody else's copies are simply
+    // overwritten by the next thing it publishes.
+    net.on('owner', () => { if (net.simOwner) st.cafeSim.takeOver(); });
+    // A hidden tab stops drawing, and so stops simulating. Say so as it
+    // happens rather than leaving the server to work it out from the silence.
+    if (typeof document !== 'undefined' && document.addEventListener) {
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) net.frameStopped();
+      });
+    }
     net.on('cust', (list) => { if (!net.simOwner) st.cafeSim.applyCustomers(list); });
     net.on('serve', (m) => { if (net.simOwner) st.cafeSim.serveNearest(m.x, m.y); });
   }
@@ -1000,6 +1011,7 @@ class Game {
     // Two reads and a comparison: cheap enough to do every frame, and the only
     // thing that reliably rescues a browser which resized without saying so.
     this.display.recheck();
+    net.frameBeat(dt);
     const t0 = performance.now();
     try {
       this.update(dt);
@@ -1028,6 +1040,13 @@ class Game {
       if (s.done) {
         const i = this.screens.indexOf(s);
         if (i >= 0) this.screens.splice(i, 1);
+      }
+      // Alone, an open menu pauses the cafe. In a shared valley it must not:
+      // if we are the one running the room, everybody else's customers would
+      // stand still for as long as we spent reading the cafe book.
+      if (st.shared && this.mode === 'play') {
+        this.updateCafeSim(dt);
+        if (net.simOwner) st.expireDeliveries();
       }
       this.hud.update(dt, st);
       this.input.endFrame();
@@ -1664,8 +1683,20 @@ class Game {
     // Cashing up is a change to the shared books, so only one client does it;
     // the others are sent the finished card so everyone reads the same figures.
     if (!net.simOwner) return;
+    // The server asks again if it hasn't seen the books, and the first answer
+    // may simply have crossed with the question.
+    if (opts.day != null) {
+      if (this.cashedDay != null && opts.day <= this.cashedDay) {
+        // Done already, and asked again: the card never arrived. Send the card
+        // again rather than doing the books again.
+        if (this.lastSummary) net.sendSummary(this.lastSummary);
+        return;
+      }
+      this.cashedDay = opts.day;
+    }
     const summary = st.endOfDay();
     summary.slept = !!opts.slept;
+    this.lastSummary = summary;
     net.sendSummary(summary);
     this.showSummary(summary);
   }

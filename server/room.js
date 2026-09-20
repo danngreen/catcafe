@@ -19,6 +19,18 @@ const IDLE_TIMEOUT_MS = 60_000;
 const ROSTER_EVERY_MS = 5_000;
 const CLOCK_BROADCAST_MS = 1000;
 const SAVE_EVERY_MS = 20_000;
+// Every playing client says once a second that its frame loop is turning. The
+// socket's own ping can't tell us that: a browser answers those from a tab
+// that has been in the background for an hour, and a tab in the background
+// simulates nothing — so the cafe stood still for everybody while the server
+// was quite sure its owner was alive and well.
+const FRAME_STALE_MS = 5_000;
+// When the owner's connection goes, wait this long for the same browser to
+// come back before giving the cafe to somebody else. A wifi blip is two or
+// three seconds, and a handover is the more disruptive of the two.
+const OWNER_GRACE_MS = 10_000;
+// How long to wait for the morning's books before asking for them again.
+const CASHUP_RETRY_MS = 4_000;
 
 export class Room {
   constructor(seed, savePath = null) {
@@ -29,6 +41,13 @@ export class Room {
     this.world = null;            // seeded by whoever starts playing first
     this.clock = new WorldClock();
     this.owner = null;            // id of the client running the cafe sim
+    this.ownerSince = 0;
+    this.ownerGrace = null;       // { who, until } while waiting for a dropped owner
+    // The last day somebody cashed up. The day rolls here but the books are
+    // done on a client, and a client can be away at midnight; this is how we
+    // know to ask again rather than letting the day go unpaid.
+    this.cashedDay = this.clock.day;
+    this.cashAskedAt = 0;
     this.dirty = false;
     this.lastTick = Date.now();
     this.sinceClock = 0;
@@ -53,6 +72,7 @@ export class Room {
       x: 0, y: 0, dir: 'down', frame: 0, map: 'overworld', up: false,
       joined: false,
       lastSeen: Date.now(),
+      frameAt: 0,                 // last time their frame loop said it was turning
       ws,
     };
     this.players.set(ws.id, player);
@@ -65,10 +85,19 @@ export class Room {
     });
 
     ws.on('close', () => {
+      // Already taken out by replaceSelf, which has said everything there is
+      // to say about it. Saying it again re-ran the owner vote at the one
+      // moment the returning player could not win it.
+      if (this.players.get(ws.id) !== player) return;
       this.players.delete(ws.id);
       if (player.joined) {
         this.broadcast({ t: 'left', id: player.id });
         console.log(`[room] ${player.name || player.id} left (${this.count} playing)`);
+      }
+      // The owner dropping is not the owner leaving. Hold the cafe for them
+      // for a few seconds unless they said goodbye on the way out.
+      if (this.owner === player.id && player.who && !ws.leftOnPurpose && this.count) {
+        this.ownerGrace = { who: player.who, until: Date.now() + OWNER_GRACE_MS };
       }
       this.chooseOwner();
       this.announcePresence();
@@ -108,13 +137,16 @@ export class Room {
         // "this is me" is faster and surer than any timeout, so the old one
         // goes now — and the name it was holding is free again for its owner.
         player.who = typeof msg.who === 'string' ? msg.who.slice(0, 64) : null;
-        if (player.who) this.replaceSelf(player);
+        const tookOver = player.who ? this.replaceSelf(player) : false;
         player.name = this.uniqueName(String(msg.name || `Player ${player.number}`).slice(0, 16));
         player.look = msg.look || null;
         player.x = Number(msg.x) || 0;
         player.y = Number(msg.y) || 0;
         player.map = String(msg.map || 'overworld');
         player.joined = true;
+        player.frameAt = Date.now();
+        // The same person on a new connection keeps the cafe they were running.
+        if (tookOver) this.setOwner(player.id);
         this.broadcast({ t: 'joined', p: Room.describe(player) }, player.id);
         // They may not have got the name they asked for.
         player.ws.sendJSON({ t: 'youare', name: player.name });
@@ -148,6 +180,7 @@ export class Room {
         }
         this.world = msg.world;
         this.clock = WorldClock.from(msg.clock);
+        this.cashedDay = this.clock.day;
         this.dirty = true;
         console.log(`[room] ${player.name || player.id} opened the cafe`);
         // Not back to the seeder: it's their own world, and adopting it would
@@ -169,7 +202,10 @@ export class Room {
         const rolled = this.clock.skipTo(hour);
         this.dirty = true;
         this.broadcast({ t: 'clock', c: this.clock.save() });
-        if (rolled) this.broadcast({ t: 'newday', day: this.clock.day, by: player.name });
+        if (rolled) {
+          this.cashAskedAt = Date.now();
+          this.broadcast({ t: 'newday', day: this.clock.day, by: player.name });
+        }
         break;
       }
       // Only the sim owner's customers are real; everyone else draws copies.
@@ -177,7 +213,25 @@ export class Room {
         if (player.id === this.owner) this.broadcast({ t: 'cust', c: msg.c }, player.id);
         break;
       case 'summary':
-        if (player.id === this.owner) this.broadcast({ t: 'summary', s: msg.s }, player.id);
+        // The morning card is also the receipt: the books for today are done.
+        // Taken from whoever did them, once — the cafe may have changed hands
+        // between the day turning and the card arriving, and turning the card
+        // away would have the new owner pay everybody's wages a second time.
+        if (!player.joined) break;
+        if (this.cashedDay >= this.clock.day && player.id !== this.owner) break;
+        this.cashedDay = this.clock.day;
+        this.dirty = true;
+        this.broadcast({ t: 'summary', s: msg.s }, player.id);
+        break;
+      // "My frame loop is turning" — or, with ok false, "my tab has just been
+      // hidden and it is about to stop".
+      case 'alive':
+        player.frameAt = msg.ok === false ? 0 : Date.now();
+        if (msg.ok === false && player.id === this.owner) this.chooseOwner();
+        break;
+      // Leaving on purpose, so nobody holds the cafe open for their return.
+      case 'bye':
+        player.ws.leftOnPurpose = true;
         break;
       // Serving is the one thing a non-owner does to the simulation, so it goes
       // to whoever is running it.
@@ -222,6 +276,7 @@ export class Room {
    * is told they left, and the name goes back on the shelf.
    */
   replaceSelf(player) {
+    let wasOwner = false;
     for (const old of [...this.players.values()]) {
       if (old === player || old.who !== player.who) continue;
       this.players.delete(old.id);
@@ -229,9 +284,18 @@ export class Room {
         this.broadcast({ t: 'left', id: old.id });
         console.log(`[room] ${old.name || old.id} came back on a new connection`);
       }
-      if (this.owner === old.id) this.owner = null;
+      // Seniority belongs to the person, not the connection.
+      player.number = Math.min(player.number, old.number);
+      if (this.owner === old.id) wasOwner = true;
       try { old.ws.close(1000, 'replaced'); } catch { /* already gone */ }
     }
+    // Or the old connection had already been noticed and the cafe is being
+    // held for them.
+    if (this.ownerGrace && this.ownerGrace.who === player.who) {
+      this.ownerGrace = null;
+      wasOwner = true;
+    }
+    return wasOwner;
   }
 
   /**
@@ -265,12 +329,14 @@ export class Room {
       cafeOpened: !!this.world,
       money: this.world ? this.world.money : null,
       owner: this.owner,
+      cashedDay: this.cashedDay,
       sockets: this.players.size,
       playing: this.count,
       players: [...this.players.values()].map((p) => ({
         id: p.id,
         name: p.name,
         joined: p.joined,
+        simulating: p.joined && now - p.frameAt < FRAME_STALE_MS,
         map: p.map,
         at: `${Math.round(p.x)},${Math.round(p.y)}`,
         quietFor: `${Math.round((now - p.ws.lastActivity) / 1000)}s`,
@@ -283,16 +349,38 @@ export class Room {
    * simulated its own customers, each would ring up the same sale.
    */
   chooseOwner() {
-    // Sticky: hand over only when the current owner has actually gone. A player
-    // who drops and comes back gets a new socket, and re-running the vote on
-    // every reconnect would pass the cafe back and forth.
-    const held = this.players.get(this.owner);
-    if (held && held.joined) return;
+    const now = Date.now();
+    // Sticky: hand over only when the current owner has actually gone, or has
+    // stopped simulating and somebody else could. A player who drops and comes
+    // back gets a new socket, and re-running the vote on every reconnect would
+    // pass the cafe back and forth.
+    const live = (p) => now - p.frameAt < FRAME_STALE_MS;
     const joined = [...this.players.values()].filter((p) => p.joined);
     joined.sort((a, b) => a.number - b.number);
-    const next = joined.length ? joined[0].id : null;
-    if (next === this.owner) return;
-    this.owner = next;
+    const held = this.players.get(this.owner);
+    if (held && held.joined) {
+      if (live(held)) return;
+      // A stalled owner is still better than nobody: with no one else awake
+      // the cafe is theirs to come back to.
+      const awake = joined.find(live);
+      if (!awake) return;
+      console.log(`[room] ${held.name || held.id} has stopped simulating — ${awake.name || awake.id} runs the cafe`);
+      this.setOwner(awake.id);
+      return;
+    }
+    // Holding the cafe for an owner who dropped a moment ago.
+    if (this.ownerGrace) {
+      if (now < this.ownerGrace.until && joined.length) { this.setOwner(null); return; }
+      this.ownerGrace = null;
+    }
+    const next = joined.find(live) || joined[0] || null;
+    this.setOwner(next ? next.id : null);
+  }
+
+  setOwner(id) {
+    if (id === this.owner) return;
+    this.owner = id;
+    this.ownerSince = Date.now();
     this.broadcast({ t: 'owner', id: this.owner });
   }
 
@@ -335,11 +423,29 @@ export class Room {
 
     const joined = [...this.players.values()].filter((p) => p.joined);
 
+    // Has the owner gone quiet, or has the wait for a dropped one run out?
+    const owner = this.players.get(this.owner);
+    if (this.ownerGrace ? now >= this.ownerGrace.until
+      : (joined.length && (!owner || now - owner.frameAt >= FRAME_STALE_MS))) {
+      this.chooseOwner();
+    }
+
+    // A morning nobody has cashed up: the owner was away when it came, or
+    // changed hands as it did. Ask whoever runs the cafe now.
+    if (this.world && this.cashedDay < this.clock.day && now - this.cashAskedAt > CASHUP_RETRY_MS) {
+      const o = this.players.get(this.owner);
+      if (o && o.joined) {
+        this.cashAskedAt = now;
+        o.ws.sendJSON({ t: 'cashup', day: this.clock.day });
+      }
+    }
+
     // The valley only ages while somebody is in it — a server left running
     // overnight should not eat a fortnight of wages.
     if (joined.length && this.world) {
       if (this.clock.advance(dt)) {
         this.dirty = true;
+        this.cashAskedAt = now;
         this.broadcast({ t: 'newday', day: this.clock.day });
       }
       this.sinceClock += dt * 1000;
@@ -406,6 +512,8 @@ export class Room {
       }
       this.world = data.world || null;
       this.clock = WorldClock.from(data.clock);
+      // A save from before this was kept is taken to be up to date.
+      this.cashedDay = Number.isFinite(data.cashedDay) ? data.cashedDay : this.clock.day;
       if (this.world) console.log(`[room] resumed day ${this.clock.day} from ${this.savePath}`);
     } catch { /* no save yet */ }
   }
@@ -417,7 +525,9 @@ export class Room {
     // half-written valley where the real one was.
     const tmp = `${this.savePath}.tmp`;
     try {
-      writeFileSync(tmp, JSON.stringify({ seed: this.seed, world: this.world, clock: this.clock.save() }));
+      writeFileSync(tmp, JSON.stringify({
+        seed: this.seed, world: this.world, clock: this.clock.save(), cashedDay: this.cashedDay,
+      }));
       renameSync(tmp, this.savePath);
     } catch (err) {
       console.warn('[room] could not save the valley:', err.message);

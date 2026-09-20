@@ -37,6 +37,7 @@ export class NetClient {
     this.owner = null;    // whose client is running the cafe simulation
     this.sendTimer = 0;
     this.custTimer = 0;
+    this.aliveTimer = 0;
     this.lastSent = { x: -1, y: -1, dir: '', map: '' };
     // Keepalive and reconnection. On a timer rather than the frame loop: the
     // title screen, an open menu and a backgrounded tab all still need them.
@@ -274,6 +275,9 @@ export class NetClient {
   leave() {
     this.rejoin = null;
     this.everConnected = false;
+    // Said first, so that if we were running the cafe the server passes it on
+    // at once instead of holding it for a return that is not coming.
+    this.send({ t: 'bye' });
     this.dropLink();
     this.connected = false;
     this.joined = false;
@@ -352,6 +356,10 @@ export class NetClient {
         break;
       case 'serve':
         this.emit('serve', msg);
+        break;
+      // A morning that went by without anybody doing the books.
+      case 'cashup':
+        this.emit('cashup', msg);
         break;
       case 'presence':
         this.here = msg.here || 0;
@@ -477,9 +485,33 @@ export class NetClient {
     this.custTimer = 1 / CUST_HZ;
     this.send({
       t: 'cust',
+      // The last two are for whoever runs the room next, not for drawing: what
+      // they have spent and how they feel is what a handover would lose.
       c: customers.map((c) => [c.id, Math.round(c.x), Math.round(c.y), c.dir, c.frame,
-        c.look, c.state, c.order || null]),
+        c.look, c.state, c.order || null, Math.round(c.spend || 0),
+        Math.round((c.satisfaction || 0) * 100)]),
     });
+  }
+
+  /**
+   * Called from the frame loop, and only from there: once a second, say that
+   * it is turning. The server gives the cafe to somebody else when the owner's
+   * stops — a hidden tab, a locked phone — since a socket stays up through all
+   * of those and the customers stand still for everybody.
+   */
+  frameBeat(dt) {
+    if (!this.shared) return;
+    this.aliveTimer -= dt;
+    if (this.aliveTimer > 0) return;
+    this.aliveTimer = 1;
+    this.send({ t: 'alive' });
+  }
+
+  /** The tab has just been hidden: the frame loop is about to stop. */
+  frameStopped() {
+    if (!this.shared) return;
+    this.aliveTimer = 0;
+    this.send({ t: 'alive', ok: false });
   }
 
   /** Called every frame; throttles to SEND_HZ and skips when nothing moved. */

@@ -239,20 +239,30 @@ export class Cafe {
    * copies along towards wherever the owner last said they were.
    */
   updatePuppets(dt) {
-    for (const c of this.customers) c.updatePuppet(dt);
+    for (const c of this.customers) {
+      // One of our own, from when we ran the room — we have lost the link, or
+      // the cafe. It has never been told where to stand, and would walk back
+      // to the door it came in by; it stays where it is until we hear better.
+      if (!c.puppet) { c.puppet = true; c.goalX = c.x; c.goalY = c.y; }
+      c.updatePuppet(dt);
+    }
   }
 
   /** Take the owner's word for who is in the room and where they're standing. */
   applyCustomers(list) {
     const byId = new Map(this.customers.map((c) => [c.id, c]));
-    this.customers = list.map(([id, x, y, dir, frame, look, state, order]) => {
+    this.customers = list.map(([id, x, y, dir, frame, look, state, order, spend, mood]) => {
       let c = byId.get(id);
       if (!c) {
         c = new Customer(x, y, look || { species: 'mouse', coat: 'grey', cloth: CLOTHES[0] });
         c.id = id;
-        c.puppet = true;
       }
+      // Including one we were simulating ourselves until a moment ago: it is
+      // somebody else's now, and ours only to draw.
+      c.puppet = true;
       c.goalX = x; c.goalY = y;
+      if (spend !== undefined) c.spend = spend;
+      if (mood !== undefined) c.satisfaction = mood / 100;
       c.dir = dir; c.frame = frame; c.state = state;
       // The bubble is drawn from the emote, not from `order`, and only the
       // client running the room ever calls showAsk — so without this the other
@@ -265,6 +275,61 @@ export class Cafe {
       }
       return c;
     });
+  }
+
+  /**
+   * The room is ours to run now, and the people in it are copies of somebody
+   * else's customers: where they stand and what they are doing, but no route,
+   * no seat and no list. Give each one enough to carry on from where they are
+   * rather than sweeping the room — the owner changing used to empty the cafe
+   * for everybody, mid-afternoon, for no reason a player could see.
+   */
+  takeOver() {
+    const map = this.state.cafeMap;
+    if (!map) { this.clearCustomers(); return; }
+    // Whatever the seats remember is from the last time we ran the room, if
+    // we ever did. Only the people we are still simulating hold one.
+    const seats = (map.meta && map.meta.seats) || [];
+    for (const s of seats) s.taken = null;
+    for (const c of this.customers) if (!c.puppet && c.seat) c.seat.taken = c;
+    const keep = [];
+    for (const c of this.customers) {
+      if (!c.puppet) { keep.push(c); continue; }
+      c.puppet = false;
+      c.x = c.goalX; c.y = c.goalY;
+      c.path = null;
+      c.pathIndex = 0;
+      c.seat = null;
+      c.queueSlot = undefined;
+      c.stateT = 0;
+      if (map.solid(c.tx, c.ty) && c.state !== 'seated') {
+        const spot = nearestFree(map, c.tx, c.ty);
+        if (!spot) continue;
+        c.x = spot.x * TILE + TILE / 2;
+        c.y = spot.y * TILE + TILE - 2;
+      }
+      if (c.state === 'seated' || c.state === 'toSeat') {
+        const here = seats.find((s) => s.x === c.tx && s.y === c.ty && !s.taken);
+        const seat = (c.state === 'seated' && here) || seats.find((s) => !s.taken);
+        if (seat) {
+          seat.taken = c;
+          c.seat = seat;
+          if (c.state === 'seated' && seat === here) c.stayT = this.stayDuration(c) * (0.3 + rng() * 0.7);
+          else c.state = 'toSeat';
+        } else {
+          c.state = 'leaving';
+        }
+      } else if (c.state === 'waiting') {
+        // Back to the counter by the usual road, which finds them a place in
+        // the queue and a list to ask from. They are a step away from it.
+        c.state = 'toCounter';
+        c.clearEmote();
+      } else if (c.state !== 'leaving') {
+        c.state = 'toCounter';
+      }
+      keep.push(c);
+    }
+    this.customers = keep;
   }
 
   updateLive(dt, ctx) {

@@ -76,7 +76,7 @@ export class PollHub {
     // A client on its way out says so, since there is no socket to close and
     // nothing else would tell the room for a whole minute.
     if (body.bye) {
-      if (conn) conn.close();
+      if (conn) { conn.leftOnPurpose = true; conn.close(); }
       return { id: body.id, msgs: [] };
     }
     if (!conn) {

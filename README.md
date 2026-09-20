@@ -119,6 +119,16 @@ matters: if every client simulated the room, the same cup of coffee would be sol
 once per player. Anyone can still serve — a press of Space asks whoever is
 running the room to take the order.
 
+Who runs the room belongs to the person, not the connection: drop off the wifi
+and come back and it is still yours, customers and all, and the server holds it
+for ten seconds before giving it to anyone else. It does change hands when you
+leave, or when your tab is hidden or your phone locks — a socket stays up
+through those but nothing is simulated, so every client says once a second that
+it is still drawing and the server goes by that. The new owner carries on with
+the customers already in the room. An open menu doesn't pause a shared cafe,
+and a morning that arrives while the owner is away is cashed up by whoever
+runs the room next. `/status` shows who is `simulating` and the last `cashedDay`.
+
 **Several valleys at once.** One server can host as many games as you like, and
 two groups can play different ones side by side without seeing each other. You
 land in a lobby first, listing each game
@@ -541,6 +551,7 @@ caffeinate -dimsu node tools/check.js all --clean   # everything, about five min
 node tools/check.js quests --clean    # just the quest scenarios, about a minute
 node tools/pairs.js                   # the ones needing two browsers at once
 node tools/wsframes.js                # WebSocket framing, no browser needed
+npm test                              # the server's room logic, under a second
 node tools/imports.js                 # names a module uses but never imports
 
 node tools/check.js ghostquest --clean          # one scenario by name

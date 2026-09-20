@@ -70,6 +70,7 @@ const BUDGET = {
   nightfolk: 18000,
   ghoststuck: 22000,
   // Deliberately longer than any idle timeout, which is the point of them.
+  takeover: 40000,
   netidle: 60000,
   netidletitle: 58000,
   netping: 68000,
@@ -171,7 +172,7 @@ const BUDGET = {
 const GROUPS = {
   quests: ['ghostquest', 'deliverquest', 'journalstep', 'questrepair', 'ghoststuck',
     'barriers', 'nightfolk', 'nightplaces', 'questchain', 'logbook', 'hedgestuck', 'freshstones', 'questwalk', 'piercheck', 'hedgewalk', 'shellchain', 'spotcheck', 'coatgoal', 'ghosthidden', 'shellwalk', 'hintheard', 'bear', 'deliverspots', 'rugs', 'taxitime', 'snowday', 'firelight', 'confirmbox', 'bearlegs', 'cottages', 'content', 'questextras', 'regular', 'barstool'],
-  cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers', 'employee',
+  cafe: ['cafe', 'takeover', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers', 'employee',
     'weathercafe', 'hourly'],
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',
     'barriers', 'eastpass', 'barrierreach', 'passcleared', 'debugpos', 'weather', 'doorblock', 'resumeplace', 'cafestrand', 'savedvalley', 'catcolumns', 'cafenames', 'titlename', 'titlenameadj'],
