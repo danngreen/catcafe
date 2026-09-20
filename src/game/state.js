@@ -521,19 +521,38 @@ export class GameState {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return false;
-      if (seed === undefined) return true;
-      return JSON.parse(raw).seed === seed;
+      return GameState.saveIsOf(JSON.parse(raw), seed);
     } catch { return false; }
+  }
+
+  /**
+   * Is this save a save of the valley we are standing in?
+   *
+   * There is one slot per browser and a server can have half a dozen valleys,
+   * so this is the only thing keeping them apart. Get it wrong and Continue
+   * pours the cafe you played last into whichever valley you are in now — and
+   * since the layouts differ, it can put you down where a room no longer is.
+   *
+   * A save with no seed in it was written before saves carried one. There was
+   * only ever one world then, so it belongs to whatever asks.
+   */
+  static saveIsOf(data, seed) {
+    if (!data) return false;
+    if (data.seed == null) return true;
+    if (seed == null) return false;
+    return data.seed === seed;
   }
 
   static clearSave() {
     try { localStorage.removeItem(SAVE_KEY); } catch { /* ignore */ }
   }
 
-  load() {
+  /** `seed` names the valley being loaded into; a save of another one is refused. */
+  load(seed) {
     let data;
     try { data = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch { return false; }
     if (!data) return false;
+    if (!GameState.saveIsOf(data, seed)) return false;
     this.clock.load(data.clock);
     this.money = data.money != null ? data.money : 480;
     this.reputation = data.reputation != null ? data.reputation : 0.12;

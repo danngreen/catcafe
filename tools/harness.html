@@ -6460,6 +6460,35 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             }
           }
         }
+      } else if (SCRIPT === 'savedvalley') {
+        // One save slot per browser, and a server can hold half a dozen
+        // valleys. A save of one must never be offered as the way back into
+        // another: the cafes are different shapes, so the spot it puts you on
+        // can be outside the walls of the valley you are actually in.
+        const S = await import('../src/game/state.js');
+        const here = g.worldSeed;
+        const elsewhere = here + 12345;
+        g.state.save();
+        const mine = S.GameState.hasSave(here);
+        const theirs = S.GameState.hasSave(elsewhere);
+        // Loading into the wrong valley is refused outright, not just hidden.
+        const loadedWrong = g.state.load(elsewhere);
+        const loadedRight = g.state.load(here);
+        // A save from before saves carried a seed belongs to whoever asks.
+        let legacy = false;
+        try {
+          const raw = JSON.parse(localStorage.getItem('catcafe.save.v1'));
+          delete raw.seed;
+          localStorage.setItem('catcafe.save.v1', JSON.stringify(raw));
+          legacy = S.GameState.hasSave(elsewhere);
+        } catch (e) {}
+        window.__valley = `mine=${mine} theirs=${theirs}`
+          + ` loadedWrong=${loadedWrong} loadedRight=${loadedRight} legacy=${legacy}`;
+        if (!mine) window.__errors.push('no Continue for the valley I am in: ' + window.__valley);
+        if (theirs) window.__errors.push('offered Continue from another valley: ' + window.__valley);
+        if (loadedWrong) window.__errors.push('loaded the wrong valley\'s save: ' + window.__valley);
+        if (!loadedRight) window.__errors.push('would not load my own valley: ' + window.__valley);
+        if (!legacy) window.__errors.push('a save from before seeds was refused: ' + window.__valley);
       } else if (SCRIPT === 'cafestrand') {
         // Coming back into a cafe that is not the shape it was. A saved spot
         // can be outside the walls now — somebody took a room down while you
@@ -6675,6 +6704,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__resume ? ` ${window.__resume}` : '')
         + (window.__doorblock ? ` ${window.__doorblock}` : '')
         + (window.__strand ? ` ${window.__strand}` : '')
+        + (window.__valley ? ` ${window.__valley}` : '')
         + (window.__shellw ? ` ${window.__shellw}` : '')
         + (window.__hint ? ` ${window.__hint}` : '')
         + (window.__exit ? ` ${window.__exit}` : '')
@@ -6750,6 +6780,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__resume ? ` ${window.__resume}` : '')
         + (window.__doorblock ? ` ${window.__doorblock}` : '')
         + (window.__strand ? ` ${window.__strand}` : '')
+        + (window.__valley ? ` ${window.__valley}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       if (window.__terrain) { out.textContent = window.__terrain; document.title = 'OK'; window.__done = true; return; }
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';

@@ -697,7 +697,7 @@ class Game {
 
   continueGame() {
     const st = this.state;
-    if (!st.load()) {
+    if (!st.load(this.worldSeed)) {
       return this.startNewGame(st.playerLook, {
         wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], awning: AWNING_CHOICES[0],
         floor: T.FLOOR_WOOD, name: CAFE_NAMES[0],
@@ -3107,9 +3107,10 @@ class TitleScreen extends Screen {
     // to match it: a new valley is new, and the only thing to do in one is
     // start. The one case this keeps is the useful one — a valley the server
     // has forgotten but this browser has not, where Continue hands it back.
-    const mine = game.net.connected
-      ? GameState.hasSave(game.worldSeed)
-      : GameState.hasSave();
+    // Always against this valley's seed, connected or not. Asking "is there a
+    // save at all" when we happen not to be connected is how a save of one
+    // valley ends up being offered as the way back into another.
+    const mine = GameState.hasSave(game.worldSeed);
     this.options = mine ? ['Continue', 'New game'] : ['New game'];
     // Whatever this browser played as last time, so the usual answer is just
     // to press Space.
