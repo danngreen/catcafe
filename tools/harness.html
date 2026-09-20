@@ -6241,6 +6241,55 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (results.some((r) => r.includes('STUCK'))) {
           window.__errors.push('trapped after leaving a building: ' + window.__door);
         }
+      } else if (SCRIPT === 'nettitleghost' || SCRIPT === 'nettitleghostpoll') {
+        // Leave a valley properly and come back to it: there must be one of
+        // you. A copy of yourself left standing where you logged out is the
+        // old socket still in the room, wearing your name.
+        const PHASE = 'catcafe.test.ghost.' + SCRIPT;
+        let phase = null;
+        try { phase = localStorage.getItem(PHASE); } catch (e) {}
+        let waited = 0;
+        while (!g.net.connected && waited < 8000) { await wait(200); waited += 200; }
+        if (!phase) {
+          if (!g.net.world) {
+            g.screens.length = 0;
+            g.startNewGame({ species: 'cat', coat: 'ginger', cloth: '#5b8fd6' },
+              { wall: '#efe2c8', roof: '#8a4b3c', awning: '#c05a7a', floor: 6, name: 'The Test Cat' });
+            await wait(1500);
+          }
+          // Wait until the server has actually named us, or the second half
+          // has nothing to compare against.
+          let named = 0;
+          while (!g.net.name && named < 6000) { await wait(200); named += 200; }
+          try { localStorage.setItem(PHASE, JSON.stringify({ name: g.net.name || g.state.playerName })); } catch (e) {}
+          await wait(400);
+          g.leaveValley();            // saves, hangs up, and reloads
+          await wait(25000);
+        } else {
+          let was = null;
+          try { was = JSON.parse(phase); localStorage.removeItem(PHASE); } catch (e) {}
+          while (!g.net.world && waited < 14000) { await wait(250); waited += 250; }
+          const ts = g.screens[g.screens.length - 1];
+          const opts = (ts && ts.options) || [];
+          if (opts.includes('Continue')) ts.index = opts.indexOf('Continue');
+          key('Space', true); await wait(220); key('Space', false);
+          // Give the server long enough to have told us about anybody else.
+          await wait(6000);
+          const others = [...g.net.remotes.values()].map((r) => r.n);
+          const mine = was && was.name;
+          const now = g.net.name || g.state.playerName;
+          window.__ghost = `was=${mine} now=${now}`
+            + ` others=[${others}] here=${g.net.here} playing=${g.net.playing}`;
+          // Anybody else in the valley is somebody else's business — these
+          // scenarios share a server. What must not be here is the player we
+          // were a moment ago, and we must not have been renamed around them.
+          if (mine && others.includes(mine)) {
+            window.__errors.push('the player I was is still standing there: ' + window.__ghost);
+          }
+          if (mine && now !== mine) {
+            window.__errors.push('renamed on rejoin, so the old me is still in the room: ' + window.__ghost);
+          }
+        }
       } else if (SCRIPT === 'nettitlecontinue') {
         // Rejoining a valley you have played before. The cafe is open — somebody
         // else's paint — but this browser has a save of this valley, so Continue

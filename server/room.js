@@ -297,7 +297,7 @@ export class Room {
       // standing still — or one whose messages weren't getting through — looked
       // identical to one who had closed the lid.
       const quiet = now - p.ws.lastActivity;
-      if (quiet > IDLE_TIMEOUT_MS) {
+      if (quiet > (p.ws.idleMs || IDLE_TIMEOUT_MS)) {
         console.warn(`[room] ${p.name || p.id} silent for ${Math.round(quiet / 1000)}s — hanging up`);
         p.ws.close(1001, 'idle');
         continue;

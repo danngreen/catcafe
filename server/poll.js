@@ -22,6 +22,11 @@ export class PollConn {
     this.out = [];                  // messages waiting for the next poll
     this.lastActivity = Date.now();
     this.onGone = onGone;
+    // A poll connection is proved alive ten times a second, so silence means
+    // something quite different here than on a socket: the minute a socket is
+    // given is a minute of somebody standing in the room who has gone. A tab
+    // that was only asleep reconnects and rejoins on its own.
+    this.idleMs = 15_000;
   }
 
   on(evt, fn) { (this.handlers[evt] ||= []).push(fn); return this; }
@@ -68,6 +73,12 @@ export class PollHub {
    */
   handle(body, attach) {
     let conn = body.id ? this.conns.get(body.id) : null;
+    // A client on its way out says so, since there is no socket to close and
+    // nothing else would tell the room for a whole minute.
+    if (body.bye) {
+      if (conn) conn.close();
+      return { id: body.id, msgs: [] };
+    }
     if (!conn) {
       conn = new PollConn((c) => this.conns.delete(c.id));
       this.conns.set(conn.id, conn);

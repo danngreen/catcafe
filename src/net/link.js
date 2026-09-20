@@ -92,8 +92,27 @@ export class PollLink {
     this.h.close();
   }
 
+  /**
+   * Say goodbye. A socket closing is something the server can see; a client
+   * that simply stops polling is not, so without this the room keeps you in it
+   * until you time out — and somebody who left and came back stood next to a
+   * copy of themselves wearing their own name.
+   *
+   * keepalive, because this is sent on the way to a reload: an ordinary fetch
+   * is cancelled when the page goes away, which is exactly when it matters.
+   */
   close() {
     this.dead = true;
     clearInterval(this.timer);
+    if (!this.id) return;
+    try {
+      fetch(this.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: this.id, bye: true }),
+        cache: 'no-store',
+        keepalive: true,
+      }).catch(() => { /* leaving anyway */ });
+    } catch { /* leaving anyway */ }
   }
 }
