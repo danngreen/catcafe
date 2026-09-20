@@ -117,7 +117,7 @@ export const VILLAGERS = [
     coat: 'ginger',
     role: 'villager',
     lines: [
-      "I'm short on legs. But, like most residents of the Valley, long on opinions.",
+      "I'm a Corgi! Short on legs, but, like most residents of the Valley, long on opinions.",
       "I'd visit your cafe more if there were somewhere comfy to sit.",
       'Everyone says corgis are hard to live with. Everyone is wrong.',
     ],
@@ -130,7 +130,7 @@ export const VILLAGERS = [
     coat: 'grey',
     role: 'villager',
     lines: [
-      "Careful, I'm very small and you are very not.",
+      "I'm a mouse! Careful, I'm very small.",
       "I count the cats when I walk past. It's my hobby. ",
       'A mouse has the right to choose their own hobby without judgement from others.',
     ],
@@ -144,7 +144,7 @@ export const VILLAGERS = [
     role: 'villager',
     lines: [
       "Lovely spot you've got. Bit bare, though, isn't it?",
-      "Plants. Pictures. A rug. It's not hard.",
+      "Add some plants, some pictures, maybe a rug? It's not hard.",
       "I'd stay longer if it felt like somewhere worth staying.",
     ],
   },
@@ -184,7 +184,7 @@ export const VILLAGERS = [
     role: 'builder',
     lines: [
       'You want an expansion? Everyone wants to expand.',
-      'Money first, then workers, then walls. In that order.',
+      'Hire workers and pay for materials. Then you can build new rooms',
       "I can put a roof on anything. Doesn't mean I should.",
     ],
     hints: [
@@ -214,9 +214,9 @@ export const VILLAGERS = [
     coat: 'grey',
     role: 'hardware',
     lines: [
-      "Slate, tile, or thatch. Thatch leaks. Slate's dear. Tile's sensible.",
+      'We sell all kinds of building materials. What do you need?',
       'Everything here is heavier than it looks.',
-      "You'll want good timber if you're going up two rooms.",
+      "You'll want good timber if you're going to build new rooms.",
     ],
   },
   {
@@ -260,7 +260,7 @@ export const VILLAGERS = [
     lines: [
       "I eat the hedges so you don't have to. You're welcome!",
       'That path east has been blocked since the storm. Big rock. Very rude of it to block the way!',
-      'Somebody strong could move it. Not me. I have a bad knee and a good excuse.',
+      'Somebody strong could move it. Not me. I have a bad knee.',
     ],
     hints: [
       {
@@ -303,8 +303,8 @@ export const VILLAGERS = [
     role: 'vet',
     lines: [
       'Sick cat? Bring them straight in. It spreads, you know.',
-      'One sneezing cat becomes three sneezing cats becomes a very quiet cafe.',
-      "Prevention is cheaper than cure. Feed them properly and I'll see less of you.",
+      'One sneezing cat becomes three sneezing cats, and no one wants to come to a cafe like that.',
+      "Prevention is cheaper than cure. Feed them properly and they'll stay healthy.",
     ],
     hints: [
       {
@@ -365,7 +365,7 @@ export const VILLAGERS = [
     role: 'villager',
     lines: [
       'MINE. Sorry. Reflex.',
-      "You can't sit outside a cafe here. We'd have your cake off you in seconds.",
+      "You can't sit outside a cafe here. We'd take your croissant in seconds.",
       "Nothing personal. It's a lifestyle.",
     ],
   },
@@ -444,7 +444,7 @@ export const VILLAGERS = [
     lines: [
       'Water off the boil. Off. The. Boil.',
       'A good pot makes people linger. Lingering people order twice.',
-      "I have a smoked one that tastes like a bonfire. Not everyone's cup. Ha.",
+      "I have a smoked tea that tastes like a bonfire. Not everyone's cup. Ha.",
     ],
   },
   {
