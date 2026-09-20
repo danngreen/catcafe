@@ -700,7 +700,7 @@ class Game {
     if (!st.load(this.worldSeed, !NetClient.available())) {
       return this.startNewGame(st.playerLook, {
         wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], awning: AWNING_CHOICES[0],
-        floor: T.FLOOR_WOOD, name: CAFE_NAMES[0],
+        floor: T.FLOOR_WOOD, name: DEFAULT_CAFE_NAME,
       });
     }
     st.rebuildCafe();
@@ -2795,7 +2795,33 @@ const WALL_CHOICES = ['#efe2c8', '#e6dcc2', '#dfe6e8', '#f0e4cc', '#f2e0e0'];
 // The awning is the boldest thing on the shopfront, so it's the choice that
 // actually shows from across the lane.
 const AWNING_CHOICES = ['#c05a7a', '#5b8fd6', '#7fbe57', '#eec453', '#8a72d6', '#e0894a', '#6b9e8f', '#d95f5f'];
-const CAFE_NAMES = ['The Contented Cat', 'Paws & Provisions', 'The Warm Windowsill', 'Bramble & Whisker', 'The Sleepy Saucer'];
+// Cafe names are built rather than chosen from a shortlist: two words, and the
+// grammar that goes between them. A noun first and the two are partners —
+// "Bramble and Whisker" — an adjective first and it describes the second —
+// "The Sleepy Saucer". Which of the two it was is the only thing the joining
+// word depends on, so the lists have to stay disjoint: a word in both would
+// make the name read either way depending on where it was found.
+export const CAFE_NOUNS = [
+  'Bell', 'Bramble', 'Cat', 'Claw', 'Cream', 'Hearth', 'Kettle', 'Kitten',
+  'Lantern', 'Paw', 'Saucer', 'Sparrow', 'Teapot', 'Thistle', 'Whisker',
+  'Windowsill',
+];
+export const CAFE_ADJECTIVES = [
+  'Contented', 'Cosy', 'Curious', 'Drowsy', 'Fluffy', 'Idle', 'Quiet',
+  'Sleepy', 'Velvet', 'Wandering', 'Warm',
+];
+// The first word may be either; the second is always a noun. Alphabetical, so
+// a word you are looking for is where you would look for it rather than where
+// the two lists happen to have been joined.
+export const CAFE_FIRST = CAFE_NOUNS.concat(CAFE_ADJECTIVES).sort();
+
+/** The name those two words make, with the word that joins them. */
+export function cafeName(first, second) {
+  return CAFE_ADJECTIVES.indexOf(first) >= 0
+    ? `The ${first} ${second}` : `${first} and ${second}`;
+}
+
+const DEFAULT_CAFE_NAME = cafeName('Contented', 'Cat');
 
 // What this browser last played as. Kept out of the save file on purpose: it
 // belongs to the machine rather than to the valley, so it is still there for a
@@ -3128,9 +3154,13 @@ class TitleScreen extends Screen {
     this.name = game.state.playerName || (me && me.name)
       || PLAYER_NAMES[Math.floor(Math.random() * PLAYER_NAMES.length)];
     this.remembered = !!me;
+    // A name is two words and the grammar between them. Start on a random
+    // pair, so the first thing you see is not the same cafe as everyone else's.
+    this.word1 = CAFE_FIRST[Math.floor(Math.random() * CAFE_FIRST.length)];
+    this.word2 = CAFE_NOUNS[Math.floor(Math.random() * CAFE_NOUNS.length)];
     this.style = {
       wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], awning: AWNING_CHOICES[0],
-      floor: T.FLOOR_WOOD, name: CAFE_NAMES[0],
+      floor: T.FLOOR_WOOD, name: cafeName(this.word1, this.word2),
     };
     this.row = 0;
   }
@@ -3166,7 +3196,7 @@ class TitleScreen extends Screen {
     }
 
     // Character & cafe creation.
-    const rows = this.joining ? 3 : (this.multiplayer ? 6 : 5);
+    const rows = this.joining ? 3 : (this.multiplayer ? 7 : 6);
     if (input.repeat('up', dt)) { this.row = (this.row - 1 + rows) % rows; audio.sfx('ui_move'); }
     if (input.repeat('down', dt)) { this.row = (this.row + 1) % rows; audio.sfx('ui_move'); }
     const dir = input.repeat('right', dt) ? 1 : input.repeat('left', dt) ? -1 : 0;
@@ -3180,7 +3210,9 @@ class TitleScreen extends Screen {
         else if (r === 1) this.look.cloth = step(CLOTHES, this.look.cloth);
         else if (r === 2) this.style.roof = step(ROOF_CHOICES, this.style.roof);
         else if (r === 3) this.style.awning = step(AWNING_CHOICES, this.style.awning);
-        else this.style.name = step(CAFE_NAMES, this.style.name);
+        else if (r === 4) this.word1 = step(CAFE_FIRST, this.word1);
+        else this.word2 = step(CAFE_NOUNS, this.word2);
+        this.style.name = cafeName(this.word1, this.word2);
       }
     }
     if (input.hit('use')) {
@@ -3329,15 +3361,52 @@ class TitleScreen extends Screen {
       drawTextCentered(ctx, 'You just need a face', mid, y + 146, { color: P.uiTextDim, shadow: P.uiShadow });
       drawTextCentered(ctx, 'and a name', mid, y + 158, { color: P.uiTextDim, shadow: P.uiShadow });
     } else {
+      // The name, written as the four things it is made of: "The" or nothing,
+      // the word you picked, "and" or nothing, the word you picked. The two
+      // words are separate rows — up and down move between them — and the
+      // joining words are not chosen by anybody, so they are never highlighted.
       const ry = y + h - 46;
-      const sel = this.row === 4 + nameRow;
-      if (sel) {
-        ctx.fillStyle = 'rgba(255,207,107,0.14)';
-        ctx.fillRect(x + 10, ry - 5, w - 20, 22);
+      const pick = this.row - (4 + nameRow);          // 0 = first word, 1 = second
+      const adj = CAFE_ADJECTIVES.indexOf(this.word1) >= 0;
+      const parts = [];
+      if (adj) parts.push({ text: 'The' });
+      parts.push({ text: this.word1, word: 0 });
+      if (!adj) parts.push({ text: 'and' });
+      parts.push({ text: this.word2, word: 1 });
+      // Arrows live inside the box either way, so the line does not jump about
+      // as the selection moves between the two words.
+      const ARROW = 12, GAP = 6;
+      let total = 0;
+      for (const p of parts) {
+        p.w = textWidth(p.text) + (p.word != null ? ARROW * 2 : 0);
+        total += p.w + GAP;
       }
-      drawText(ctx, 'Cafe name', x + 18, ry + 1, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
-      drawTextRight(ctx, `< ${this.style.name} >`, x + w - 16, ry + 1,
-        { color: sel ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
+      // Beside the label rather than under it: above this line is the cafe we
+      // are drawing a picture of, and text over the roof reads as damage.
+      const fieldL = x + 86;
+      let px = Math.round(fieldL + ((x + w - 12) - fieldL) / 2 - (total - GAP) / 2);
+      drawText(ctx, 'Cafe name', x + 18, ry + 1,
+        { color: pick >= 0 ? P.uiGold : P.uiText, shadow: P.uiShadow });
+      for (const p of parts) {
+        const on = p.word != null && p.word === pick;
+        if (on) {
+          ctx.fillStyle = 'rgba(255,207,107,0.14)';
+          ctx.fillRect(px - 3, ry - 5, p.w + 6, 22);
+        }
+        if (p.word != null) {
+          // Both words keep their arrows whether or not they are the one being
+          // changed: they are what says a word can be changed at all.
+          const arrow = on ? P.uiGold : P.uiTextDim;
+          drawText(ctx, '<', px, ry + 1, { color: arrow, shadow: P.uiShadow });
+          drawText(ctx, '>', px + p.w - 6, ry + 1, { color: arrow, shadow: P.uiShadow });
+          drawText(ctx, p.text, px + ARROW, ry + 1,
+            { color: on ? P.uiGold : P.uiText, shadow: P.uiShadow });
+        } else {
+          // "The" and "and" are grammar, not a choice: dimmer, and never lit.
+          drawText(ctx, p.text, px, ry + 1, { color: P.uiTextDim, shadow: P.uiShadow });
+        }
+        px += p.w + GAP;
+      }
     }
 
     drawTextCentered(ctx, 'Left / Right to change    Space to begin', x + w / 2, y + h - 16, { color: P.uiTextDim, shadow: P.uiShadow });
@@ -3370,6 +3439,6 @@ if (location.search.includes('autostart')) (async () => {
   g.screens.length = 0;
   g.startNewGame({ species: 'cat', coat: 'ginger', cloth: CLOTHES[5] },
     { wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], awning: AWNING_CHOICES[0],
-      floor: T.FLOOR_WOOD, name: CAFE_NAMES[0] });
+      floor: T.FLOOR_WOOD, name: DEFAULT_CAFE_NAME });
   g.dialogue.active = false;
 })();

@@ -6462,6 +6462,71 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             }
           }
         }
+      } else if (SCRIPT === 'titlename' || SCRIPT === 'titlenameadj') {
+        // The name picker itself, for looking at: the row highlighted on the
+        // first word, with "and" or "The" either side of it as appropriate.
+        const M = await import('../src/main.js');
+        const ts = g.screens[0];
+        ts.index = ts.options.indexOf('New game');
+        key('Space', true); await wait(220); key('Space', false);
+        await wait(500);
+        // Down to the first word of the name.
+        const want = SCRIPT === 'titlenameadj' ? 'Fluffy' : 'Whisker';
+        ts.word1 = want;
+        ts.word2 = 'Claw';
+        ts.style.name = M.cafeName(ts.word1, ts.word2);
+        ts.row = 4 + (ts.multiplayer ? 1 : 0);
+        await wait(700);
+        window.__namerow = `stage=${ts.stage} row=${ts.row} name="${ts.style.name}"`;
+        if (ts.stage !== 'create') window.__errors.push('never reached the chooser: ' + window.__namerow);
+        const wantName = SCRIPT === 'titlenameadj' ? 'The Fluffy Claw' : 'Whisker and Claw';
+        if (ts.style.name !== wantName) window.__errors.push('wrong name assembled: ' + window.__namerow);
+      } else if (SCRIPT === 'cafenames') {
+        // Two words and the grammar between them. A noun first makes partners
+        // — "Bramble and Whisker" — an adjective first describes the second —
+        // "The Sleepy Saucer". Nothing may appear in both lists, or the same
+        // word would read both ways.
+        const M = await import('../src/main.js');
+        const both = M.CAFE_NOUNS.filter((n) => M.CAFE_ADJECTIVES.indexOf(n) >= 0);
+        const sorted = M.CAFE_FIRST.slice().sort().join() === M.CAFE_FIRST.join();
+        const whole = M.CAFE_FIRST.length === M.CAFE_NOUNS.length + M.CAFE_ADJECTIVES.length;
+        const bad = [];
+        for (const first of M.CAFE_FIRST) {
+          for (const second of M.CAFE_NOUNS) {
+            const name = M.cafeName(first, second);
+            const isAdj = M.CAFE_ADJECTIVES.indexOf(first) >= 0;
+            const want = isAdj ? `The ${first} ${second}` : `${first} and ${second}`;
+            if (name !== want) bad.push(name);
+          }
+        }
+        // The longest name has to fit the line it is written on, or a future
+        // word added to either list silently overprints the panel edge.
+        const F = await import('../src/engine/font.js');
+        const ARROW = 12, GAP = 6, FIELD = 340 - 86 - 12;
+        let widest = 0, widestName = '';
+        for (const first of M.CAFE_FIRST) {
+          for (const second of M.CAFE_NOUNS) {
+            const isAdj = M.CAFE_ADJECTIVES.indexOf(first) >= 0;
+            const joiner = isAdj ? 'The' : 'and';
+            const total = F.textWidth(joiner) + GAP
+              + F.textWidth(first) + ARROW * 2 + GAP
+              + F.textWidth(second) + ARROW * 2;
+            if (total > widest) { widest = total; widestName = M.cafeName(first, second); }
+          }
+        }
+        if (widest > FIELD) {
+          window.__errors.push(`"${widestName}" is ${widest}px, wider than the ${FIELD}px it has`);
+        }
+        window.__names = `widest=${widest}/${FIELD} "${widestName}" `
+          + `first=${M.CAFE_FIRST.length} nouns=${M.CAFE_NOUNS.length}`
+          + ` sorted=${sorted} whole=${whole} overlap=${both.length} bad=${bad.length}`
+          + ` eg="${M.cafeName('Whisker', 'Claw')}" / "${M.cafeName('Fluffy', 'Kitten')}"`;
+        if (both.length) window.__errors.push('a word is both a noun and an adjective: ' + window.__names);
+        if (!sorted) window.__errors.push('the first-word list is not in order: ' + window.__names);
+        if (!whole) window.__errors.push('the first-word list is missing words: ' + window.__names);
+        if (bad.length) window.__errors.push('a name came out wrong: ' + window.__names);
+        if (M.cafeName('Whisker', 'Claw') !== 'Whisker and Claw') window.__errors.push('nouns should be partners: ' + window.__names);
+        if (M.cafeName('Fluffy', 'Kitten') !== 'The Fluffy Kitten') window.__errors.push('adjectives should describe: ' + window.__names);
       } else if (SCRIPT === 'catcolumns') {
         // The Cats tab is a table, and a table has to fit the panel it is in.
         // The book is as wide as the screen allows, and on a landscape phone
@@ -6770,6 +6835,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__strand ? ` ${window.__strand}` : '')
         + (window.__valley ? ` ${window.__valley}` : '')
         + (window.__cols ? ` ${window.__cols}` : '')
+        + (window.__names ? ` ${window.__names}` : '')
+        + (window.__namerow ? ` ${window.__namerow}` : '')
         + (window.__bookshot ? ` ${window.__bookshot}` : '')
         + (window.__shellw ? ` ${window.__shellw}` : '')
         + (window.__hint ? ` ${window.__hint}` : '')
@@ -6848,6 +6915,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__strand ? ` ${window.__strand}` : '')
         + (window.__valley ? ` ${window.__valley}` : '')
         + (window.__cols ? ` ${window.__cols}` : '')
+        + (window.__names ? ` ${window.__names}` : '')
+        + (window.__namerow ? ` ${window.__namerow}` : '')
         + (window.__bookshot ? ` ${window.__bookshot}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       if (window.__terrain) { out.textContent = window.__terrain; document.title = 'OK'; window.__done = true; return; }

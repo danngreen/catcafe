@@ -50,6 +50,9 @@ const BUDGET = {
   cafestrand: 25000,
   savedvalley: 20000,
   catcolumns: 15000,
+  cafenames: 15000,
+  titlename: 20000,
+  titlenameadj: 20000,
   bookmobile: 20000,
   staffmobile: 20000,
   hoursmobile: 20000,
@@ -171,7 +174,7 @@ const GROUPS = {
   cafe: ['cafe', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers', 'employee',
     'weathercafe', 'hourly'],
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',
-    'barriers', 'eastpass', 'barrierreach', 'passcleared', 'debugpos', 'weather', 'doorblock', 'resumeplace', 'cafestrand', 'savedvalley', 'catcolumns'],
+    'barriers', 'eastpass', 'barrierreach', 'passcleared', 'debugpos', 'weather', 'doorblock', 'resumeplace', 'cafestrand', 'savedvalley', 'catcolumns', 'cafenames', 'titlename', 'titlenameadj'],
   // Frame times, and the things that are supposed to make them shorter. These
   // report numbers as much as they pass or fail: a machine under load will
   // read slower without anything being wrong, so they assert on what the code
