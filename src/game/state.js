@@ -13,7 +13,13 @@ import { shiftHours } from './cafe.js';
 import { VILLAGERS } from '../world/places.js';
 import { TILE } from '../art/tiles.js';
 
+// One slot per valley: `catcafe.save.v1.<seed>`. The bare key is where saves
+// went when a browser had a single slot, and is still read so nobody loses the
+// valley they were in when this changed.
 const SAVE_KEY = 'catcafe.save.v1';
+// Slots are a few kilobytes each and a server can have any number of valleys,
+// so keep the ones you actually came back to and let the rest go.
+const MAX_SLOTS = 12;
 
 export class GameState {
   constructor(hooks = {}) {
@@ -501,8 +507,22 @@ export class GameState {
       pendingLetters: this.pendingLetters,
       player: (this.hooks.playerPos && this.hooks.playerPos()) || null,
     };
+    // When this valley was last played, so the oldest slots can go when there
+    // are too many of them.
+    data.at = Date.now();
+    const key = GameState.keyFor(this.worldSeed);
     try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+      localStorage.setItem(key, JSON.stringify(data));
+      // The old single slot held this same valley: it has a proper one now.
+      // Only when it is this valley's — another one's save lives in there
+      // until that valley is played again, and throwing it away would lose it.
+      if (key !== SAVE_KEY) {
+        try {
+          const legacy = JSON.parse(localStorage.getItem(SAVE_KEY));
+          if (legacy && legacy.seed === this.worldSeed) localStorage.removeItem(SAVE_KEY);
+        } catch { /* nothing readable in there */ }
+      }
+      GameState.pruneSlots();
       return true;
     } catch (e) {
       console.warn('save failed', e);
@@ -510,19 +530,57 @@ export class GameState {
     }
   }
 
+  /** Where this valley's save lives. */
+  static keyFor(seed) { return seed == null ? SAVE_KEY : `${SAVE_KEY}.${seed}`; }
+
   /**
-   * Is there a save worth offering to continue?
-   *
-   * Called with a seed, the answer is only yes if the save is of *that* valley.
-   * Called without one — solo play, where there is only ever the one world —
-   * any save will do, including saves written before they carried a seed.
+   * This valley's save, from its own slot or — for a browser that last played
+   * before valleys had their own — from the single old one.
    */
-  static hasSave(seed) {
+  static readSlot(seed, allowSeedless) {
     try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (!raw) return false;
-      return GameState.saveIsOf(JSON.parse(raw), seed);
-    } catch { return false; }
+      const own = localStorage.getItem(GameState.keyFor(seed));
+      if (own) {
+        const data = JSON.parse(own);
+        if (GameState.saveIsOf(data, seed, allowSeedless)) return data;
+      }
+      const legacy = seed == null ? null : localStorage.getItem(SAVE_KEY);
+      if (!legacy) return null;
+      const data = JSON.parse(legacy);
+      return GameState.saveIsOf(data, seed, allowSeedless) ? data : null;
+    } catch { return null; }
+  }
+
+  /**
+   * Is there a save worth offering to resume?
+   *
+   * Only ever yes for a save of *this* valley. `allowSeedless` is solo play,
+   * where a save written before saves carried a seed still belongs to the one
+   * world there has ever been out there.
+   */
+  static hasSave(seed, allowSeedless) { return !!GameState.readSlot(seed, allowSeedless); }
+
+  /** Every valley slot this browser holds, newest first. */
+  static slots() {
+    const out = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || k === SAVE_KEY || k.indexOf(`${SAVE_KEY}.`) !== 0) continue;
+        let at = 0;
+        try { at = JSON.parse(localStorage.getItem(k)).at || 0; } catch { at = 0; }
+        out.push({ key: k, at });
+      }
+    } catch { return out; }
+    return out.sort((a, b) => b.at - a.at);
+  }
+
+  /** Keep the most recently played valleys and drop the rest. */
+  static pruneSlots() {
+    const slots = GameState.slots();
+    for (const s of slots.slice(MAX_SLOTS)) {
+      try { localStorage.removeItem(s.key); } catch { /* nothing to be done */ }
+    }
   }
 
   /**
@@ -536,9 +594,12 @@ export class GameState {
    * A save with no seed in it was written before saves carried one. There was
    * only ever one world then, so it belongs to whatever asks.
    */
-  static saveIsOf(data, seed) {
+  static saveIsOf(data, seed, allowSeedless) {
     if (!data) return false;
-    if (data.seed == null) return true;
+    // A save with no seed in it was written before saves carried one, when a
+    // browser had one world. It belongs to solo play, where there is still only
+    // one — never to a valley on a server, or it would answer for all of them.
+    if (data.seed == null) return !!allowSeedless;
     if (seed == null) return false;
     return data.seed === seed;
   }
@@ -548,11 +609,9 @@ export class GameState {
   }
 
   /** `seed` names the valley being loaded into; a save of another one is refused. */
-  load(seed) {
-    let data;
-    try { data = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch { return false; }
+  load(seed, allowSeedless) {
+    const data = GameState.readSlot(seed, allowSeedless);
     if (!data) return false;
-    if (!GameState.saveIsOf(data, seed)) return false;
     this.clock.load(data.clock);
     this.money = data.money != null ? data.money : 480;
     this.reputation = data.reputation != null ? data.reputation : 0.12;
