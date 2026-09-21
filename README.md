@@ -22,8 +22,10 @@ quests (NPC dialog, hints, rewards, etc).
 
 ### Prerequisites
 
-You need Node 16 or newer installed. I recommend something newer. We've
-only tested it on Node 23.11 and Node 24.18. Download and install it from the
+You need Node installed. We've only tested it on Node 23.11 and Node 24.18, but
+earlier versions might work (definitely at least Node 16 is required).
+
+Download and install it with your package manager, or from the
 [official NodeJS site here](https://nodejs.org/en/download).
 
 
@@ -61,17 +63,18 @@ and play together.
 When you join a shared server, you pick a name, name, a color and an apron, and
 walk around the same valley as the other players. 
 
-It runs happily on a small box like an Orange Pi: the server only keeps state
-and relays messages, and each player's browser does all the drawing.
+It runs happily on a small box like a Raspberry Pi or Orange Pi with 1GB RAM.
+The server only keeps state and relays messages, and each player's browser does
+all the drawing.
 
 The host owns the world seed, so every client generates a byte-identical valley
 from one number — no map is ever sent. Add `?solo` to the URL to play alone even
 when a session is running.
 
-**One cafe, one set of books.** The till, the pantry, the bag, the cats, the
-quest flags and the clock all live on the server. Buy muffins and they're in
-everyone's pantry; take a taxi and everyone's money goes down; sleep at the inn
-and morning comes for all of you. 
+**One cafe, one set of books.** The money, the pantry, the inventory, the cats,
+the quest flags and the clock all live on the server. Buy muffins and they're
+in everyone's pantry; take a taxi and everyone's money goes down; sleep at the
+inn and morning comes for all of you. 
 
 **People come in wanting particular things.** Everyone arrives with three or
 four items in mind and asks for them in turn, fanciest first. If you have what
