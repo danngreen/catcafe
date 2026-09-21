@@ -538,7 +538,7 @@ export const ITEM_DATA = {
   },
   f_piano: {
     name: 'Upright Piano',
-    desc: 'Somebody always knows three songs.',
+    desc: 'Somebody always knows a song or two.',
     cat: 'furniture',
     icon: 'piano',
     cost: 900,
@@ -793,5 +793,18 @@ export const ITEM_DATA = {
     desc: 'Sealed, addressed, and waiting for a bird.',
     cat: 'key',
     icon: 'letter',
+  },
+  s: {
+    name: 'Strawberry',
+    desc: '',
+    cat: 'food',
+    icon: 'berry',
+    glyph: 'parcel',
+    colour: '#d0a659',
+    cost: 3,
+    price: 12,
+    appeal: 1,
+    shelf: 4,
+    temp: 'cold',
   },
 };
