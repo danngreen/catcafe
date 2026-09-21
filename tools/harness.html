@@ -60,6 +60,12 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
     }
 
     async function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
+    // Which valley this run was given. Every scenario that talks to the server
+    // on the side — a second player on a raw socket, a look at /status — has
+    // to name it, or it is talking about the default valley while the game
+    // under test is in another one.
+    const GAME_ID = (location.search.match(/[?&]game=(\d+)/) || [])[1] || null;
+    const GAMEQ = GAME_ID ? `?game=${GAME_ID}` : '';
 
     /** How much was drawn on a canvas — for "is this on screen at all". */
     function ink(ctx2, w = 480, h = 270) {
@@ -4715,7 +4721,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // A second socket joins as Pippin first, so our own join has to be
         // given something else.
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const bot = new WebSocket(`${proto}//${location.host}/ws`);
+        const bot = new WebSocket(`${proto}//${location.host}/ws${GAMEQ}`);
         let ready = false;
         bot.onmessage = (ev) => {
           const m = JSON.parse(ev.data);
@@ -4746,7 +4752,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // of the world still appears.
         const st = g.state;
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const bot = new WebSocket(`${proto}//${location.host}/ws`);
+        const bot = new WebSocket(`${proto}//${location.host}/ws${GAMEQ}`);
         let ready = false;
         bot.onmessage = (ev) => {
           const m = JSON.parse(ev.data);
@@ -5474,7 +5480,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           // in it. Everything below counts the change we cause, not the total.
           const before = g.net.remotes.size;
           const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-          const ws = new WebSocket(`${proto}//${location.host}/ws`);
+          const ws = new WebSocket(`${proto}//${location.host}/ws${GAMEQ}`);
           let ready = false;
           ws.onmessage = (ev) => {
             const m = JSON.parse(ev.data);
@@ -5521,7 +5527,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             { name: 'Figgy', look: { species: 'fox', coat: 'fox', cloth: '#5b8fd6' }, dx: -34 },
           ];
           for (const e of extras) {
-            const w2 = new WebSocket(`${proto2}//${location.host}/ws`);
+            const w2 = new WebSocket(`${proto2}//${location.host}/ws${GAMEQ}`);
             let up = false;
             w2.onmessage = (ev) => {
               const m = JSON.parse(ev.data);
@@ -5567,7 +5573,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // money, the bag and the pantry, and we must end up agreeing.
         const st = g.state;
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${proto}//${location.host}/ws`);
+        const ws = new WebSocket(`${proto}//${location.host}/ws${GAMEQ}`);
         const seen = [];
         let ready = false;
         ws.onmessage = (ev) => {
@@ -5709,7 +5715,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // not need a page reload, and should not leave us out of step.
         const st = g.state;
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const bot = new WebSocket(`${proto}//${location.host}/ws`);
+        const bot = new WebSocket(`${proto}//${location.host}/ws${GAMEQ}`);
         let ready = false;
         bot.onmessage = (ev) => {
           const m = JSON.parse(ev.data);
@@ -5745,7 +5751,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // connected is not put up over a title screen.
         const names = () => g.screens.map((sc) => sc.constructor.name).join(',');
         const press = async (code) => { key(code, true); await wait(90); key(code, false); await wait(200); };
-        const here = async () => (await (await fetch('/status?game=001', { cache: 'no-store' })).json()).sockets;
+        let entered = null;
+        const here = async () => (await (await fetch('/status?game=' + entered, { cache: 'no-store' })).json()).sockets;
         await wait(800);
         const start = names();
         await press('Space');                              // into the first valley
@@ -5753,6 +5760,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await wait(300);
         const title = g.titleScreen;
         const options = title ? title.options.join('/') : '';
+        entered = g.net.gameId;
         const inLobbyFor = await here();
 
         // Midnight, while we are still deciding.
@@ -5780,7 +5788,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const st = g.state;
         const { BuildScreen } = await import('../src/ui/build.js');
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const bot = new WebSocket(`${proto}//${location.host}/ws`);
+        const bot = new WebSocket(`${proto}//${location.host}/ws${GAMEQ}`);
         const answers = [];
         let synced = 0;
         bot.onmessage = (ev) => {
@@ -5833,7 +5841,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // whatever the other player did meanwhile.
         const st = g.state;
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const bot = new WebSocket(`${proto}//${location.host}/ws`);
+        const bot = new WebSocket(`${proto}//${location.host}/ws${GAMEQ}`);
         bot.onmessage = (ev) => {
           const m = JSON.parse(ev.data);
           if (m.t === 'welcome') bot.send(JSON.stringify({ t: 'join', name: 'Ledger', look: st.playerLook, x: 0, y: 0, map: 'overworld' }));
@@ -5856,7 +5864,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         let waited = 0;
         while (g.net.rejoinCount === rejoins0 && waited < 12000) { await wait(250); waited += 250; }
         await wait(1500);
-        const status = await (await fetch('/status' + (location.search.match(/game=\d+/) ? '?' + location.search.match(/game=\d+/)[0] : ''), { cache: 'no-store' })).json();
+        const status = await (await fetch('/status' + GAMEQ, { cache: 'no-store' })).json();
         window.__offline = `down=${wasDown} back=${g.net.joined} after=${waited}ms kept=${g.net.caughtUp}`
           + ` money ${before}->${st.money} (server ${status.money}) chairs=${st.inventory.f_chair}/${chairs}`
           + ` flags mine=${!!st.flags.offline_probe} theirs=${!!st.flags.bot_probe} friend=${st.friends.offline_owl}`;
@@ -5880,14 +5888,14 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         let gone = false;
         for (let i = 0; i < 40 && !gone; i++) {
           await wait(1000);
-          const status = await (await fetch('/status', { cache: 'no-store' })).json();
+          const status = await (await fetch('/status' + GAMEQ, { cache: 'no-store' })).json();
           gone = !status.players.some((p) => p.id === id0);
         }
         link.timer = setInterval(() => link.tick(), 100);  // and wakes up
         let waited = 0;
         while (!(g.net.joined && g.net.id !== id0) && waited < 12000) { await wait(250); waited += 250; }
         await wait(500);
-        const status = await (await fetch('/status', { cache: 'no-store' })).json();
+        const status = await (await fetch('/status' + GAMEQ, { cache: 'no-store' })).json();
         const me = status.players.find((p) => p.id === g.net.id);
         window.__gone = `hungUpOn=${gone} back=${g.net.connected}/${g.net.joined} after=${waited}ms`
           + ` rejoins=${g.net.rejoinCount - rejoins0} serverHasUs=${!!(me && me.joined)}`;
@@ -5904,7 +5912,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!g.net.connected || !g.net.joined) window.__errors.push('never joined: ' + window.__poll);
 
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const bot = new WebSocket(`${proto}//${location.host}/ws`);
+        const bot = new WebSocket(`${proto}//${location.host}/ws${GAMEQ}`);
         let ready = false;
         bot.onmessage = (ev) => {
           const m = JSON.parse(ev.data);
@@ -5972,7 +5980,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // it never draws them and never sends them customers.
         const st = g.state;
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const bot = new WebSocket(`${proto}//${location.host}/ws`);
+        const bot = new WebSocket(`${proto}//${location.host}/ws${GAMEQ}`);
         let ready = false;
         bot.onmessage = (ev) => {
           const m = JSON.parse(ev.data);
@@ -6061,7 +6069,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // check below says so plainly rather than blaming the clock.
         const st = g.state;
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${proto}//${location.host}/ws`);
+        const ws = new WebSocket(`${proto}//${location.host}/ws${GAMEQ}`);
         let ready = false;
         ws.onmessage = (ev) => {
           const m = JSON.parse(ev.data);

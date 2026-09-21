@@ -13,11 +13,18 @@
 import { spawn } from 'node:child_process';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { createServer } from 'node:net';
 
 const CHROME = process.env.CHROME
   || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PORT = 9333 + (process.pid % 200);
-const BASE = process.env.BASE || 'http://localhost:8080';
+// Where the game is served from. Left unset — the usual case — a server is
+// started for this run alone, on a port of its own, saving nothing: whatever is
+// on 8080 is somebody's evening of play, and a sweep through it left test
+// valleys in their lobby and their money in the assertions. Set BASE to aim at
+// a server that is already up, which is what `netsave`/`netsaved` need.
+let BASE = process.env.BASE || null;
+const HERE = new URL('.', import.meta.url).pathname;
 
 const args = process.argv.slice(2);
 const flagsWithValue = new Set(['--shot', '--ms', '--url', '--eval', '--shotdir', '--mobile', '--hold', '--game']);
@@ -28,6 +35,9 @@ const shot = shotIdx >= 0 ? args[shotIdx + 1] : null;
 const msIdx = args.indexOf('--ms');
 const forcedMs = msIdx >= 0 ? Number(args[msIdx + 1]) : null;
 const hideOut = args.includes('--clean');
+// Both halves of a pair have to stand in the same valley, so tools/pairs.js
+// asks for the default one rather than a fresh one each.
+const sharedValley = args.includes('--shared-valley');
 // Stay open this long after the scenario reports. Only the first half of a
 // paired run needs it: the other browser has to still be there to be seen, and
 // now that a run ends the moment it is done, it otherwise wouldn't be.
@@ -192,10 +202,8 @@ const GROUPS = {
   mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile', 'pickupmobile', 'slidepad', 'bookmobile', 'staffmobile', 'hoursmobile'],
   // Single-process networked runs. The paired ones need two browsers at once
   // and are listed in the README rather than here.
-  // netclock goes first: only the sim owner cashes up a morning, ownership
-  // goes to whoever joined the valley first, and a scenario that ran before it
-  // and left a client connected takes it. Running it first is not a fix for
-  // that — it is a way of not paying for it every sweep.
+  // Each of these gets a valley of its own — see freshValley() — so the order
+  // they run in no longer matters.
   net: ['netclock', 'net', 'netmobile', 'netbooks', 'netdrop', 'netoffline', 'netbuildlock', 'netforget',
     'netpollbooks', 'netpollgone', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbyback', 'netlobbydel', 'netlobbyone', 'netnewvalley', 'netexit', 'netbookfields', 'nettitlecontinue', 'nettitleghost', 'nettitleghostpoll', 'netghostmove', 'netghostmovepoll', 'solo'],
   slow: ['netidle', 'netping', 'netmute', 'netpollquiet', 'netidletitle'],
@@ -210,7 +218,75 @@ const scenarios = [...new Set(named.flatMap((n) => GROUPS[n] || [n]))];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** A port nothing is listening on. */
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.on('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
+}
+
+/** Start a server for this run alone. Returns the process, to be killed. */
+async function ownServer() {
+  const port = await freePort();
+  const proc = spawn(process.execPath, [`${HERE}../server.js`], {
+    stdio: 'ignore',
+    env: { ...process.env, PORT: String(port), SESSION_SAVE: '0', ADMIN_PORT: '0', LOBBY_LOCK: '0' },
+  });
+  BASE = `http://localhost:${port}`;
+  for (let i = 0; i < 60; i++) {
+    await sleep(100);
+    try { if ((await fetch(`${BASE}/games`)).ok) return proc; } catch { /* not up yet */ }
+  }
+  proc.kill();
+  throw new Error('the test server did not start');
+}
+
+/**
+ * A valley of its own for one scenario.
+ *
+ * They all used to play in valley 001, one after another, on a server that
+ * stayed up between them. Each inherited the last one's money, day, cats and
+ * quest flags — and, for a few seconds, its players: a browser that has
+ * navigated away is still in the roster until its socket is noticed, and the
+ * first to join runs the cafe, so whether a scenario was the sim owner depended
+ * on what ran before it. That is what "netclock goes first" was papering over,
+ * and what made a scenario fail once in a sweep and never alone.
+ */
+async function freshValley() {
+  try {
+    const res = await fetch(`${BASE}/games/new`, { method: 'POST' });
+    if (!res.ok) return null;                 // a locked lobby: make do with the default
+    return (await res.json()).id || null;
+  } catch { return null; }
+}
+
+/** Throw it away again, once the browser has let go of it. */
+async function dropValley(id) {
+  // Usually at once. A scenario on the HTTP transport has no socket to close,
+  // and the server takes fifteen seconds to decide a poller has gone.
+  for (let i = 0; i < 120; i++) {
+    try {
+      const res = await fetch(`${BASE}/games/${id}`, { method: 'DELETE' });
+      if (res.ok) return true;
+      const body = await res.json().catch(() => ({}));
+      if (/no such/.test(body.why || '')) return true;
+      if (process.env.VALLEY_DEBUG) console.warn(`   drop ${id}: ${res.status} ${JSON.stringify(body)}`);
+    } catch { return false; }
+    await sleep(150);                          // somebody is still in there
+  }
+  console.warn(`   (could not remove test valley ${id} — delete it from the lobby)`);
+  return false;
+}
+
 async function main() {
+  const server = BASE ? null : await ownServer();
+  process.on('exit', () => { if (server) server.kill(); });
+
   const chrome = spawn(CHROME, [
     '--headless=new',
     `--remote-debugging-port=${PORT}`,
@@ -223,7 +299,12 @@ async function main() {
     '--disable-background-timer-throttling',
     '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding',
-    '--disable-features=CalculateNativeWinOcclusion',
+    // And no back/forward cache: a scenario's page has to be gone when we leave
+    // it, along with any extra sockets the scenario opened for a second player.
+    // Kept in the cache they stay connected, and the valley they were in can't
+    // be removed. (The game hangs up its own link on `pagehide` for the same
+    // reason — this covers the ones the scenarios open by hand.)
+    '--disable-features=CalculateNativeWinOcclusion,BackForwardCache',
     '--no-sandbox',
     '--no-first-run',
     '--hide-scrollbars',
@@ -342,7 +423,13 @@ async function main() {
     if (sc.includes('poll')) params.push('poll');
     // --game names one valley, for the scenarios about having several.
     const gameIdx = args.indexOf('--game');
+    let valley = null;
     if (gameIdx >= 0) params.push(`game=${args[gameIdx + 1]}`);
+    // Lobby scenarios are about the list of valleys, so they are not given one.
+    else if (sc.startsWith('net') && !sc.includes('lobby') && !sharedValley) {
+      valley = await freshValley();
+      params.push(`game=${valley || DEFAULT_GAME}`);
+    }
     // Title-screen scenarios are about the title screen, so they name a valley
     // rather than being asked to pick one — otherwise they open in the lobby,
     // where nobody is connected to anything yet.
@@ -394,6 +481,12 @@ async function main() {
       }
     }
 
+    if (valley) {
+      // Leave the page first: the valley can't be removed with us still in it.
+      await send('Page.navigate', { url: 'about:blank' });
+      await dropValley(valley);
+    }
+
     const real = problems.filter((p) => !p.includes('favicon'));
     console.log(`--- ${sc} --- ${(took / 1000).toFixed(1)}s${hung ? ` (hit its ${budget / 1000}s ceiling)` : ''}`);
     console.log(summary.trim() || '(no in-page summary)');
@@ -407,6 +500,7 @@ async function main() {
 
   ws.close();
   chrome.kill();
+  if (server) server.kill();
   process.exit(failed ? 1 : 0);
 }
 

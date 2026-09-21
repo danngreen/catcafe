@@ -399,6 +399,12 @@ class Game {
         if (document.hidden) net.frameStopped();
       });
     }
+    // Leaving the page hangs up, even when the browser keeps the page — see
+    // NetClient.suspend. `pagehide` rather than `unload`, which a cached page
+    // never gets and which stops a page being cached at all.
+    if (typeof window !== 'undefined' && window.addEventListener) {
+      window.addEventListener('pagehide', () => net.suspend());
+    }
     net.on('cust', (list) => { if (!net.simOwner) st.cafeSim.applyCustomers(list); });
     net.on('serve', (m) => { if (net.simOwner) st.cafeSim.serveNearest(m.x, m.y); });
   }

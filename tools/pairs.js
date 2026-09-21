@@ -48,10 +48,14 @@ if (!pairs.length) {
 /** One check.js run, its output captured rather than interleaved. */
 function run(scenario, hold = 0, game = null) {
   return new Promise((resolve) => {
-    const argv = [`${HERE}check.js`, scenario, '--clean'];
+    // The same valley for both halves, on the server started below.
+    const argv = [`${HERE}check.js`, scenario, '--clean', '--shared-valley'];
     if (game) argv.push('--game', game);
     if (hold) argv.push('--hold', String(hold));
-    const p = spawn(process.execPath, argv, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const p = spawn(process.execPath, argv, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, BASE: `http://localhost:${PORT}` },
+    });
     let out = '';
     p.stdout.on('data', (d) => { out += d; });
     p.stderr.on('data', (d) => { out += d; });
@@ -79,20 +83,6 @@ counts these pairs assert on will not match.
     process.exit(2);
   }
 } catch { /* nothing there: exactly what we want */ }
-
-// BASE is inherited by the browsers below, so a BASE left over from a sweep
-// sends them to a different server than the empty one started here — one full
-// of the money that sweep made. The pairs then fail on the numbers and read
-// exactly like a bug in sharing. Catch it here rather than in the results.
-if (process.env.BASE && !process.env.BASE.includes(`:${PORT}`)) {
-  console.error(`BASE is set to ${process.env.BASE}, and these pairs serve themselves on ${PORT}.
-
-The browsers would go to that one instead of the empty valley started here.
-
-  env -u BASE node tools/pairs.js            # what you want
-  PORT=8137 node tools/pairs.js              # or move the pairs' own server`);
-  process.exit(2);
-}
 
 let failed = 0;
 for (const pair of pairs) {

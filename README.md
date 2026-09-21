@@ -592,6 +592,16 @@ node tools/check.js slow --clean                # the keepalive ones, minutes ea
 node tools/check.js town --shotdir /tmp/shots   # also writes screenshots
 ```
 
+Nothing needs to be running first. `check.js` starts a server of its own for
+the run, on a free port and saving nothing, so a sweep never touches the
+valleys you actually play in; set `BASE=http://host:port` to aim it at a server
+that is already up instead. Every `net` scenario is given a valley of its own
+and the valley is thrown away afterwards, so none of them inherits the last
+one's money, day, quest flags or — the one that bit — its players, who linger
+in the roster for a moment after the browser has moved on and used to decide
+who ran the cafe in the next scenario. Pairs share one valley on purpose.
+`npm test` covers the server and the rules with no browser at all.
+
 Scenarios say when they have finished and the runner moves on the moment they
 do, so the per-scenario times in `check.js` are ceilings rather than waits: a
 run costs what it actually needs, and a ceiling being hit means something hung.
@@ -602,10 +612,10 @@ plausibly have broken, with `all` before committing.
 `netsave`/`netsaved` are still run by hand, since they bracket a server restart:
 
 ```bash
-SESSION_SAVE=/tmp/v.json node server.js &
-node tools/check.js netsave --clean
-# restart the server on the same file, then
-node tools/check.js netsaved --clean
+SESSION_SAVE=/tmp/v node server.js &
+BASE=http://localhost:8080 node tools/check.js netsave --clean --game 001
+# restart the server on the same directory, then
+BASE=http://localhost:8080 node tools/check.js netsaved --clean --game 001
 ```
 
 Scenarios cover walking the overworld, the cafe trading loop, entering shops,

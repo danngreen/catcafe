@@ -306,6 +306,28 @@ export class NetClient {
     if (this.keepalive) { clearInterval(this.keepalive); this.keepalive = null; }
   }
 
+  /**
+   * The page is going away — closed, navigated from, or put in the browser's
+   * back/forward cache. Hang up.
+   *
+   * A cached page is frozen, not gone: its socket stays open, the browser goes
+   * on answering the server's pings for it, and the player stands in the valley
+   * for as long as the cache keeps the page — holding the cafe if they ran it,
+   * and keeping the valley from being deleted. Safari on an iPad caches nearly
+   * everything. If the page does come back, the keepalive finds the link down
+   * and reconnects like after any other drop; this is not counted as one,
+   * since it says nothing about whether this machine can hold a socket.
+   */
+  suspend() {
+    if (!this.link) return;
+    this.dropLink();
+    this.connected = false;
+    this.joined = false;
+    this.owner = null;
+    this.remotes.clear();
+    this.retryIn = 1;
+  }
+
   /** The link went away on its own. */
   noteClose() {
     const wasConnected = this.connected;
