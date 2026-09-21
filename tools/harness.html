@@ -60,6 +60,89 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
     }
 
     async function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+    // ------------------------------------------------------------- waiting
+    //
+    // A fixed wait is a guess at how long something takes. Guess short and the
+    // scenario fails on a slow machine, or on a fast one with something else
+    // running; guess long and every run pays for it, six hundred times a
+    // sweep. These wait for the thing itself instead, and give up at a ceiling.
+    //
+    // `wait(ms)` is still here for the cases where time is the subject: the
+    // cafe simulated for five seconds, a title screen left idle for a minute.
+
+    /** One animation frame, or a moment if the browser isn't drawing. */
+    function nextFrame() {
+      return new Promise((r) => {
+        let done = false;
+        const go = () => { if (!done) { done = true; r(); } };
+        requestAnimationFrame(go);
+        setTimeout(go, 60);
+      });
+    }
+
+    /** Let the game run `n` frames: update, draw, and read the keys. */
+    async function frames(n) { for (let i = 0; i < (n || 1); i++) await nextFrame(); }
+
+    /**
+     * As soon as `pred()` is true, and no later than `ceilingMs`. Returns what
+     * it returned, or false if it never came true — so a scenario can go on to
+     * its own assertions and report what it found, rather than dying here.
+     */
+    async function until(pred, ceilingMs) {
+      const t0 = performance.now();
+      const ceiling = ceilingMs == null ? 5000 : ceilingMs;
+      for (;;) {
+        let ok = false;
+        try { ok = pred(); } catch (e) { ok = false; }
+        if (ok) return ok;
+        if (performance.now() - t0 >= ceiling) return false;
+        await nextFrame();
+      }
+    }
+
+    /** `until`, answering with how long it took — for the ones that report it. */
+    async function untilMs(pred, ceilingMs) {
+      const t0 = performance.now();
+      await until(pred, ceilingMs);
+      return Math.round(performance.now() - t0);
+    }
+
+    /**
+     * The game has caught up with whatever was just done to it: a couple of
+     * frames have run, and no fade or door or lock request is in flight.
+     */
+    async function settle() {
+      await frames(2);
+      const g = window.game;
+      if (!g) return;
+      await until(() => !(g.fader && g.fader.busy) && !g.openingBuild, 4000);
+      await frames(1);
+    }
+
+    /** A key held for two frames and let go, like a finger would. */
+    async function pressKey(code, after) {
+      key(code, true);
+      await frames(2);
+      key(code, false);
+      if (after !== false) await frames(2);
+    }
+
+    /**
+     * Everything sent to the server so far has been dealt with and answered.
+     * The server handles messages in the order they arrive and replies in
+     * order, so when the answer to a ping sent now comes back, the answers to
+     * everything sent before it already have.
+     */
+    async function roundTrip() {
+      const g = window.game;
+      const n = g && g.net;
+      if (!n || !n.connected) { await frames(2); return; }
+      const before = n.pongCount;
+      n.send({ t: 'ping', at: Date.now() });
+      await until(() => n.pongCount > before || !n.connected, 3000);
+      await frames(2);
+    }
     // Which valley this run was given. Every scenario that talks to the server
     // on the side — a second player on a raw socket, a look at /status — has
     // to name it, or it is talking about the default valley while the game
@@ -76,7 +159,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
     }
 
     (async () => {
-      await wait(400);
+      await settle();
       const g = window.game;
       if (!g) {
         report(['game never constructed', ...window.__errors]);
@@ -90,7 +173,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
       } else if (SCRIPT === 'cafe') {
         g.enterInterior('cafe', g.state.cafeMap, g.homeDoor.x, g.homeDoor.y);
-        await wait(1200);
+        await settle();
         g.state.shopOpen = true;
         g.state.clock.t = 11 * (1200 / 24);
         // Force a few customers through the door.
@@ -109,7 +192,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // emptied the cafe for everybody whenever the owner's wifi blinked.
         const sim = g.state.cafeSim;
         g.enterInterior('cafe', g.state.cafeMap, g.homeDoor.x, g.homeDoor.y);
-        await wait(600);
+        await settle();
         g.state.shopOpen = true;
         g.state.clock.t = 11 * (1200 / 24);
         for (let i = 0; i < 5; i++) { sim.trySpawn(g.state.cafeMap); await wait(300); }
@@ -189,12 +272,12 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const byId = (id) => g.villagers.find((v) => v.def.id === id);
         st.clock.t = 12 * (1200 / 24);
         g.updateVillagerShift();
-        await wait(400);
+        await settle();
         const dayOut = byId('nettle').shift, ghostOut = byId('woofers').shift;
 
         st.clock.t = 21 * (1200 / 24);      // after dark
         g.updateVillagerShift();
-        await wait(300);
+        await settle();
         const leaving = g.villagers.filter((v) => v.shift === 'leaving').length;
         const arriving = g.villagers.filter((v) => v.shift === 'arriving').length;
         // They should be *walking*, and fading rather than vanishing.
@@ -234,14 +317,12 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const { QUEST_BY_ID, objectiveText } = await import('../src/game/quests.js');
         st.quests.lane_end_hedge = 'active';
         st.questStep.lane_end_hedge = 0;
-        key('Escape', true); await wait(140); key('Escape', false);
-        await wait(400);
+        await pressKey('Escape');
         // Arrow down to Journal and open it.
         const pause = g.screens[g.screens.length - 1];
         const idx = pause ? pause.items.indexOf('Journal') : -1;
-        for (let i = 0; i < idx; i++) { key('ArrowDown', true); await wait(110); key('ArrowDown', false); }
-        key('Space', true); await wait(160); key('Space', false);
-        await wait(500);
+        for (let i = 0; i < idx; i++) { await pressKey('ArrowDown', false); }
+        await pressKey('Space');
         const scr = g.screens[g.screens.length - 1];
         const text = objectiveText(QUEST_BY_ID.lane_end_hedge, st);
         window.__journal = `screen=${scr && scr.constructor.name} says="${text}"`;
@@ -260,7 +341,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const widest = Math.max(...wrapped.map((l) => textWidth(l)));
         window.__journal += ` lines=${wrapped.length} widest=${widest}px`;
         if (widest > 200) window.__errors.push('objective still runs off the panel: ' + window.__journal);
-        await wait(600);
+        await settle();
       } else if (SCRIPT === 'netquesthost' || SCRIPT === 'netquestguest') {
         // Two people in front of the same villager, both reading the same
         // offer. Taking it on twice used to hand out a second parcel and put
@@ -309,7 +390,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const p = st.hooks.playerPos();
         window.__pos = `slab=${bx},${by} standing=${Math.floor(p.x / 16)},${Math.floor(p.y / 16)} map=${p.map}`;
         if (Math.floor(p.x / 16) !== bx) window.__errors.push('position is wrong: ' + window.__pos);
-        await wait(700);
+        await settle();
       } else if (SCRIPT === 'netlivesave') {
         // Join whatever the server is actually holding and report the state of
         // the pass. Pointed at a real save, this says whether that save is
@@ -317,7 +398,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const st = g.state;
         const map = g.overworld;
         let w = 0;
-        while (!g.net.joined && w < 8000) { await wait(250); w += 250; }
+        w = await untilMs(() => g.net.joined, 8000);
         await wait(1500);
         const stones = map.objects.filter((o) => o.id === 'eastpass');
         const flag = !!st.flags.barrier_eastpass;
@@ -375,7 +456,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // Exactly what happens on load, on joining, or when the other player
         // clears it while you are stood next to it.
         g.applyClearedBarriers();
-        await wait(400);
+        await settle();
         const after = map.objects.filter((o) => o.id === 'eastpass').length;
         const stillSolid = [];
         for (const o of map.objects) {
@@ -456,7 +537,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           const real = g.weatherFx;
           const on = shot();
           g.weatherFx = { update() {}, draw() {}, drops: [], flakes: [] };
-          await wait(120);
+          await settle();
           const off = shot();
           g.weatherFx = real;
           return { id: g.sky.now.id, drawn: diff(on, off), particles: real.drops.length };
@@ -707,7 +788,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         };
         paint();
         window.__pass = `signs=${keys.length}`;
-        await wait(400);
+        await settle();
       } else if (SCRIPT === 'signkeys') {
         // Two shops that sell different things must not hang the same board.
         // The old valley had six pairs sharing one, which is how you end up
@@ -867,9 +948,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           { type: 'fountain', x: 17, y: 1, variant: 0 },
         ]);
         st.rebuildCafe();
-        await wait(300);
+        await settle();
         g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
-        await wait(1200);
+        await settle();
         const off = st.cafeMap.meta;
         g.player.x = (14 + off.offX) * 16 + 8;
         g.player.y = (5 + off.offY) * 16;
@@ -961,8 +1042,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         ];
         for (const run of runs) {
           run.setup();
-          key('KeyC', true); await wait(120); key('KeyC', false);
-          await wait(350);
+          await pressKey('KeyC');
           const scr = g.screens[g.screens.length - 1];
           if (!scr || scr.constructor.name !== 'CafeScreen') {
             window.__errors.push('the cafe book would not open');
@@ -974,14 +1054,13 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             scr.scroll = 0;
             // Two frames: one to draw it, one so anything the draw set up on
             // the first pass gets exercised on the second.
-            await wait(160);
+            await settle();
             drawn.push(`${run.name}:${tabs[i]}`);
             // Move about inside the tab — empty lists are where these throw.
-            for (let k = 0; k < 2; k++) { key('ArrowDown', true); await wait(70); key('ArrowDown', false); }
-            await wait(120);
+            for (let k = 0; k < 2; k++) { await pressKey('ArrowDown', false); }
+            await settle();
           }
-          key('Escape', true); await wait(120); key('Escape', false);
-          await wait(300);
+          await pressKey('Escape');
         }
         window.__book2 = `drew=${drawn.length}/${tabs.length * runs.length}`;
         if (drawn.length < tabs.length * runs.length) {
@@ -994,16 +1073,15 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         st.money = 9000;
         st.shopHours = [8, 18];
         st.employee = { name: 'Saffron', id: 'saffron', wage: 9, fairWage: 9, quality: 0.6, onDuty: true, hourly: true };
-        key('KeyC', true); await wait(120); key('KeyC', false);
-        await wait(350);
+        await pressKey('KeyC');
         const scr = g.screens[g.screens.length - 1];
         const press = async (code, n = 1) => {
-          for (let i = 0; i < n; i++) { key(code, true); await wait(110); key(code, false); await wait(150); }
+          for (let i = 0; i < n; i++) { await pressKey(code); }
         };
 
         // Onto the Staff tab, then down onto the wage row.
         scr.tab = 3; scr.index = 0; scr.scroll = 0;
-        await wait(200);
+        await settle();
         await press('ArrowDown');
         const onWage = scr.currentList()[scr.index]?.kind;
 
@@ -1030,7 +1108,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // tab to the left of it and page across.
         st.shopHours = [8, 18];
         scr.tab = 3; scr.index = 0; scr.scroll = 0;
-        await wait(200);
+        await settle();
         const hoursBefore = st.shopHours.join('-');
         await press('ArrowRight');
         const landedOn = scr.tab;
@@ -1040,8 +1118,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await press('ArrowRight');
         const hoursMoved = st.shopHours.join('-');
 
-        key('Escape', true); await wait(120); key('Escape', false);
-        await wait(250);
+        await pressKey('Escape');
 
         window.__wage = `row=${onWage} wage ${start}->${up}->${down}`
           + ` tabs ${tabAfterUp}/${tabAfterDown} pagedOffWageRow=${paged}`
@@ -1070,10 +1147,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         st.cats = [];
         st.catActors = [];
         st.rebuildCafe();
-        await wait(300);
+        await settle();
         st.clock.t = 8 * (1200 / 24);
         g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
-        await wait(1000);
+        await settle();
         const off = st.cafeMap.meta;
         // Stand on the join, so both rooms are on screen at once.
         g.player.x = (11 + off.offX) * 16;
@@ -1089,19 +1166,19 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // description has promised since the day it went on sale.
         st.cafe.furniture.push({ type: 'umbrella', x: 17, y: 6, variant: 0 });
         st.rebuildCafe();
-        await wait(400);
+        await settle();
         const um = st.cafeMap.meta;
         const underBrolly = st.cafeMap.openSky(17 + um.offX, 6 + um.offY);
         const besideBrolly = st.cafeMap.openSky(15 + um.offX, 6 + um.offY);
         st.cafe.furniture.pop();
         st.rebuildCafe();
-        await wait(400);
+        await settle();
         g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
-        await wait(900);
+        await settle();
         g.player.x = (11 + off.offX) * 16;
         g.player.y = (4 + off.offY) * 16;
         g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
-        await wait(500);
+        await settle();
 
         // Screen rectangles for a patch of each room, well inside its walls.
         const box = (tx, ty, tw2, th2) => ({
@@ -1131,7 +1208,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           const real = g.weatherFx;
           const onA = grab(inside), onB = grab(terrace);
           g.weatherFx = { update() {}, draw() {}, drops: [], flakes: [] };
-          await wait(140);
+          await settle();
           const offA = grab(inside), offB = grab(terrace);
           g.weatherFx = real;
           return { id: g.sky.now.id, room: diff(onA, offA), patio: diff(onB, offB), drops: real.drops.length };
@@ -1160,15 +1237,14 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         st.money = 5000;
         st.inventory.f_chair = 1;
         g.openBuildMode();
-        await wait(700);
+        await settle();
         const bs = g.screens[g.screens.length - 1];
         bs.mode = bs.modes.indexOf('Furnish');
-        await wait(200);
+        await settle();
 
         // Put a chair down where the cursor is.
         const before = bs.draft.furniture.length;
-        key('Space', true); await wait(150); key('Space', false);
-        await wait(400);
+        await pressKey('Space');
         const placed = bs.draft.furniture.length;
 
         // Now the only route a phone has: the BACK button in the DOM.
@@ -1179,7 +1255,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           }
         };
         const hasBack = !!back;
-        if (hasBack) { tapBack(); await wait(400); }
+        if (hasBack) { tapBack(); await settle(); }
         const after = bs.draft.furniture.length;
 
         // And it must not have thrown us out of build mode.
@@ -1221,14 +1297,14 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         st.inventory.f_piano = 1;
         st.inventory.f_umbrella = 1;
         g.openBuildMode();
-        await wait(700);
+        await settle();
         const bs = g.screens[g.screens.length - 1];
         bs.mode = bs.modes.indexOf('Furnish');
         // An empty room, so the only thing that can stop a piece going down is
         // the thing under test. The starting cafe comes furnished.
         bs.draft.furniture = [];
         bs.rebuild();
-        await wait(300);
+        await settle();
 
         // The build screen's idea of a footprint has to be the map's idea of
         // it, or a piece is pickable somewhere it was never drawn.
@@ -1258,16 +1334,14 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           bs.palette = bs.furnitureStock.findIndex((k) => k === id || k.startsWith(`${id}#`));
           if (bs.palette < 0) { results.push(`${id}:notInBag`); continue; }
           const before = bs.draft.furniture.length;
-          key('Space', true); await wait(120); key('Space', false);
-          await wait(300);
+          await pressKey('Space');
           const placed = bs.draft.furniture.length > before;
           // Far corner: the opposite end horizontally, top row vertically.
           const fx = ax + (def.tw || 1) - 1, fy = ay - ((def.th || 1) - 1);
           bs.cur = { x: fx, y: fy };
-          await wait(150);
+          await settle();
           const found = !!bs.furnitureAt(fx, fy);
-          key('KeyX', true); await wait(120); key('KeyX', false);
-          await wait(300);
+          await pressKey('KeyX');
           const gone = bs.draft.furniture.length === before;
           results.push(`${id}(${def.tw}x${def.th}) placed=${placed} findsAt${fx},${fy}=${found} pickedUp=${gone}`);
         }
@@ -1284,7 +1358,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const gx = room.x + 3, gy = room.y + 4;
         bs.cur = { x: gx, y: gy };
         bs.palette = bs.furnitureStock.findIndex((k) => k === 'f_bookshelf' || k.startsWith('f_bookshelf#'));
-        await wait(500);
+        await settle();
         const canvas = document.getElementById('screen');
         const cg = canvas.getContext('2d');
         // Only the band the piece occupies. Emptying the bag also empties the
@@ -1295,7 +1369,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const withGhost = grab();
         delete st.inventory.f_bookshelf;        // nothing to place, no ghost
         bs.palette = 0;
-        await wait(500);
+        await settle();
         const without = grab();
         let x0 = 1e9, x1 = -1;
         for (let i = 0; i < withGhost.length; i += 4) {
@@ -1330,12 +1404,12 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         st.money = 9000; st.workers = 2;
         st.inventory.f_bookshelf = 1;
         g.openBuildMode();
-        await wait(700);
+        await settle();
         const bs = g.screens[g.screens.length - 1];
         bs.mode = bs.modes.indexOf('Furnish');
         bs.draft.furniture = bs.draft.furniture.filter((f) => f.type === 'counter' || f.type === 'register');
         bs.rebuild();
-        await wait(300);
+        await settle();
         bs.cur = { x: bs.draft.rooms[0].x + 4, y: bs.draft.rooms[0].y + 4 };
         bs.palette = bs.furnitureStock.findIndex((k) => k.startsWith('f_bookshelf'));
         await wait(900);
@@ -1440,7 +1514,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           cx.fillText(id, px, py + 68);
         });
         window.__pass = `glyphs=${ids.length}`;
-        await wait(300);
+        await settle();
       } else if (SCRIPT === 'questchain') {
         // Every quest has to be finishable from what the valley actually
         // contains. The shell errand used to send you to a beach that has not
@@ -1571,7 +1645,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const st = g.state;
         const map = buildSpecialInterior('lighthouse');
         g.enterInterior('shop:lighthouse', map, 0, 0);
-        await wait(900);
+        await settle();
 
         // Somewhere in there has to be a table you can search.
         const spots = [];
@@ -1585,16 +1659,16 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.player.y = (sy2 + 1) * 16 + 8;
         g.player.dir = 'up';
         g.cam.follow(map, g.player.x, g.player.y, true);
-        await wait(400);
+        await settle();
         g.interact();
         await wait(700);
         // Dismiss whatever it said.
-        for (let i = 0; i < 4; i++) { key('Space', true); await wait(120); key('Space', false); await wait(200); }
+        for (let i = 0; i < 4; i++) { await pressKey('Space'); }
         const after = st.inventory.logbook || 0;
         // Searching again must not hand out a second one.
         g.interact();
         await wait(600);
-        for (let i = 0; i < 4; i++) { key('Space', true); await wait(120); key('Space', false); await wait(200); }
+        for (let i = 0; i < 4; i++) { await pressKey('Space'); }
         const twice = st.inventory.logbook || 0;
 
         window.__log = `spots=[${spots.join(' ')}] logbook ${before}->${after}->${twice}`
@@ -1677,7 +1751,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
 
         // Now put him in the room and check he behaves like a regular.
         g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
-        await wait(900);
+        await settle();
         // The daytime regular has to work the same way, in daylight.
         const fen = REGULARS.find((r) => r.id === 'fennel');
         const fenDay = (() => { for (let d = 0; d < 200; d++) if (visitOn(fen, seed, d)) return d; return 0; })();
@@ -1720,9 +1794,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         let spoke = false;
         if (v0) {
           g.player.x = v0.x + 8; g.player.y = v0.y;
-          await wait(200);
+          await settle();
           g.interact();
-          await wait(500);
+          await settle();
           spoke = g.dialogue.active;
         }
 
@@ -1763,7 +1837,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         st.cafe.furniture.push({ type: 'barStool', x: room.x + 8, y: room.y + 2, variant: 0 });
         st.rebuildCafe();
         g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
-        await wait(900);
+        await settle();
         st.shopOpen = true;
         for (let d = 0; d < 200; d++) if (visitOn(def, g.worldSeed, d)) { st.clock.day = d; break; }
         const win = visitOn(def, g.worldSeed, st.clock.day);
@@ -1790,7 +1864,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         st.cafe.furniture.push({ type: 'phone', x: 1, y: 3, variant: 0 });
         st.rebuildCafe();
         g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
-        await wait(900);
+        await settle();
         st.flags = {};
         const rings = D.ringsOn(g.worldSeed, st.clock.day);
         const stableRings = JSON.stringify(rings) === JSON.stringify(D.ringsOn(g.worldSeed, st.clock.day));
@@ -1813,12 +1887,12 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const before = st.deliveries.length;
         const moneyBefore = st.money;
         g.answerPhone();
-        await wait(500);
+        await settle();
         const asked = g.dialogue.active;
         // Choices are up/down and only appear on the last page, so press on
         // until the call ends. Index 0 is "Take the order".
         for (let i = 0; i < 10 && g.dialogue.active; i++) {
-          key('Space', true); await wait(130); key('Space', false); await wait(260);
+          await pressKey('Space');
         }
         const took = st.deliveries.length > before;
         const d = st.deliveries[st.deliveries.length - 1];
@@ -1833,13 +1907,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const stillRinging = !!g.phoneCall();
 
         // It shows on the map with a ring that empties.
-        key('KeyM', true); await wait(140); key('KeyM', false);
-        await wait(600);
+        await pressKey('KeyM');
         const ms = g.screens[g.screens.length - 1];
         const onMap = ms && ms.places ? ms.places.some((p) => p.delivery && p.delivery.id === d.id) : false;
         const fracFull = D.timeFraction(d, st.clock.absolute);
-        key('KeyX', true); await wait(140); key('KeyX', false);
-        await wait(300);
+        await pressKey('KeyX');
 
         // Stock only part of it, then deliver: paid for what you brought plus
         // the whole fee.
@@ -1908,7 +1980,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         );
         st.addDelivery(d);
         g.updateDeliveries(0.016);
-        await wait(400);
+        await settle();
         const litNow = lit();
         st.stock = {};
         for (const id of d.items) st.cafeSim.addStock(id, 2, st.clock.day);
@@ -1920,7 +1992,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.player.x = house.x * 16 + 8;
         g.player.y = (house.y + 1) * 16;
         g.openDoor(it, { x: house.x, y: house.y });
-        await wait(1000);
+        await settle();
         const inside = st.mapId.startsWith('house:');
         const map = g.currentMap;
         const who = (map.villagers || []).find((v) => v.recipient === d.id);
@@ -1931,11 +2003,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const stockBefore = d.items.reduce((n, id) => n + st.cafeSim.stockCount(id), 0);
         if (who) {
           g.player.x = who.x + 10; g.player.y = who.y;
-          await wait(250);
+          await settle();
           g.interact();
           await wait(600);
           for (let i = 0; i < 8 && g.dialogue.active; i++) {
-            key('Space', true); await wait(130); key('Space', false); await wait(240);
+            await pressKey('Space');
           }
         }
         const paid = st.money - moneyBefore;
@@ -1943,7 +2015,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const debited = stockBefore - stockAfter;
         const offBooks = !st.deliveries.some((x) => x.id === d.id);
         g.updateDeliveries(0.016);
-        await wait(300);
+        await settle();
         const darkAgain = !lit();
 
         // An expired order: nobody in, no light, nothing charged.
@@ -1994,14 +2066,14 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         st.deliveries[2].due = now + 40;
         st.touch('deliveries');
         g.updateDeliveries(0.016);
-        await wait(500);
+        await settle();
         if (which === 'map') {
           const { MapScreen } = await import('../src/ui/menus.js');
           st.visit('brambleford', 'Brambleford', 96, 168);
           st.visit('hollowdown', 'Hollowdown', 208, 68);
           const m = new MapScreen(g);
           g.push(m);
-          await wait(400);
+          await settle();
           m.index = 0;
           await wait(700);
         } else if (which === 'phone') {
@@ -2009,7 +2081,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           st.cafe.furniture.push({ type: 'phone', x: 5, y: 5, variant: 0 });
           st.rebuildCafe();
           g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
-          await wait(900);
+          await settle();
           st.flags = {};
           st.clock.t = D.ringsOn(g.worldSeed, st.clock.day)[0].at + 3;
           const off = st.cafeMap.meta;
@@ -2118,9 +2190,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.searchSpot('stones');
         await wait(600);
         for (let i = 0; i < 6 && g.dialogue.active; i++) {
-          key('Space', true); await wait(120); key('Space', false); await wait(220);
+          await pressKey('Space');
         }
-        await wait(400);
+        await settle();
 
         const flagged = !!st.flags.stood_in_stones;
         const step = st.questStep.stone_circle;
@@ -2138,11 +2210,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // Talking to her is what actually moves it on, and plays her reply.
         if (vesper) {
           g.player.x = vesper.x; g.player.y = vesper.y + 8;
-          await wait(200);
+          await settle();
           g.talkTo(vesper);
-          await wait(500);
+          await settle();
           for (let i = 0; i < 8 && g.dialogue.active; i++) {
-            key('Space', true); await wait(120); key('Space', false); await wait(220);
+            await pressKey('Space');
           }
         }
         const stepAfterTalk = st.questStep.stone_circle;
@@ -2253,7 +2325,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const unusable = [];
         const found = [];
         for (const seed of list) {
-          await wait(0);            // let the page breathe between valleys
+          await settle();            // let the page breathe between valleys
           const w = generateWorld(seed);
           const pier = w.landmarks.find((l) => l.id === 'pier');
           if (!pier) { missing.push(seed); continue; }
@@ -2306,7 +2378,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.player.y = (ty + 1) * 16 + 8;      // stood on the tile below, looking at it
         g.player.dir = 'up';
         g.cam.follow(g.overworld, g.player.x, g.player.y, true);
-        await wait(400);
+        await settle();
         const trace = [];
         const _talk = g.talkTo.bind(g), _search = g.searchSpot.bind(g);
         g.talkTo = (v) => { trace.push('talk:' + (v.def ? v.def.id : '?')); return _talk(v); };
@@ -2317,7 +2389,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // Beside the hedge, not on it — which is where he stands in a real
         // valley, and near enough to have swallowed every press meant for it.
         if (ghost) { ghost.x = (tx + 1) * 16 + 8; ghost.y = ty * 16 + 14; }
-        await wait(100);
+        await settle();
         const near = g.villagers.filter((v) => v.shift === 'here'
           && Math.hypot(v.x - g.player.x, v.y - g.player.y) < 26).map((v) => v.def.id);
         const inList = g.villagers.indexOf(ghost);
@@ -2326,7 +2398,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await wait(600);
         const spokeTo = g.dialogue.active ? (g.dialogue.speaker || 'nobody') : 'the hedge';
         for (let i = 0; i < 6 && g.dialogue.active; i++) {
-          key('Space', true); await wait(120); key('Space', false); await wait(200);
+          await pressKey('Space');
         }
         const looked = !!st.flags.saw_the_hedge;
         const nowSays = Q.objectiveText(Q.QUESTS.find((x) => x.id === 'lane_end_hedge'), st);
@@ -2336,11 +2408,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const button = g.villagers.find((v) => v.def.id === 'button');
         if (button) {
           g.player.x = button.x; g.player.y = button.y + 10;
-          await wait(200);
+          await settle();
           g.talkTo(button);
-          await wait(500);
+          await settle();
           for (let i = 0; i < 8 && g.dialogue.active; i++) {
-            key('Space', true); await wait(120); key('Space', false); await wait(200);
+            await pressKey('Space');
           }
         }
         const afterButton = st.questStep.lane_end_hedge;
@@ -2348,11 +2420,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // Now talking to the ghost has to move it on.
         if (ghost) {
           g.player.x = ghost.x; g.player.y = ghost.y + 10;
-          await wait(200);
+          await settle();
           g.talkTo(ghost);
-          await wait(500);
+          await settle();
           for (let i = 0; i < 8 && g.dialogue.active; i++) {
-            key('Space', true); await wait(120); key('Space', false); await wait(200);
+            await pressKey('Space');
           }
         }
         const afterGhost = st.questStep.lane_end_hedge;
@@ -2374,7 +2446,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const st = g.state;
         st.quests = {}; st.questStep = {}; st.flags = {};
         st.clock.t = 22 * (1200 / 24);
-        await wait(500);
+        await settle();
         const moth = Q.QUESTS.find((q) => q.id === 'moth_count');
         const beforeHearing = g.questAvailable(moth);
         const shrimp = g.villagers.find((v) => v.def.id === 'shrimp');
@@ -2387,7 +2459,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           await wait(450);
           said.push((g.dialogue.pages || []).flat().join(' ').slice(0, 60));
           for (let i = 0; i < 6 && g.dialogue.active; i++) {
-            key('Space', true); await wait(110); key('Space', false); await wait(180);
+            await pressKey('Space');
           }
           if (n === 0) { firstHeard = !!st.flags.heard_hint_shrimp; firstOffers = g.questAvailable(moth); }
         }
@@ -2485,15 +2557,15 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // Take the job and look at the hedge: still nothing to see.
         st.quests.lane_end_hedge = 'active';
         st.questStep.lane_end_hedge = 0;
-        await wait(400);
+        await settle();
         const onQuest = seen();
         st.flags.saw_the_hedge = true;
-        await wait(400);
+        await settle();
         const afterLooking = seen();
 
         // Tell Button — the step moves on, and only now is he about.
         st.questStep.lane_end_hedge = 1;
-        await wait(400);
+        await settle();
         const afterTelling = seen();
         // He walks in from the treeline like anyone else, so give him the walk.
         for (let i = 0; i < 100 && ghost().shift !== 'here'; i++) await wait(100);
@@ -2534,9 +2606,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         };
         const talkThrough = async (v) => {
           g.talkTo(v);
-          await wait(300);
+          await settle();
           for (let i = 0; i < 40 && g.dialogue.active; i++) {
-            key('Space', true); await wait(90); key('Space', false); await wait(160);
+            await pressKey('Space');
           }
         };
         st.quests = {}; st.questStep = {};
@@ -2551,14 +2623,18 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const { VILLAGERS } = await import('../src/world/places.js');
         const hollisDef = VILLAGERS.find((v) => v.id === 'hollis');
         const hollis = find('hollis') || (hollisDef && new Villager(hollisDef, g.player.x, g.player.y));
+        const phone = (await import('../src/game/quests.js')).QUEST_BY_ID.the_telephone;
+        const realReward = phone.reward;
+        phone.reward = { ...realReward, money: -600 };
         st.quests.the_telephone = 'active';
-        st.questStep.the_telephone = 3;
+        st.questStep.the_telephone = phone.steps.length - 1;
         st.money = 100;
         if (hollis) await talkThrough(hollis);
         const broke = `${st.quests.the_telephone} money=${st.money} phone=${st.inventory.f_telephone || 0}`;
         st.money = 700;
         if (hollis) await talkThrough(hollis);
         const paid = `${st.quests.the_telephone} money=${st.money} phone=${st.inventory.f_telephone || 0}`;
+        phone.reward = realReward;
 
         // "Bring me a jar of honey" ends with Dough having the honey.
         const dough = find('dough') || new Villager(VILLAGERS.find((v) => v.id === 'dough'), g.player.x, g.player.y);
@@ -2590,9 +2666,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           || new Villager(VILLAGERS.find((v) => v.id === id), g.player.x, g.player.y);
         const talkThrough = async (v) => {
           g.talkTo(v);
-          await wait(300);
+          await settle();
           for (let i = 0; i < 40 && g.dialogue.active; i++) {
-            key('Space', true); await wait(90); key('Space', false); await wait(160);
+            await pressKey('Space');
           }
         };
         const shells = () => st.inventory.seashell || 0;
@@ -2625,7 +2701,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // world holding that they were never told.
         const st = g.state;
         st.flags = {}; st.quests = {}; st.questStep = {};
-        await wait(400);
+        await settle();
         // Somebody with something useful to say and no quest gating it, so the
         // only branch that can speak it is the chance one.
         const V2 = await import('../src/world/villagers.js');
@@ -2636,13 +2712,13 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         let said = '';
         try {
           g.player.x = who.x; g.player.y = who.y + 10;
-          await wait(150);
+          await settle();
           g.talkTo(who);
-          await wait(450);
+          await settle();
           said = (g.dialogue.pages || []).flat().join(' ');
         } finally { Math.random = real; }
         for (let i = 0; i < 6 && g.dialogue.active; i++) {
-          key('Space', true); await wait(100); key('Space', false); await wait(160);
+          await pressKey('Space');
         }
         const spoke = said.trim() === V2.hintsOf(who.def)[0].text.trim();
         const wrote = !!st.flags[`heard_hint_${who.def.id}`];
@@ -2659,13 +2735,13 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         localStorage.removeItem(SLOT);
         localStorage.removeItem('catcafe.save.v1');
         st.money = 4321;
-        await wait(400);
+        await settle();
 
         let reloads = 0;
         g.reloadPage = () => { reloads++; };
         const wasConnected = g.net.connected;
 
-        key('Escape', true); await wait(150); key('Escape', false); await wait(250);
+        await pressKey('Escape');
         const menu = g.topScreen;
         const items = (menu && menu.items) || [];
         const after = items[items.indexOf('Save game') + 1];
@@ -2673,22 +2749,22 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // Walk down to Exit the way a thumb would, one press at a time.
         const steps = items.indexOf('Exit');
         for (let i = 0; i < steps; i++) {
-          key('ArrowDown', true); await wait(120); key('ArrowDown', false); await wait(160);
+          await pressKey('ArrowDown');
         }
         const onExit = items[menu.index];
-        key('Space', true); await wait(150); key('Space', false); await wait(300);
+        await pressKey('Space');
         const asked = g.topScreen && g.topScreen.constructor.name;
 
         // It opens on No, and No means stay.
-        key('Space', true); await wait(150); key('Space', false); await wait(400);
+        await pressKey('Space');
         const stayed = g.topScreen && g.topScreen.constructor.name;
         const savedAfterNo = !!localStorage.getItem(SLOT);
         const reloadsAfterNo = reloads;
 
         // Now go through with it.
-        key('Space', true); await wait(150); key('Space', false); await wait(300);
-        key('ArrowRight', true); await wait(140); key('ArrowRight', false); await wait(160);
-        key('Space', true); await wait(150); key('Space', false); await wait(900);
+        await pressKey('Space');
+        await pressKey('ArrowRight');
+        await pressKey('Space');
 
         // And the valley should let go of us: leaving is a hang-up the server
         // sees, not just a screen change on this machine.
@@ -2704,6 +2780,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           await wait(250);
         }
 
+        await until(() => reloads > 0, 3000);
         const raw = localStorage.getItem(SLOT);
         const saved = raw ? JSON.parse(raw) : null;
         window.__exit = `after Save game="${after}" landedOn="${onExit}" asked=${asked}`
@@ -2747,7 +2824,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
 
         // Hearing it is what puts Bell in the market.
         st.flags.heard_hint_comfrey = true;
-        await wait(400);
+        await settle();
         const bellOut = g.found(bellNow());
 
         // 3. Buying her.
@@ -2758,7 +2835,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // whether she can be bought twice.
         st.money = 12000;
         g.completeBearSale(bellNow().def);
-        await wait(500);
+        await settle();
         const paid = st.money;
         const bought = !!st.bear;
         g.completeBearSale(bellNow().def);
@@ -2773,15 +2850,15 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         st.inventory[B.BEAR_FOOD] = 0;
         while (st.cafeSim.stockCount(B.BEAR_FOOD) > 0) st.cafeSim.takeStock(B.BEAR_FOOD, 1);
         g.player.x = g.bear.x; g.player.y = g.bear.y + 8;
-        await wait(300);
+        await settle();
         const inReach = g.bearInReach();
         g.interact();
-        await wait(300);
+        await settle();
         const rodeHungry = g.riding;
 
         st.inventory[B.BEAR_FOOD] = 1;
         g.interact();
-        await wait(400);
+        await settle();
         const rodeFed = g.riding;
         const fishLeft = st.inventory[B.BEAR_FOOD] || 0;
         const fedDay = st.bear.fedDay === st.clock.day;
@@ -2815,20 +2892,20 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           // Clear anything the drover is still saying: a dialogue box stops the
           // player moving, which would look exactly like a river stopping her.
           for (let i = 0; i < 8 && (g.dialogue.active || g.screens.length); i++) {
-            key("Space", true); await wait(110); key("Space", false); await wait(160);
+            await pressKey("Space");
           }
-          await wait(200);
+          await settle();
           key('ArrowRight', true);
           for (let i = 0; i < 40 && Math.floor(g.player.x / 16) < wet.tx; i++) await wait(100);
           key('ArrowRight', false);
-          await wait(150);
+          await settle();
           swamIn = W.WATER_TILES.includes(g.overworld.get(g.player.tx, g.player.ty));
           window.__wet = `bank=${bx} target=${wet.tx} landedOn=${g.player.tx} dlg=${g.dialogue.active} scr=${g.screens.length} riding=${g.riding}`;
         }
 
         // 7. Getting off puts her down on dry land, and she stays there.
         g.interact();
-        await wait(400);
+        await settle();
         const off = !g.riding;
         const dry = !g.overworld.solid(g.player.tx, g.player.ty);
         const parked = st.bear && Math.hypot(st.bear.x - g.player.x, st.bear.y - g.player.y) < 40;
@@ -2843,7 +2920,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.player.x = g.homeDoor.x * 16 + 8;
         g.player.y = (g.homeDoor.y + 2) * 16 - 2;
         g.player.dir = 'up';
-        await wait(300);
+        await settle();
         const atDoor = g.bearInReach();
         g.interact();
         await wait(700);
@@ -2892,21 +2969,21 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         st.clock.t = 10 * (1200 / 24);
         st.flags.heard_hint_comfrey = true;
         st.money = 12000;
-        await wait(500);
+        await settle();
         const door = g.homeDoor;
         g.completeBearSale({ name: 'Drover Bell' });
         await wait(600);
         for (let i = 0; i < 6 && (g.dialogue.active || g.screens.length); i++) {
-          key('Space', true); await wait(110); key('Space', false); await wait(150);
+          await pressKey('Space');
         }
         st.inventory[B.BEAR_FOOD] = 2;
         g.player.x = g.bear.x; g.player.y = g.bear.y + 10;
         g.cam.follow(g.overworld, g.player.x, g.player.y, true);
         await wait(600);
         g.interact();
-        await wait(400);
+        await settle();
         key('ArrowDown', true); await wait(700); key('ArrowDown', false);
-        await wait(400);
+        await settle();
         window.__bshot = `riding=${g.riding}`;
       } else if (SCRIPT === 'deliverspots') {
         // Every address the phone can give you has to have somebody at it.
@@ -2917,7 +2994,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const st = g.state;
         st.deliveries = [];
         st.clock.t = 11 * (1200 / 24);
-        await wait(500);
+        await settle();
 
         const spots = g.deliverySpots();
         const kinds = { house: 0, landmark: 0, green: 0 };
@@ -2979,13 +3056,13 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           for (const id of open.items) st.cafeSim.addStock(id, 1, st.clock.day);
           const before = st.money;
           g.player.x = who.x; g.player.y = who.y + 10;
-          await wait(200);
+          await settle();
           g.talkTo(who);
-          await wait(500);
+          await settle();
           for (let i = 0; i < 6 && g.dialogue.active; i++) {
-            key('Space', true); await wait(110); key('Space', false); await wait(170);
+            await pressKey('Space');
           }
-          await wait(500);
+          await settle();
           paid = st.money - before;
           gone = !g.villagers.some((v) => v.recipient === open.id);
           cleared = !st.deliveries.some((d) => d.id === open.id);
@@ -3090,7 +3167,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.maps.set('cafe', st.cafeMap);
         g.currentMap = st.cafeMap;
         g.renderer.invalidateAll();
-        await wait(500);
+        await settle();
 
         window.__rugs = `orphans=[${orphans}] decal=${asDecal} object=${asObject}`
           + ` blocksTheFloor=${blocks} pixelsChanged=${diff}`;
@@ -3148,7 +3225,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         st.clock.day = 5;
         st.clock.t = 14 * TT.HOUR_SECONDS;            // two in the afternoon
         st.visited = st.visited || {};
-        await wait(500);
+        await settle();
 
         // An order with the shortest window the phone ever gives out.
         const spot = g.deliverySpots().find((p) => !p.house);
@@ -3174,7 +3251,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // the date rolling is what puts the morning summary on the screen.
         st.clock.day = 5;
         st.clock.t = 19 * TT.HOUR_SECONDS;
-        await wait(300);
+        await settle();
         const eveBefore = st.clock.day;
         g.flyTaxi({ x: g.homeDoor.x, y: g.homeDoor.y, name: 'home' });
         for (let i = 0; i < 120 && (g.cutscene || g.fader.busy); i++) await wait(100);
@@ -3337,7 +3414,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           return cx2.getImageData(sx, sy, Math.round(80 * scale), Math.round(48 * scale)).data;
         };
         const a1 = canvasInk();
-        await wait(320);                       // a couple of frames at five a second
+        await settle();                       // a couple of frames at five a second
         const a2 = canvasInk();
         let moved = 0;
         for (let i = 0; i < a1.length; i += 4) {
@@ -3415,7 +3492,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const show = new M.ConfirmScreen(cases[0]);
         show.choice = 1;
         g.push(show);
-        await wait(400);
+        await settle();
 
         window.__cbox = `cases=${cases.length} [${report.join(' ')}] bad=[${bad.join(' | ')}]`;
         if (bad.length) window.__errors.push('a confirm box does not hold its own text: ' + window.__cbox);
@@ -3681,7 +3758,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const V = await import('../src/world/villagers.js');
         const st = g.state;
         st.flags = {}; st.quests = {}; st.questStep = {};
-        await wait(500);
+        await settle();
 
         // --- a hint that waits on a flag ---
         const def = { id: 'testcase', hints: [
@@ -3702,12 +3779,12 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const said = [];
         for (let n = 0; n < 2; n++) {
           g.player.x = shrimp.x; g.player.y = shrimp.y + 10;
-          await wait(150);
+          await settle();
           g.talkTo(shrimp);
-          await wait(400);
+          await settle();
           said.push((g.dialogue.pages || []).flat().join(' ').slice(0, 30));
           for (let i = 0; i < 6 && g.dialogue.active; i++) {
-            key('Space', true); await wait(100); key('Space', false); await wait(150);
+            await pressKey('Space');
           }
         }
         const heardShrimp = !!st.flags.heard_hint_shrimp;
@@ -3757,7 +3834,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const gatedJob = Q.QUEST_BY_ID.moth_count;
         delete st.flags.heard_hint_shrimp;
         st.clock.t = 22 * (1200 / 24);
-        await wait(250);
+        await settle();
         const beforeFlag = g.questAvailable(gatedJob);
         st.flags.heard_hint_shrimp = true;
         const afterFlag = g.questAvailable(gatedJob);
@@ -3798,7 +3875,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // lift, aim, press — and aiming is the whole problem on a phone, where
         // the thumb cannot see what it is doing.
         const st = g.state;
-        await wait(500);
+        await settle();
         const pad = document.querySelector('#touch .dpad');
         const r = pad.getBoundingClientRect();
         const mid = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
@@ -3812,35 +3889,35 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const seen = [];
         const held = () => ['up', 'down', 'left', 'right'].filter((d) => g.input.down(d)).sort().join('+');
         at(0, -reach, 'pointerdown');
-        await wait(60); seen.push('down@up=' + held());
+        await settle(); seen.push('down@up=' + held());
         for (const [dx, dy, name] of [
           [-reach, 0, 'left'], [0, reach, 'down'], [reach, 0, 'right'],
           [-reach * 0.7, -reach * 0.7, 'up-left corner'], [0, 0, 'middle'],
         ]) {
           at(dx, dy, 'pointermove');
-          await wait(60);
+          await settle();
           seen.push(`${name}=${held() || 'none'}`);
         }
         // And it does actually walk: hold one way and watch the player move.
         at(reach, 0, 'pointermove');
         const x0 = g.player.x;
-        await wait(500);
+        await until(() => g.player.x - x0 >= 8, 2500);
         const walked = Math.round(g.player.x - x0);
         at(reach, 0, 'pointerup');
-        await wait(120);
+        await settle();
         const afterLift = held();
 
         // The arrow under the thumb lights up, so you can see where you are
         // without looking away from the game.
         at(0, -reach, 'pointerdown');
-        await wait(60);
+        await settle();
         const litUp = document.querySelector('#touch .tb.up').classList.contains('on');
         at(-reach, 0, 'pointermove');
-        await wait(60);
+        await settle();
         const stillLit = document.querySelector('#touch .tb.up').classList.contains('on');
         const nowLeft = document.querySelector('#touch .tb.left').classList.contains('on');
         at(-reach, 0, 'pointerup');
-        await wait(60);
+        await settle();
 
         window.__slide = `[${seen.join(' ')}] walked=${walked} afterLift="${afterLift}"`
           + ` litUp=${litUp} upStillLitAfterSlide=${stillLit} leftLit=${nowLeft}`;
@@ -3891,7 +3968,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           g.player.x = where.tx * 16 + 8;
           g.player.y = (where.ty + 1) * 16 - 2;
           g.cam.follow(g.overworld, g.player.x, g.player.y, true);
-          await wait(400);
+          await settle();
           g.perf.clear();
           await wait(1600);                      // ~100 frames
           const r = g.perf.report();
@@ -3911,7 +3988,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const asWeather = async (want) => {
           g.worldSeed = seedFor(want);
           st.worldSeed = g.worldSeed;
-          await wait(400);
+          await settle();
           g.perf.clear();
           await wait(1200);
           const r = g.perf.report();
@@ -3952,9 +4029,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.player.x = wet.tx * 16 + 8;
         g.player.y = (wet.ty + 1) * 16 - 2;
         g.cam.follow(g.overworld, g.player.x, g.player.y, true);
-        await wait(400);
+        await settle();
         const sea1 = seaPatch();
-        await wait(400);
+        await settle();
         const sea2 = seaPatch();
         let ripple = 0;
         for (let i = 0; i < sea1.length; i += 4) if (sea1[i] !== sea2[i]) ripple++;
@@ -3963,9 +4040,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const S = await import('../src/engine/settings.js');
         S.setSetting('lowFx', true);
         const low = await measure(wet, 'by the water, smooth mode');
-        await wait(300);
+        await settle();
         const still1 = seaPatch();
-        await wait(400);
+        await settle();
         const still2 = seaPatch();
         let stillMoving = 0;
         for (let i = 0; i < still1.length; i += 4) if (still1[i] !== still2[i]) stillMoving++;
@@ -3990,18 +4067,18 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
       } else if (SCRIPT === 'menukeys') {
         // Three small things, each of which is invisible until it is wrong.
         const st = g.state;
-        await wait(500);
+        await settle();
 
         // 1. Tab opens the menu, and closes it. Escape still does both, because
         // that is what everybody's hands already do — the reason for adding Tab
         // is that the browser takes Escape to mean "leave fullscreen".
-        key('Tab', true); await wait(150); key('Tab', false); await wait(300);
+        await pressKey('Tab');
         const opened = g.topScreen && g.topScreen.constructor.name;
-        key('Tab', true); await wait(150); key('Tab', false); await wait(300);
+        await pressKey('Tab');
         const closed = g.screens.length;
-        key('Escape', true); await wait(150); key('Escape', false); await wait(300);
+        await pressKey('Escape');
         const stillEscape = g.topScreen && g.topScreen.constructor.name;
-        key('Escape', true); await wait(150); key('Escape', false); await wait(300);
+        await pressKey('Escape');
 
         // 2. The map's heading and its footnote do not sit on each other. Drawn
         // twice — with a from-the-map place and without — and the heading's own
@@ -4130,7 +4207,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         let ticks = 0;
         const realRecheck = d.recheck.bind(d);
         d.recheck = () => { ticks += 1; realRecheck(); };
-        await wait(120);
+        await settle();
         d.recheck = realRecheck;
 
         // 3. The diagnostic says what the browser thinks, in the page rather
@@ -4296,7 +4373,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             g.player.x = sx * 16 + 8; g.player.y = (sy + 1) * 16 - 2;
             g.player.dir = sy > by ? 'up' : sy < by ? 'down' : (sx > bx ? 'left' : 'right');
             g.cam.follow(map, g.player.x, g.player.y, true);
-            await wait(500);
+            await settle();
             prompt = g.promptLabel;
           }
 
@@ -4573,25 +4650,21 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const doomed = scr.rows[scr.index];
 
         // X asks rather than doing it.
-        key('KeyX', true); await wait(160); key('KeyX', false);
-        await wait(400);
+        await pressKey('KeyX');
         const asked = !!scr.confirm;
         const startsOnNo = scr.yes === false;
 
         // Space on No backs out and changes nothing.
-        key('Space', true); await wait(160); key('Space', false);
-        await wait(500);
+        await pressKey('Space');
         const afterNo = scr.games.length;
 
         // Now do it for real: X, right to Yes, Space.
-        key('KeyX', true); await wait(160); key('KeyX', false);
-        await wait(300);
-        key('ArrowRight', true); await wait(160); key('ArrowRight', false);
-        await wait(200);
+        await pressKey('KeyX');
+        await pressKey('ArrowRight');
         const nowYes = scr.yes === true;
-        key('Space', true); await wait(160); key('Space', false);
+        await pressKey('Space', false);
         let w = 0;
-        while (scr.games.length === afterNo && w < 9000) { await wait(250); w += 250; }
+        w = await untilMs(() => !(scr.games.length === afterNo), 9000);
         const left = (await NetClient.listGames()) || [];
         window.__del = `asked=${asked} startsOnNo=${startsOnNo} afterNo=${afterNo}`
           + ` movedToYes=${nowYes} games ${before}->${scr.games.length}`
@@ -4605,11 +4678,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           window.__errors.push('still on the server: ' + window.__del);
         }
       } else if (SCRIPT === 'netlobbylook') {
-        await wait(400);
+        await settle();
         const scr = g.screens[g.screens.length - 1];
         if (scr && scr.rows) { scr.index = 0; }
         if (location.search.includes('confirm')) {
-          key('KeyX', true); await wait(160); key('KeyX', false);
+          await pressKey('KeyX', false);
         }
         await wait(900);
       } else if (SCRIPT === 'netnewvalley') {
@@ -4682,9 +4755,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             window.__errors.push('lobby is missing rows: ' + window.__lobby);
           }
           // Join the first one and end up in the game proper.
-          key('Space', true); await wait(200); key('Space', false);
+          await pressKey('Space', false);
           let w = 0;
-          while (!g.titleScreen && w < 12000) { await wait(250); w += 250; }
+          w = await untilMs(() => g.titleScreen, 12000);
           await wait(600);
           const now = g.screens[g.screens.length - 1];
           window.__lobby += ` joined=${g.net.gameId} then=${now && now.constructor.name}`
@@ -4736,8 +4809,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.net.joined = false;
         g.net.join('Pippin', st.playerLook, g.player.x, g.player.y, st.mapId);
         let w = 0;
-        while (g.net.name === undefined && w < 6000) { await wait(200); w += 200; }
-        await wait(900);
+        w = await untilMs(() => !(g.net.name === undefined), 6000);
+        await roundTrip();
         const names = [...g.net.remotes.values()].map((r) => r.n);
         window.__me = `mine=${g.net.name} others=[${names.join('|')}]`;
         if (g.net.name === 'Pippin') {
@@ -4763,10 +4836,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           }
         };
         let w = 0;
-        while (!g.net.remotes.size && w < 9000) { await wait(250); w += 250; }
+        w = await untilMs(() => g.net.remotes.size, 9000);
         st.visit('brambleford', 'Brambleford', 96, 168);
-        key('KeyM', true); await wait(150); key('KeyM', false);
-        await wait(700);
+        await pressKey('KeyM');
         const scr = g.screens[g.screens.length - 1];
         // Look at the pixels: a pip for the other player has to be drawn.
         const c = document.getElementById('screen');
@@ -4784,10 +4856,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // itself mid-measurement and the comparison silently becomes nothing
         // against nothing.
         g.net.joined = false;
-        await wait(500);
+        await roundTrip();
         const without = shot();
         g.net.joined = true;
-        await wait(500);
+        await roundTrip();
         let diff = 0;
         for (let i = 0; i < withThem.length; i += 4) {
           if (Math.abs(withThem[i] - without[i]) > 16) diff++;
@@ -4850,7 +4922,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const money0 = st.money;
         for (let i = 0; i < 4; i++) { st.cafeSim.trySpawn(st.cafeMap); await wait(300); }
         let w = 0;
-        while (st.money === money0 && w < 16000) { await wait(250); w += 250; }
+        w = await untilMs(() => !(st.money === money0), 16000);
         window.__emp += ` served=${st.money > money0} in=${w}ms`;
         if (st.money <= money0) window.__errors.push('the employee served nobody: ' + window.__emp);
 
@@ -4862,7 +4934,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.player.x = (spot2.x + 2) * 16 + 8;
         g.player.y = (spot2.y + 3) * 16;
         g.cam.follow(st.cafeMap, g.player.x, g.player.y, true);
-        await wait(500);
+        await settle();
         const shot = () => {
           const c = document.getElementById('screen');
           const gg = c.getContext('2d');
@@ -4891,9 +4963,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         st.inventory.f_bookshelf = 1;         // two tiles wide
         st.inventory.f_plant = 2;
         g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
-        await wait(900);
+        await settle();
         g.openBuildMode();
-        await wait(700);
+        await settle();
         const b = g.screens[g.screens.length - 1];
         window.__keys = `tabs=${b.modes.join('/')} first=${b.modeName}`;
         if (b.modeName !== 'Furnish') window.__errors.push('Furnish is not the default tab: ' + window.__keys);
@@ -4902,8 +4974,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const room = b.draft.rooms[0];
         b.cur = { x: room.x + 1, y: room.y + 1 };
         while (b.furnitureAt(b.cur.x, b.cur.y)) b.cur.x++;
-        key('KeyX', true); await wait(150); key('KeyX', false);
-        await wait(400);
+        await pressKey('KeyX');
         const stillOpen = g.screens[g.screens.length - 1] === b && !b.done;
         window.__keys += ` survivedX=${stillOpen}`;
         if (!stillOpen) window.__errors.push('X over empty floor left build mode: ' + window.__keys);
@@ -4918,8 +4989,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           }
         }
         b.cur = { ...spot };
-        key('Space', true); await wait(150); key('Space', false);
-        await wait(400);
+        await pressKey('Space');
         const placed = b.draft.furniture.find((f) => f.type === 'bookshelf');
         window.__keys += ` placed=${!!placed}`;
         if (!placed) { window.__errors.push('bookshelf never went down: ' + window.__keys); }
@@ -4927,8 +4997,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           // The tile that is *not* the anchor — the old code only matched the anchor.
           b.cur = { x: placed.x + 1, y: placed.y };
           const found = b.furnitureAt(b.cur.x, b.cur.y);
-          key('KeyX', true); await wait(150); key('KeyX', false);
-          await wait(400);
+          await pressKey('KeyX');
           const gone = !b.draft.furniture.find((f) => f.type === 'bookshelf');
           window.__keys += ` shelf@${placed.x},${placed.y} cur=${b.cur.x},${b.cur.y}`
             + ` farTileFinds=${!!found} pickedUp=${gone} msg="${b.msg}"`;
@@ -4943,8 +5012,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           const clash = b.draft.furniture.find((f) => f.type === 'pastryCase');
           b.cur = { x: clash.x - 1, y: clash.y };
           const n0 = b.draft.furniture.length;
-          key('Space', true); await wait(150); key('Space', false);
-          await wait(400);
+          await pressKey('Space');
           window.__keys += ` overlapRefused=${b.draft.furniture.length === n0}`;
           if (b.draft.furniture.length !== n0) {
             window.__errors.push('a wide piece went down on top of another: ' + window.__keys);
@@ -4952,8 +5020,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
 
         // Esc still finishes.
-        key('Escape', true); await wait(150); key('Escape', false);
-        await wait(500);
+        await pressKey('Escape');
         window.__keys += ` escClosed=${b.done}`;
         if (!b.done) window.__errors.push('Esc did not finish: ' + window.__keys);
       } else if (SCRIPT === 'furncustomers') {
@@ -4974,7 +5041,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           if (c.state !== 'waiting') continue;
           c.wish = ['black_tea']; c.wishIndex = 0; c.order = 'black_tea';
           c.served = true; c.servedByPlayer = true;
-          await wait(500);
+          await settle();
         }
         await wait(3000);
         const before = sim.customers.length;
@@ -5020,9 +5087,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           || new Villager(VILLAGERS.find((v) => v.id === id), g.player.x, g.player.y);
         const talkThrough = async (v) => {
           g.talkTo(v);
-          await wait(300);
+          await settle();
           for (let i = 0; i < 40 && g.dialogue.active; i++) {
-            key('Space', true); await wait(90); key('Space', false); await wait(160);
+            await pressKey('Space');
           }
         };
         st.quests = { lane_end_hedge: 'active' };
@@ -5068,7 +5135,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const st = g.state;
         const clear = async () => {
           for (let i = 0; i < 12 && g.dialogue.active; i++) {
-            key('Space', true); await wait(90); key('Space', false); await wait(160);
+            await pressKey('Space');
           }
         };
         const talk = async (id) => {
@@ -5076,23 +5143,23 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           if (!v) { window.__errors.push('no such villager: ' + id); return; }
           v.shift = 'here'; v.alpha = 1;
           g.talkTo(v);
-          await wait(300); await clear(); await wait(300);
+          await settle(); await clear(); await settle();
         };
         st.clock.t = 12 * (1200 / 24);
         g.updateVillagerShift();
-        await wait(300);
+        await settle();
 
         // Marigold keeps a shop, so take the job the way accepting one does:
         // the quest goes active and the parcel goes in the bag.
         st.quests.lost_bell = 'active';
         st.questStep.lost_bell = 0;
         st.give('lost_bell', 1);
-        await wait(200);
+        await settle();
         const carrying = st.has('lost_bell');
         const money0 = st.money;
 
         await talk('shrimp');                       // hand it over
-        await wait(400);
+        await settle();
         window.__deliver = `taken=${st.quests.lost_bell} carried=${carrying}`
           + ` afterwards=${st.has('lost_bell')} bag=${st.inventory.lost_bell || 0}`
           + ` paid=${st.money - money0}`;
@@ -5142,7 +5209,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (lib) {
           g.player.x = lib.x * 16 + 8; g.player.y = (lib.y + 1) * 16 - 2;
           g.openDoor({ kind: 'door', shop: 'library', name: 'The Reading Room' }, lib);
-          await wait(1400);
+          await settle();
           const map = g.currentMap;
           for (const [, v] of map.interacts) if (v.kind === 'book') books++;
         }
@@ -5163,7 +5230,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const st = g.state;
         const clear = async () => {
           for (let i = 0; i < 12 && g.dialogue.active; i++) {
-            key('Space', true); await wait(90); key('Space', false); await wait(160);
+            await pressKey('Space');
           }
         };
         const talk = async (id) => {
@@ -5171,23 +5238,23 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           if (!v) { window.__errors.push('no such villager: ' + id); return; }
           v.shift = 'here'; v.alpha = 1;
           g.talkTo(v);
-          await wait(300);
+          await settle();
           await clear();
-          await wait(300);
+          await settle();
         };
         const step = () => st.questStep.lane_end_hedge || 0;
         const trail = [];
 
         st.clock.t = 12 * (1200 / 24);
         g.updateVillagerShift();
-        await wait(300);
+        await settle();
         await talk('button');                        // take the job
         trail.push(`taken=${st.quests.lane_end_hedge}@${step()}`);
 
         st.clock.t = 21 * (1200 / 24);               // after dark
         g.updateVillagerShift();
-        await wait(400);
-        g.searchSpot('bushes'); await wait(250); await clear();
+        await settle();
+        g.searchSpot('bushes'); await settle(); await clear();
         trail.push(`hedge=${!!st.flags.saw_the_hedge}`);
         await talk('button');                        // report the hedge moved
         trail.push(`step${step()}`);
@@ -5195,19 +5262,19 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await talk('woofers');                       // meet the ghost
         trail.push(`met@${step()}`);
 
-        g.readBook('town_history'); await wait(250); await clear();
+        g.readBook('town_history'); await settle(); await clear();
         trail.push(`read=${!!st.flags.read_town_history}`);
         await talk('button');                        // work out where to look
         trail.push(`step${step()}`);
 
-        g.searchSpot('pier_mud'); await wait(250); await clear();
+        g.searchSpot('pier_mud'); await settle(); await clear();
         trail.push(`collar=${st.has('golden_collar')}`);
         await talk('button');
         trail.push(`step${step()}`);
 
         const money0 = st.money;
         await talk('woofers');                       // give it back
-        await wait(400);
+        await settle();
         window.__ghost = trail.join(' ') + ` done=${st.quests.lane_end_hedge}`
           + ` paid=${st.money - money0} carrying=${st.has('golden_collar')}`;
         if (!st.flags.saw_the_hedge) window.__errors.push('the hedge never moved: ' + window.__ghost);
@@ -5275,7 +5342,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           for (let i = 0; i < 3; i++) {
             asks.push(a.order);
             a.served = true; a.servedByPlayer = true;
-            await wait(500);
+            await settle();
           }
           window.__asked = `asked=${asks.join('>')} then=${a.state}`
             + ` missed=${Object.keys(sim.missed).length} walkedOut=${sim.walkedOut}`;
@@ -5298,10 +5365,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           p.wishIndex = 0;
           p.order = 'pie';
           g.player.x = p.x; g.player.y = p.y + 8;
-          await wait(300);
+          await settle();
           const outLabel = g.promptLabel;
           p.order = 'black_tea';
-          await wait(300);
+          await settle();
           const haveLabel = g.promptLabel;
           window.__prompt = `out="${outLabel}" have="${haveLabel}"`;
           if (!/^Out of /.test(outLabel || '')) {
@@ -5323,7 +5390,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           w.order = 'pie';
           w.stateT = 0;
           w.served = true; w.servedByPlayer = true;
-          await wait(400);
+          await settle();
           const afterOne = w.order;
           await wait(7000);                    // long past the serving beat
           window.__waited = `afterOnePress=${afterOne} sevenSecondsLater=${w.order}`
@@ -5345,10 +5412,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           const money0 = st.money;
           const stock0 = sim.stockCount('black_tea');
           b.served = true; b.servedByPlayer = true;
-          await wait(500);
+          await settle();
           const afterMiss = b.order;
           b.served = true; b.servedByPlayer = true;
-          await wait(500);
+          await settle();
           window.__settle = `afterMiss=${afterMiss} state=${b.state}`
             + ` money ${money0}->${st.money} tea ${stock0}->${sim.stockCount('black_tea')}`;
           if (afterMiss !== 'black_tea') window.__errors.push('did not ask for the next thing: ' + window.__settle);
@@ -5364,11 +5431,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // Go in the way a player does: through Trowel & Sons.
         g.state.workers = 2; g.state.materials = 3; g.state.money = 5000;
         g.openShopCounter('builder');
-        await wait(500);
+        await settle();
         key('Space', true); await wait(220); key('Space', false);   // finish typing
-        await wait(250);
+        await settle();
         key('Space', true); await wait(220); key('Space', false);   // close greeting
-        await wait(500);
+        await settle();
         window.__builder = g.screens.length ? g.screens[g.screens.length - 1].constructor.name : 'none';
         key('ArrowDown', true); await wait(230); key('ArrowDown', false);  // -> Start building
         key('Space', true); await wait(230); key('Space', false);
@@ -5379,38 +5446,34 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (window.__build !== 'BuildScreen') {
           window.__errors.push('builder yard did not open build mode (got ' + window.__build + ')');
         }
-        await wait(300);
-        for (const code of ['ArrowRight', 'ArrowRight', 'ArrowDown']) { key(code, true); await wait(160); key(code, false); }
-        key('Space', true); await wait(120); key('Space', false);
-        for (const code of ['ArrowRight', 'ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowDown']) { key(code, true); await wait(140); key(code, false); }
-        key('Space', true); await wait(160); key('Space', false);
-        await wait(600);
+        await settle();
+        for (const code of ['ArrowRight', 'ArrowRight', 'ArrowDown']) { await pressKey(code, false); }
+        await pressKey('Space', false);
+        for (const code of ['ArrowRight', 'ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowDown']) { await pressKey(code, false); }
+        await pressKey('Space');
       } else if (SCRIPT === 'shop') {
         const door = g.doorByShop.get('grocer');
         g.state.clock.t = 10 * (1200 / 24);
         g.player.x = door.x * 16 + 8; g.player.y = (door.y + 1) * 16 - 2;
         g.openDoor({ kind: 'door', shop: 'grocer', name: 'grocer' }, door);
-        await wait(1400);
+        await settle();
         g.openShopCounter('grocer');
-        await wait(300);
-        key('Space', true); await wait(150); key('Space', false);
-        await wait(900);
+        await settle();
+        await pressKey('Space');
       } else if (SCRIPT === 'menus') {
         // Every menu reachable from a key: it must open, scroll, and close
         // again, leaving the player back in play mode each time.
         const seen = [];
         for (const [code, want] of [['Escape', 'PauseScreen'], ['KeyC', 'CafeScreen'],
                                     ['KeyM', 'MapScreen'], ['KeyI', 'BagScreen']]) {
-          key(code, true); await wait(150); key(code, false);
-          await wait(400);
+          await pressKey(code);
           const s = g.screens[g.screens.length - 1];
           const got = s ? s.constructor.name : 'none';
           seen.push(got);
           if (got !== want) { window.__errors.push(`${code} opened ${got}, wanted ${want}`); continue; }
           // Scrolling is where a screen with an empty list tends to throw.
-          for (let i = 0; i < 3; i++) { key('ArrowDown', true); await wait(90); key('ArrowDown', false); }
-          key('KeyX', true); await wait(150); key('KeyX', false);
-          await wait(400);
+          for (let i = 0; i < 3; i++) { await pressKey('ArrowDown', false); }
+          await pressKey('KeyX');
           if (g.screens.length) window.__errors.push(`${want} would not close with X`);
         }
         window.__menus = seen.join('>');
@@ -5442,7 +5505,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           st.shopOpen = true;
           st.clock.t = 12 * (1200 / 24);
           g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
-          await wait(900);
+          await settle();
           for (let i = 0; i < 6; i++) { st.cafeSim.trySpawn(st.cafeMap); await wait(200); }
           await wait(7000);   // long enough for orders to be served and paid for
           window.__customers = st.cafeSim.customers.length;
@@ -5467,7 +5530,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           if (!window.__summaryShown) window.__errors.push('no day summary appeared');
         }
         window.__step = 'done';
-        await wait(300);
+        await settle();
       } else if (SCRIPT === 'netmobile' || SCRIPT === 'net') {
         // Join a second player over a raw socket and check the real client
         // picks them up, places them, and drops them when they leave.
@@ -5500,9 +5563,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             ws.send(JSON.stringify({
               t: 'move', x: g.player.x + 40 + i * 8, y: g.player.y, dir: 'right', frame: i % 4, map: st.mapId,
             }));
-            await wait(160);
+            await settle();
           }
-          await wait(500);
+          await settle();
           const r = [...g.remotes.values()].find((a) => a.name === 'Testbot');
           window.__remote = r ? `${r.name}@${Math.round(r.x)},${Math.round(r.y)}` : 'none';
           window.__drawn = r ? r.mapId === st.mapId : false;
@@ -5512,7 +5575,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             window.__errors.push('remote player did not follow its updates: ' + window.__remote);
           }
           ws.close();
-          await wait(900);
+          await roundTrip();
           // Name them rather than count heads: bots left over from the previous
           // scenario disconnect on their own schedule, and a total would swing
           // either way for reasons that have nothing to do with this.
@@ -5539,7 +5602,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
                 }));
               }
             };
-            await wait(400);
+            await settle();
           }
           await wait(1200);
           const names = new Set([...g.remotes.values()].map((r) => r.name));
@@ -5634,21 +5697,21 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const st = g.state;
         const host = SCRIPT === 'nettitlehost';
         if (host) await wait(35000);
-        else { let w = 0; while (!g.net.world && w < 60000) { await wait(500); w += 500; } }
-        key('Space', true); await wait(200); key('Space', false);   // New game / Join
+        else { let w = 0; w = await untilMs(() => g.net.world, 60000); }
+        await pressKey('Space', false);   // New game / Join
         await wait(3000);                                           // choosing colours
-        key('Space', true); await wait(200); key('Space', false);   // begin
+        await pressKey('Space', false);   // begin
         await wait(2500);
 
         if (host) {
           st.earn(555);
           let w = 0;
-          while (g.net.remotes.size === 0 && w < 15000) { await wait(500); w += 500; }
+          w = await untilMs(() => !(g.net.remotes.size === 0), 15000);
           window.__slow = `connected=${g.net.connected} joined=${g.net.joined}`
             + ` owner=${g.net.simOwner} sees=${g.net.remotes.size} money=${st.money}`;
         } else {
           let w = 0;
-          while (st.money !== 1035 && w < 12000) { await wait(500); w += 500; }
+          w = await untilMs(() => !(st.money !== 1035), 12000);
           window.__slow = `connected=${g.net.connected} joined=${g.net.joined}`
             + ` guest=${!!g.joinedExisting} owner=${g.net.simOwner}`
             + ` sees=${g.net.remotes.size} money=${st.money}`;
@@ -5664,16 +5727,15 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // What the second player actually gets asked. Joining an open cafe you
         // pick a name and a face; the paint is already dry.
         let waited = 0;
-        while (!g.net.world && waited < 12000) { await wait(250); waited += 250; }
-        key('Space', true); await wait(200); key('Space', false);
-        await wait(800);
+        waited = await untilMs(() => g.net.world, 12000);
+        await pressKey('Space');
         const ts = g.screens[g.screens.length - 1];
         window.__create = `world=${!!g.net.world} stage=${ts && ts.stage}`
           + ` joining=${ts && ts.joining} rows=${ts && ts.joining ? 3 : '?'}`;
         if (!g.net.world) window.__errors.push('never saw the open cafe: ' + window.__create);
         if (!ts || ts.stage !== 'create') window.__errors.push('did not reach the chooser: ' + window.__create);
         if (ts && !ts.joining) window.__errors.push('offered to repaint somebody else\'s cafe');
-        await wait(600);
+        await settle();
       } else if (SCRIPT === 'netwalkhost' || SCRIPT === 'netwalkguest') {
         // A long run with somebody actually walking about. Positions have to
         // keep arriving, and the link has to stay up the whole time.
@@ -5691,7 +5753,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             + ` sees=${g.net.remotes.size}`;
         } else {
           let w = 0;
-          while (g.remotes.size === 0 && w < 20000) { await wait(500); w += 500; }
+          w = await untilMs(() => !(g.remotes.size === 0), 20000);
           const samples = [];
           let ownerFlips = 0, lastOwner = g.net.simOwner;
           for (let i = 0; i < 22; i++) {
@@ -5728,7 +5790,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const before = st.money;
         const drops0 = g.net.dropCount;
         g.net.link.ws.close();                 // the connection drops under us
-        await wait(600);
+        await roundTrip();
         // Count the drop rather than sampling `connected`: reconnection can be
         // quicker than the sample, and "came back before we looked" is a pass,
         // not a failure to notice.
@@ -5736,7 +5798,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // While we're away the other player spends; we must not miss it.
         bot.send(JSON.stringify({ t: 'op', op: 'money', d: -100 }));
         let waited = 0;
-        while (!g.net.joined && waited < 12000) { await wait(250); waited += 250; }
+        waited = await untilMs(() => g.net.joined, 12000);
         await wait(1500);
         window.__drop = `dropped=${dropped} back=${g.net.connected}/${g.net.joined}`
           + ` after=${waited}ms money ${before}->${st.money}`;
@@ -5750,14 +5812,14 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // in the lobby for that one — and a morning card sent to everybody
         // connected is not put up over a title screen.
         const names = () => g.screens.map((sc) => sc.constructor.name).join(',');
-        const press = async (code) => { key(code, true); await wait(90); key(code, false); await wait(200); };
+        const press = async (code) => { await pressKey(code); };
         let entered = null;
         const here = async () => (await (await fetch('/status?game=' + entered, { cache: 'no-store' })).json()).sockets;
-        await wait(800);
+        await roundTrip();
         const start = names();
         await press('Space');                              // into the first valley
         for (let i = 0; i < 30 && !g.titleScreen; i++) await wait(150);
-        await wait(300);
+        await settle();
         const title = g.titleScreen;
         const options = title ? title.options.join('/') : '';
         entered = g.net.gameId;
@@ -5797,31 +5859,31 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           if (m.t === 'build') answers.push(m);
           if (m.t === 'sync' && m.k === 'cafe') synced++;
         };
-        const ask = async (on) => { bot.send(JSON.stringify({ t: 'build', on })); await wait(400); return answers[answers.length - 1]; };
+        const ask = async (on) => { bot.send(JSON.stringify({ t: 'build', on })); await roundTrip(); return answers[answers.length - 1]; };
         const open = () => g.screens.some((sc) => sc instanceof BuildScreen);
         await wait(900);
         // Mason has it: we are told so, and no plan opens.
         const first = await ask(true);
         g.hud.toasts.length = 0;
         g.openBuildMode();
-        await wait(700);
+        await settle();
         const refused = !open();
         const told = g.hud.toasts.some((t) => /Mason is rearranging/.test(t.text));
         // He finishes: now it opens, and he is the one turned away.
         await ask(false);
         g.openBuildMode();
-        await wait(700);
+        await settle();
         const opened = open();
         const his = await ask(true);
         // While we hold it, a layout from him goes nowhere.
         const chairs = st.cafe.furniture.length;
         bot.send(JSON.stringify({ t: 'op', op: 'put', k: 'cafe', key: 'furniture', v: [] }));
-        await wait(500);
+        await roundTrip();
         const held = st.cafe.furniture.length === chairs;
         // We finish, and it is his for the asking.
         const screen = g.screens.find((sc) => sc instanceof BuildScreen);
         if (screen) screen.finish();
-        await wait(500);
+        await settle();
         const after = await ask(true);
         window.__lock = `bot=${first && first.ok} refused=${refused} told=${told} opened=${opened}`
           + ` botWhileOurs=${his && his.ok}/${his && his.by} held=${held} botAfter=${after && after.ok}`;
@@ -5862,7 +5924,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         bot.send(JSON.stringify({ t: 'op', op: 'money', d: -100 }));
         bot.send(JSON.stringify({ t: 'op', op: 'set', k: 'flags', v: { ...JSON.parse(JSON.stringify(st.flags)), offline_probe: undefined, bot_probe: true } }));
         let waited = 0;
-        while (g.net.rejoinCount === rejoins0 && waited < 12000) { await wait(250); waited += 250; }
+        waited = await untilMs(() => !(g.net.rejoinCount === rejoins0), 12000);
         await wait(1500);
         const status = await (await fetch('/status' + GAMEQ, { cache: 'no-store' })).json();
         window.__offline = `down=${wasDown} back=${g.net.joined} after=${waited}ms kept=${g.net.caughtUp}`
@@ -5893,8 +5955,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
         link.timer = setInterval(() => link.tick(), 100);  // and wakes up
         let waited = 0;
-        while (!(g.net.joined && g.net.id !== id0) && waited < 12000) { await wait(250); waited += 250; }
-        await wait(500);
+        waited = await untilMs(() => g.net.joined && g.net.id !== id0, 12000);
+        await roundTrip();
         const status = await (await fetch('/status' + GAMEQ, { cache: 'no-store' })).json();
         const me = status.players.find((p) => p.id === g.net.id);
         window.__gone = `hungUpOn=${gone} back=${g.net.connected}/${g.net.joined} after=${waited}ms`
@@ -5928,7 +5990,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const money0 = st.money;
         bot.send(JSON.stringify({ t: 'op', op: 'money', d: 250 }));
         let w = 0;
-        while (st.money === money0 && w < 6000) { await wait(200); w += 200; }
+        w = await untilMs(() => !(st.money === money0), 6000);
         st.spend(40);
         await wait(1200);
         window.__poll += ` sees=${sees} money ${money0}->${st.money} drops=${g.net.dropCount}`;
@@ -5945,11 +6007,12 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         try { localStorage.removeItem('catcafe.transport'); } catch (e) {}
         const started = g.net.transport;
         for (let i = 0; i < 2; i++) {
+          const drops = g.net.dropCount;
           if (g.net.link && g.net.link.ws) g.net.link.ws.close();
           else if (g.net.link) g.net.link.die();
-          let w = 0;
-          while (!g.net.connected && w < 12000) { await wait(250); w += 250; }
-          await wait(800);
+          await until(() => g.net.dropCount > drops, 4000);
+          await until(() => g.net.connected && g.net.joined, 12000);
+          await roundTrip();
         }
         await wait(1500);
         window.__fall = `started=${started} now=${g.net.transport}`
@@ -5991,14 +6054,14 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           }
         };
         let w = 0;
-        while (g.net.remotes.size === 0 && w < 10000) { await wait(250); w += 250; }
+        w = await untilMs(() => !(g.net.remotes.size === 0), 10000);
         const sawJoin = g.net.remotes.size;
         // Forget them, exactly as a lost arrival message would have left us.
         g.net.remotes.clear();
         g.remotes.clear();
         let back = 0;
-        while (g.net.remotes.size === 0 && back < 12000) { await wait(250); back += 250; }
-        await wait(600);
+        back = await untilMs(() => !(g.net.remotes.size === 0), 12000);
+        await roundTrip();
         window.__forget = `saw=${sawJoin} recoveredIn=${back}ms`
           + ` roster=${g.net.remotes.size} actors=${g.remotes.size}`;
         if (!sawJoin) window.__errors.push('never saw them arrive: ' + window.__forget);
@@ -6162,7 +6225,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             if (c) { c.served = true; c.servedByPlayer = true; }
           }, 600);
           let waited = 0;
-          while (st.money === money0 && waited < 12000) { await wait(250); waited += 250; }
+          waited = await untilMs(() => !(st.money === money0), 12000);
           clearInterval(counter);
           window.__sim = `owner=${g.net.simOwner} mine=${st.cafeSim.customers.length}`
             + ` puppets=${st.cafeSim.customers.filter((c) => c.puppet).length}`
@@ -6176,7 +6239,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           // us: that is the whole point of one shared till.
           const money0 = st.money;
           let waited = 0;
-          while (st.money === money0 && waited < 9000) { await wait(250); waited += 250; }
+          waited = await untilMs(() => !(st.money === money0), 9000);
           const cs = st.cafeSim.customers;
           // Everybody in the room should see what everybody is asking for.
           const waiting = cs.filter((c) => c.state === 'waiting');
@@ -6222,13 +6285,13 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
         window.__shore = best ? `${best.x},${best.y}` : 'none';
         if (!best) window.__errors.push('no shoreline with a full depth ramp found');
-        await wait(900);
+        await settle();
       } else if (SCRIPT === 'tabmobile') {
         // Build-mode tabs by touch: Tab is keyboard-only.
         const st = g.state;
         st.workers = 2; st.materials = 3; st.money = 5000;
         g.openBuildMode();
-        await wait(800);
+        await settle();
         const bs = g.screens[g.screens.length - 1];
         window.__mode0 = bs.modeName;
         const canvas = document.getElementById('screen');
@@ -6243,12 +6306,12 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // Tap the last tab (Style).
         const last = bs.tabRects[bs.tabRects.length - 1];
         tapCanvas(last.x + last.w / 2, last.y + last.h / 2);
-        await wait(400);
+        await settle();
         window.__mode1 = bs.modeName;
         // And back to the first.
         const first = bs.tabRects[0];
         tapCanvas(first.x + first.w / 2, first.y + first.h / 2);
-        await wait(400);
+        await settle();
         window.__mode2 = bs.modeName;
         window.__tabs2 = `${window.__mode0}->${window.__mode1}->${window.__mode2}`;
         if (window.__mode1 === window.__mode0) window.__errors.push('tapping a tab did nothing: ' + window.__tabs2);
@@ -6267,7 +6330,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           tap('.tb.right', 'pointerup');
           const d = Math.hypot(g.player.x - x0, g.player.y - y0);
           after();
-          await wait(200);
+          await settle();
           return d;
         };
         const walk = await measure(() => {}, () => {});
@@ -6287,9 +6350,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await wait(700);
       } else if (SCRIPT === 'pausemobile') {
         // Pause menu with the touch pads overlaid: the info card must clear them.
-        await wait(400);
-        key('Escape', true); await wait(200); key('Escape', false);
-        await wait(700);
+        await settle();
+        await pressKey('Escape');
         const top = g.screens[g.screens.length - 1];
         window.__paused = top ? top.constructor.name : 'none';
         window.__safe = `${Math.round(g.safe ? g.safe.left : -1)},${Math.round(g.safe ? g.safe.right : -1)}`;
@@ -6305,24 +6367,24 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const door = g.doorByShop.get('furniture');
         g.player.x = door.x * 16 + 8; g.player.y = (door.y + 1) * 16 - 2;
         g.openDoor({ kind: 'door', shop: 'furniture', name: 'furniture' }, door);
-        await wait(1400);
+        await settle();
         g.openShopCounter('furniture');
-        await wait(400);
+        await settle();
         key('Space', true); await wait(250); key('Space', false);
-        await wait(250);
+        await settle();
         key('Space', true); await wait(250); key('Space', false);
         await wait(700);
         const sc = g.screens[g.screens.length - 1];
         window.__shop = sc ? sc.constructor.name : 'none';
         // Pick the third colourway of the chair, buy two, and check the bag.
         if (sc && sc.colours) {
-          key('ArrowRight', true); await wait(200); key('ArrowRight', false);
-          key('ArrowRight', true); await wait(200); key('ArrowRight', false);
+          await pressKey('ArrowRight', false);
+          await pressKey('ArrowRight', false);
           window.__variant = sc.variant;
           key('Space', true); await wait(220); key('Space', false);   // qty prompt
-          key('ArrowUp', true); await wait(200); key('ArrowUp', false);
+          await pressKey('ArrowUp', false);
           key('Space', true); await wait(250); key('Space', false);   // buy
-          await wait(500);
+          await settle();
           const keys = Object.keys(st.inventory).filter((k) => k.startsWith('f_chair'));
           window.__bagKeys = keys.join(',') + '=' + keys.map((k) => st.inventory[k]).join(',');
           if (!keys.some((k) => k.includes('#'))) {
@@ -6332,7 +6394,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         window.__stockIcons = sc && sc.items
           ? sc.items.map((id) => (window.game ? id : id)).length + ' items' : 'none';
         if (window.__shop !== 'ShopScreen') window.__errors.push('furniture shop did not open: ' + window.__shop);
-        await wait(400);
+        await settle();
       } else if (SCRIPT === 'taxi') {
         const st = g.state;
         st.money = 3000;
@@ -6355,21 +6417,21 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await wait(1100);
         if (g.cutscene) g.cutscene.stageT = -1e6;   // freeze the hover for the camera
         window.__hover = g.cutscene ? g.cutscene.stage : 'none';
-        await wait(400);
+        await settle();
       } else if (SCRIPT === 'sleep') {
         const st = g.state;
         const door = g.doorByShop.get('inn');
         st.clock.t = 20 * (1200 / 24);
         g.player.x = door.x * 16 + 8; g.player.y = (door.y + 1) * 16 - 2;
         g.openDoor({ kind: 'door', shop: 'inn', name: 'inn' }, door);
-        await wait(1500);
+        await settle();
         window.__innMap = g.state.mapId;
         window.__stairs = g.currentMap.meta && g.currentMap.meta.stairs
           ? `${g.currentMap.meta.stairs.x},${g.currentMap.meta.stairs.y}` : 'none';
         g.restAtInn();
-        await wait(500);
+        await settle();
         key('Space', true); await wait(250); key('Space', false);   // finish typing
-        await wait(300);
+        await settle();
         key('Space', true); await wait(250); key('Space', false);   // "Yes please"
         await wait(600);
         window.__walk = g.cutscene ? g.cutscene.constructor.name : 'none';
@@ -6385,23 +6447,21 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         st.give('treats', 3);
         st.give('catnip', 1);
         g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
-        await wait(1200);
+        await settle();
         const cat = st.cats[0];
         cat.happiness = 0.4;
 
         // 1. Through the cafe book's Cats tab.
         const t0 = st.inventory.treats, j0 = cat.happiness;
-        key('KeyC', true); await wait(160); key('KeyC', false);
-        await wait(400);
-        for (let i = 0; i < 2; i++) { key('ArrowRight', true); await wait(200); key('ArrowRight', false); }
-        await wait(300);
+        await pressKey('KeyC');
+        for (let i = 0; i < 2; i++) { await pressKey('ArrowRight', false); }
+        await settle();
         key('Space', true); await wait(220); key('Space', false);
-        await wait(500);
+        await settle();
         window.__bookTreat = `treats ${t0}->${st.inventory.treats || 0} joy ${j0.toFixed(2)}->${cat.happiness.toFixed(2)}`;
         if ((st.inventory.treats || 0) >= t0) window.__errors.push('cats tab did not consume a treat');
         if (cat.happiness <= j0) window.__errors.push('cats tab did not raise joy');
-        key('Escape', true); await wait(200); key('Escape', false);
-        await wait(600);
+        await pressKey('Escape');
 
         // 2. By walking up to a cat in the room.
         const live = st.catActors[0];
@@ -6411,7 +6471,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await wait(700);
         window.__choices = g.dialogue.choices ? g.dialogue.choices.map((c) => c.value).join(',') : 'none';
         key('Space', true); await wait(250); key('Space', false);   // finish typing
-        await wait(300);
+        await settle();
         key('Space', true); await wait(250); key('Space', false);   // take first choice
         await wait(700);
         window.__petTreat = `treats ${t1}->${st.inventory.treats || 0} joy ${j1.toFixed(2)}->${live.happiness.toFixed(2)}`;
@@ -6422,7 +6482,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.player.x = live.x; g.player.y = live.y + 6;
         g.interact();
         await wait(900);
-        key('Space', true); await wait(200); key('Space', false);
+        await pressKey('Space', false);
       } else if (SCRIPT === 'exterior') {
         // Picking colours must actually change the building you walk past.
         const st = g.state;
@@ -6431,7 +6491,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         st.cafe.roof = '#5a6472';
         st.cafe.awning = '#7fbe57';
         g.refreshCafeExterior();
-        await wait(300);
+        await settle();
         const after = g.cafeBuilding && g.cafeBuilding.sprite;
         window.__ext = `cfg=${beforeCfg && beforeCfg.roof}/${beforeCfg && beforeCfg.awning}`
           + ` -> ${g.cafeBuilding && g.cafeBuilding.cfg.roof}/${g.cafeBuilding && g.cafeBuilding.cfg.awning}`
@@ -6452,23 +6512,22 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const seatsBefore = st.cafeSim.seats().length;
         const chairsBefore = st.inventory.f_chair || 0;
         g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
-        await wait(1200);
-        key('KeyC', true); await wait(160); key('KeyC', false);   // cafe book
-        await wait(400);
+        await settle();
+        await pressKey('KeyC', false);   // cafe book
+        await settle();
         window.__book = g.screens.length ? g.screens[g.screens.length - 1].constructor.name : 'none';
-        key('Space', true); await wait(180); key('Space', false); // arrange & build
+        await pressKey('Space', false); // arrange & build
         await wait(700);
         const top = g.screens[g.screens.length - 1];
         window.__build = top ? top.constructor.name : 'none';
         window.__buildMode = top && top.modeName;
         window.__tabs = top && top.modes ? top.modes.join('/') : '?';
         // Move somewhere clear and drop a chair.
-        for (const k of ['ArrowDown', 'ArrowDown', 'ArrowLeft']) { key(k, true); await wait(170); key(k, false); }
-        key('Space', true); await wait(200); key('Space', false);
-        await wait(700);
+        for (const k of ['ArrowDown', 'ArrowDown', 'ArrowLeft']) { await pressKey(k, false); }
+        await pressKey('Space');
         window.__placed = (st.inventory.f_chair || 0) < chairsBefore;
         const chairsOnMapBefore = g.currentMap.objects.filter((o) => o.type === 'chair').length;
-        key('Escape', true); await wait(200); key('Escape', false); // finish
+        await pressKey('Escape', false); // finish
         await wait(1200);
         window.__seats = `${seatsBefore}->${st.cafeSim.seats().length}`;
         // Back in normal play: the furniture must still be in the map we are
@@ -6515,20 +6574,20 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         let phase = null;
         try { phase = localStorage.getItem(PHASE); } catch (e) {}
         let waited = 0;
-        while (!(g.net && g.net.shared) && waited < 10000) { await wait(200); waited += 200; }
+        waited = await untilMs(() => g.net && g.net.shared, 10000);
         const door = g.doorByShop.get('cafe');
         const home = () => { g.player.x = door.x * 16 + 8; g.player.y = (door.y + 4) * 16 - 2; };
         const walk = async (code) => {
           const before = { x: g.player.x, y: g.player.y };
           key(code, true); await wait(900); key(code, false);
-          await wait(120);
+          await settle();
           return { dx: Math.round(g.player.x - before.x), dy: Math.round(g.player.y - before.y) };
         };
         if (!phase) {
           home();
           await wait(600);
           const w = await walk('ArrowLeft');
-          home(); await wait(200);
+          home(); await settle();
           const n = await walk('ArrowUp');
           try { localStorage.setItem(PHASE, JSON.stringify({ w, n, name: g.net.name })); } catch (e) {}
           // No goodbye at all — this is a tab being closed, not Exit.
@@ -6541,9 +6600,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           // were going to: the roster is restated every five seconds.
           await wait(6000);
           const ghosts = [...g.net.remotes.values()].map((r) => r.n);
-          home(); await wait(300);
+          home(); await settle();
           const w = await walk('ArrowLeft');
-          home(); await wait(200);
+          home(); await settle();
           const n = await walk('ArrowUp');
           window.__ghostmove = `before W=${was && was.w.dx},${was && was.w.dy}`
             + ` N=${was && was.n.dx},${was && was.n.dy}`
@@ -6573,24 +6632,24 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // walk. Measured rather than eyeballed: walk a second west and a second
         // north, once alone and once with somebody standing on top of you.
         let waited = 0;
-        while (!(g.net && g.net.shared) && waited < 10000) { await wait(200); waited += 200; }
+        waited = await untilMs(() => g.net && g.net.shared, 10000);
         const walk = async (code) => {
           const before = { x: g.player.x, y: g.player.y };
           key(code, true); await wait(900); key(code, false);
-          await wait(120);
+          await settle();
           return { dx: Math.round(g.player.x - before.x), dy: Math.round(g.player.y - before.y) };
         };
         // Somewhere with room to walk in every direction.
         const door = g.doorByShop.get('cafe');
         const home = () => { g.player.x = door.x * 16 + 8; g.player.y = (door.y + 4) * 16 - 2; };
         home();
-        await wait(300);
+        await settle();
         const aloneW = await walk('ArrowLeft');
-        home(); await wait(200);
+        home(); await settle();
         const aloneN = await walk('ArrowUp');
 
         // Now a second player, standing exactly where we are.
-        home(); await wait(200);
+        home(); await settle();
         const url = `${location.protocol}//${location.host}/poll${g.net.gameId ? '?game=' + g.net.gameId : ''}`;
         const post = async (body) => {
           const res = await fetch(url, {
@@ -6608,9 +6667,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // Keep it alive for the duration, the way a real client would.
         const keep = setInterval(() => { post({ id: ghostId, msgs: [] }).catch(() => {}); }, 1500);
         let seen = 0;
-        while (!g.net.remotes.size && seen < 6000) { await wait(200); seen += 200; }
+        seen = await untilMs(() => g.net.remotes.size, 6000);
         const withW = await walk('ArrowLeft');
-        home(); await wait(200);
+        home(); await settle();
         const withN = await walk('ArrowUp');
         clearInterval(keep);
 
@@ -6634,7 +6693,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         let phase = null;
         try { phase = localStorage.getItem(PHASE); } catch (e) {}
         let waited = 0;
-        while (!g.net.connected && waited < 8000) { await wait(200); waited += 200; }
+        waited = await untilMs(() => g.net.connected, 8000);
         if (!phase) {
           if (!g.net.world) {
             g.screens.length = 0;
@@ -6645,15 +6704,15 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           // Wait until the server has actually named us, or the second half
           // has nothing to compare against.
           let named = 0;
-          while (!g.net.name && named < 6000) { await wait(200); named += 200; }
+          named = await untilMs(() => g.net.name, 6000);
           try { localStorage.setItem(PHASE, JSON.stringify({ name: g.net.name || g.state.playerName })); } catch (e) {}
-          await wait(400);
+          await roundTrip();
           g.leaveValley();            // saves, hangs up, and reloads
           await wait(25000);
         } else {
           let was = null;
           try { was = JSON.parse(phase); localStorage.removeItem(PHASE); } catch (e) {}
-          while (!g.net.world && waited < 14000) { await wait(250); waited += 250; }
+          waited = await untilMs(() => g.net.world, 14000);
           const ts = g.screens[g.screens.length - 1];
           const opts = (ts && ts.options) || [];
           if (opts.includes('Resume Game')) ts.index = opts.indexOf('Resume Game');
@@ -6684,7 +6743,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         let phase = null;
         try { phase = localStorage.getItem(PHASE); } catch (e) {}
         let waited = 0;
-        while (!g.net.connected && waited < 8000) { await wait(200); waited += 200; }
+        waited = await untilMs(() => g.net.connected, 8000);
         if (!phase) {
           // Open the cafe if nobody has, so the second half sees a real join.
           if (!g.net.world) {
@@ -6708,7 +6767,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         } else {
           let want = null;
           try { want = JSON.parse(phase); localStorage.removeItem(PHASE); } catch (e) {}
-          while (!g.net.world && waited < 14000) { await wait(250); waited += 250; }
+          waited = await untilMs(() => g.net.world, 14000);
           const ts = g.screens[g.screens.length - 1];
           const opts = (ts && ts.options) || [];
           window.__cont = `saved=${want && want.saved} world=${!!g.net.world}`
@@ -6734,7 +6793,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const ts = g.screens[0];
         ts.index = ts.options.indexOf('New game');
         key('Space', true); await wait(220); key('Space', false);
-        await wait(500);
+        await settle();
         // Down to the first word of the name.
         const want = SCRIPT === 'titlenameadj' ? 'Fluffy' : 'Whisker';
         ts.word1 = want;
@@ -6823,14 +6882,12 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         st.adoptCat('tabby'); st.adoptCat('grey');
         st.cats.forEach((c, i) => { c.sick = i % 2 === 0; c.groomed = i % 2 ? 3 : 0; });
         st.money = 1702;
-        key('KeyC', true); await wait(200); key('KeyC', false);
-        await wait(500);
+        await pressKey('KeyC');
         const tab = SCRIPT === 'bookmobile' ? 2 : SCRIPT === 'staffmobile' ? 3 : 4;
-        for (let i = 0; i < tab; i++) { key('ArrowRight', true); await wait(180); key('ArrowRight', false); await wait(120); }
+        for (let i = 0; i < tab; i++) { await pressKey('ArrowRight'); }
         // Put the cursor on the second row, which is where the highlight and
         // its explaining line have to agree with each other.
-        key('ArrowDown', true); await wait(180); key('ArrowDown', false);
-        await wait(700);
+        await pressKey('ArrowDown');
         const scr = g.topScreen;
         window.__bookshot = `screen=${scr && scr.constructor.name} tab=${scr && scr.tab} index=${scr && scr.index}`;
         if (!scr || scr.constructor.name !== 'CafeScreen') window.__errors.push('the book did not open: ' + window.__bookshot);
@@ -6903,14 +6960,14 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.player.y = (voidTile.y + 1) * 16 - 2;
         const saved = g.state.save();
         g.continueGame();
-        await wait(600);
+        await settle();
         const landed = { x: g.player.x, y: g.player.y };
         // Can we actually walk? Try all four ways and take the best.
         let best = 0;
         for (const code of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']) {
           const from = { x: g.player.x, y: g.player.y };
           key(code, true); await wait(500); key(code, false);
-          await wait(80);
+          await settle();
           best = Math.max(best, Math.round(Math.hypot(g.player.x - from.x, g.player.y - from.y)));
         }
         window.__strand = `saved=${saved} void=${voidTile.x},${voidTile.y}`
@@ -6934,7 +6991,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.player.x = ox; g.player.y = oy;
         g.state.save();
         g.continueGame();
-        await wait(400);
+        await settle();
         const valleyOff = away(ox, oy);
         results.push(`overworld:${g.state.mapId}@${valleyOff}`);
 
@@ -6945,7 +7002,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const cx = g.player.x = 80, cy = g.player.y = 80;
         g.state.save();
         g.continueGame();
-        await wait(400);
+        await settle();
         const cafeOff = away(cx, cy);
         results.push(`cafe:${g.state.mapId}@${cafeOff}`);
 
@@ -6957,7 +7014,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.player.x = 120; g.player.y = 96;
         g.state.save();
         g.continueGame();
-        await wait(400);
+        await settle();
         const backAt = `${Math.round(g.player.x / 16)},${Math.round(g.player.y / 16)}`;
         const nearDoor = away(shop.x * 16 + 8, (shop.y + 1) * 16 - 2);
         results.push(`shop:${g.state.mapId}@${backAt} fromDoor=${nearDoor}`);
@@ -7014,14 +7071,14 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const ts = g.screens[0];
         ts.index = ts.options.indexOf('New game');
         key('Space', true); await wait(220); key('Space', false);
-        await wait(500);
+        await settle();
         window.__stage = ts.stage;
         // Drop to the roof row and recolour it, then the walls.
-        for (let i = 0; i < 2; i++) { key('ArrowDown', true); await wait(190); key('ArrowDown', false); }
+        for (let i = 0; i < 2; i++) { await pressKey('ArrowDown', false); }
         for (let i = 0; i < 2; i++) { key('ArrowRight', true); await wait(210); key('ArrowRight', false); }
-        key('ArrowDown', true); await wait(190); key('ArrowDown', false);
+        await pressKey('ArrowDown', false);
         key('ArrowRight', true); await wait(210); key('ArrowRight', false);
-        await wait(500);
+        await settle();
         if (ts.stage !== 'create') window.__errors.push('did not reach the creation screen');
       } else if (SCRIPT === 'map') {
         // A realistic cluster: a town plus the shops inside it, all within a
@@ -7036,11 +7093,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.state.visit('hollowdown', 'Hollowdown', 212, 72);
         g.state.visit('thistlewick', 'Thistlewick', 270, 200);
         g.state.visit('stones', 'The Standing Stones', 262, 44);
-        await wait(200);
-        key('KeyM', true); await wait(150); key('KeyM', false);
-        await wait(500);
+        await settle();
+        await pressKey('KeyM');
         // Move the selection so the screenshot shows the highlighted label.
-        for (let i = 0; i < 4; i++) { key('ArrowDown', true); await wait(200); key('ArrowDown', false); }
+        for (let i = 0; i < 4; i++) { await pressKey('ArrowDown', false); }
         const ms = g.screens[g.screens.length - 1];
         window.__mapSel = ms && ms.places ? `${ms.index + 1}/${ms.places.length}` : 'none';
         await wait(600);
