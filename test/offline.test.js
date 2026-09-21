@@ -10,7 +10,6 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { merge3 } from '../src/net/merge.js';
 import { applyOp } from '../server/world.js';
 
 globalThis.location = { host: 'test', search: '', protocol: 'http:' };
@@ -62,12 +61,12 @@ test('offline, it is kept and sent on coming back', (t) => {
   assert.equal(net.pending.length, 0);
 });
 
-test('a whole field written offline does not undo what others did meanwhile', (t) => {
+test('a field touched offline does not undo what others did meanwhile', (t) => {
   const { net, sent } = playing(t, { flags: { met_owl: true }, friends: { owl: 0.2 } });
   drop(net);
   // Here: a flag set and a friendship warmed, on top of what we knew.
-  net.op({ op: 'set', k: 'flags', v: { met_owl: true, cleared_bridge: true } });
-  net.op({ op: 'set', k: 'friends', v: { owl: 0.5 } });
+  net.touch('flags', { met_owl: true, cleared_bridge: true });
+  net.touch('friends', { owl: 0.5 });
   // There: somebody else set a different flag and made a different friend.
   const now = { flags: { met_owl: true, found_shell: true }, friends: { owl: 0.2, fox: 0.4 } };
   comeBack(net, sent, now);
@@ -81,7 +80,7 @@ test('a cat adopted offline joins the cats, not replaces them', (t) => {
   const tabby = { id: 'c1', name: 'Tab', hunger: 0 };
   const { net, sent } = playing(t, { cats: [tabby] });
   drop(net);
-  net.op({ op: 'set', k: 'cats', v: [tabby, { id: 'c9', name: 'Mine', hunger: 0 }] });
+  net.touch('cats', [tabby, { id: 'c9', name: 'Mine', hunger: 0 }]);
   // Meanwhile Tab got hungry and somebody else adopted one too.
   const now = { cats: [{ id: 'c1', name: 'Tab', hunger: 1 }, { id: 'c5', name: 'Theirs', hunger: 0 }] };
   comeBack(net, sent, now);
@@ -91,24 +90,13 @@ test('a cat adopted offline joins the cats, not replaces them', (t) => {
   assert.equal(world.cats[0].hunger, 1, 'and Tab is as hungry as the server says');
 });
 
-test('writing a field several times offline sends it once', (t) => {
-  const { net, sent } = playing(t, { flags: {} });
-  drop(net);
-  net.op({ op: 'set', k: 'flags', v: { a: true } });
-  net.op({ op: 'set', k: 'flags', v: { a: true, b: true } });
-  comeBack(net, sent, { flags: { z: true } });
-  assert.deepEqual(ops(sent), [{ t: 'op', op: 'set', k: 'flags', v: { z: true, a: true, b: true } }]);
-});
-
-test('later changes to the live object cannot reach what we measure against', (t) => {
+test('later changes to the live object cannot reach what we compare with', (t) => {
   const { net, sent } = playing(t, { flags: {} });
   const live = { x: true };
   net.receive({ t: 'sync', k: 'flags', v: live });
-  drop(net);
   live.mine = true;                          // the game edits in place, as it does
-  net.op({ op: 'set', k: 'flags', v: live });
-  comeBack(net, sent, { flags: { x: true, theirs: true } });
-  assert.deepEqual(ops(sent)[0].v, { x: true, theirs: true, mine: true });
+  net.touch('flags', live);
+  assert.deepEqual(ops(sent), [{ t: 'op', op: 'put', k: 'flags', key: 'mine', v: true }]);
 });
 
 test('nothing is kept on the title screen, alone, or after leaving', (t) => {
@@ -129,13 +117,12 @@ test('what a dead HTTP link never delivered is kept too', (t) => {
   assert.deepEqual(ops(sent), [{ t: 'op', op: 'money', d: -5 }]);
 });
 
-test('merge3', () => {
-  assert.equal(merge3(5, 5, 9), 9, 'untouched by us: theirs');
-  assert.equal(merge3(5, 7, 5), 7, 'untouched by them: ours');
-  assert.equal(merge3(5, 7, 9), 11, 'a tally takes both');
-  assert.deepEqual(merge3({ a: 1, b: 1 }, { a: 1 }, { a: 1, b: 1, c: 1 }), { a: 1, c: 1 }, 'our removal holds');
-  assert.deepEqual(merge3({ a: 1 }, { a: 1, n: { x: 1 } }, { a: 2 }), { a: 2, n: { x: 1 } });
-  assert.deepEqual(merge3([8, 18], [9, 17], [8, 20]), [9, 17], 'no parts to tell apart: ours');
-  assert.deepEqual(merge3([{ id: 1 }, { id: 2 }], [{ id: 2 }], [{ id: 1 }, { id: 2 }, { id: 3 }]),
-    [{ id: 2 }, { id: 3 }]);
+
+test('touching a tally twice before the server answers adds to it twice, not three times', (t) => {
+  const { net, sent } = playing(t, { reputation: 0.5 });
+  net.touch('reputation', 0.51);
+  net.touch('reputation', 0.52);
+  const world = { reputation: 0.5 };
+  for (const m of ops(sent)) applyOp(world, m);
+  assert.ok(Math.abs(world.reputation - 0.52) < 1e-9);
 });

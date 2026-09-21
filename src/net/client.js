@@ -7,7 +7,7 @@
 // resolves false, `shared` stays false, and every op is a no-op.
 
 import { WsLink, PollLink } from './link.js';
-import { merge3 } from './merge.js';
+import { diffOps } from './diff.js';
 
 const TRANSPORT_KEY = 'catcafe.transport';
 const WHO_KEY = 'catcafe.who';
@@ -50,8 +50,8 @@ export class NetClient {
     // Changes to the books made while we couldn't reach them — see op().
     this.pending = [];
     // The server's last word on each field, as text so that nothing the game
-    // does to the live object afterwards can reach it. It is what a change
-    // made offline is measured against.
+    // does to the live object afterwards can reach it. It is what a touched
+    // field is compared with to find out what changed — see touch().
     this.baseJson = {};
     this.beats = 0;
     this.retryIn = 0;
@@ -493,17 +493,30 @@ export class NetClient {
   }
 
   keep(o) {
-    if (o.op === 'set') {
-      // Only the last word on a field matters, measured against the first
-      // thing we knew about it.
-      const i = this.pending.findIndex((p) => p.o.op === 'set' && p.o.k === o.k);
-      const base = i >= 0 ? this.pending[i].base : this.baseJson[o.k];
-      if (i >= 0) this.pending.splice(i, 1);
-      this.pending.push({ o, base });
-    } else {
-      this.pending.push({ o });
-    }
+    this.pending.push(o);
     if (this.pending.length > MAX_PENDING) this.pending.splice(0, this.pending.length - MAX_PENDING);
+  }
+
+  /**
+   * A field the game has just edited in place. What goes out is the difference
+   * from the server's last word on it, not the field — see diff.js — so
+   * somebody else's change to another part of it a moment ago survives ours.
+   */
+  touch(k, value) {
+    if (value === undefined) return;
+    // Alone, or not yet in a valley: nobody to tell, and nothing to keep.
+    if (!this.shared && !(this.everConnected && this.rejoin)) return;
+    const text = JSON.stringify(value);
+    let base;
+    try { base = this.baseJson[k] === undefined ? undefined : JSON.parse(this.baseJson[k]); } catch { base = undefined; }
+    // Through JSON, as it will go over the wire, and so that nothing here is
+    // the live object.
+    const ops = diffOps(k, base, JSON.parse(text));
+    // What we have now said counts as known, or the next touch — which may
+    // come before the server's answer to this one — would say it all again,
+    // and a tally would be added to twice.
+    this.baseJson[k] = text;
+    for (const o of ops) this.op(o);
   }
 
   /** Messages a dead link never delivered: the changes among them are kept. */
@@ -519,26 +532,15 @@ export class NetClient {
   }
 
   /**
-   * Back in the valley: send what was done while away. Small operations go as
-   * they are. A field written whole goes as the difference it made to what
-   * the books say now, so it doesn't undo what the others did meanwhile.
+   * Back in the valley: send what was done while away. Everything in here is
+   * a small change to some part of the books, so it applies as well late as it
+   * would have on time, on top of whatever the others did meanwhile.
    */
   flushPending() {
     const pending = this.pending;
     this.pending = [];
     if (!this.shared) return 0;
-    for (const p of pending) {
-      let o = p.o;
-      if (o.op === 'set' && p.base !== undefined && this.world && this.world[o.k] !== undefined) {
-        let base;
-        try { base = JSON.parse(p.base); } catch { base = undefined; }
-        // Through JSON, as it would have gone over the wire: cats and the
-        // like are plain data by then, and nothing here is the live object.
-        const ours = JSON.parse(JSON.stringify(o.v));
-        if (base !== undefined) o = { op: 'set', k: o.k, v: merge3(base, ours, this.world[o.k]) };
-      }
-      this.send({ t: 'op', ...o });
-    }
+    for (const o of pending) this.send({ t: 'op', ...o });
     return pending.length;
   }
 

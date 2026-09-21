@@ -94,8 +94,12 @@ export class GameState {
   earn(n) { this.money += n; this.pub({ op: 'money', d: n }); }
   spend(n) { this.money -= n; this.pub({ op: 'money', d: -n }); }
 
-  /** Re-publish a field we just edited in place (flags, quests, hours...). */
-  touch(k) { this.pub({ op: 'set', k, v: this[k] }); }
+  /**
+   * Publish a field we just edited in place (flags, friends, hours...). Only
+   * what changed in it is sent — the session works that out — so this can be
+   * called with no thought for who else might be editing the same field.
+   */
+  touch(k) { if (this.net && !this.applying) this.net.touch(k, this[k]); }
 
   /**
    * Take a job on. Returns false if it was already taken — possibly by
@@ -122,7 +126,7 @@ export class GameState {
     this.pub({ op: 'step', id, n });
   }
 
-  touchCats() { this.pub({ op: 'set', k: 'cats', v: this.cats.map((c) => c.save()) }); }
+  touchCats() { if (this.net && !this.applying) this.net.touch('cats', this.cats.map((c) => c.save())); }
 
   /** Take the server's value for one field without echoing it back. */
   applySync(k, v) {
@@ -362,7 +366,6 @@ export class GameState {
   addDelivery(d) {
     this.deliveries = [...this.deliveries, d];
     this.pub({ op: 'deliveryAdd', d });
-    this.touch('deliveries');
   }
 
   /** Run, refused, or run out of time — all the same to the books. */
@@ -371,7 +374,6 @@ export class GameState {
     this.deliveries = this.deliveries.filter((d) => d.id !== id);
     if (this.deliveries.length === before) return false;
     this.pub({ op: 'deliveryDone', id });
-    this.touch('deliveries');
     return true;
   }
 

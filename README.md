@@ -151,12 +151,18 @@ strand anyone — you come back where you were, with the books as they are now.
 A client that has lost the link stops simulating rather than quietly running a
 second cafe, and says **OFFLINE** in the corner until it's back.
 
-What you do while it says OFFLINE is kept and sent when the link returns: the
-chair you bought, the job you finished. Small changes — money, the bag, the
-pantry, quest steps — are simply sent late. Fields that are published whole,
-like the flags, friendships and cats, are sent as the *difference* you made, on
-top of whatever the books say by then, so coming back doesn't undo what the
-others did while you were away (`src/net/merge.js`).
+Nothing in the books is ever sent whole. When the game edits a field — sets a
+flag, warms a friendship, feeds a cat — the client compares it with the last
+thing the server said it was and sends only the difference: this key, this
+cat's hunger, this much more reputation (`src/net/diff.js`). The server applies
+each in arrival order, so two people changing different parts of the same
+field in the same second both get what they did, and the owner's end-of-day
+write of the cats can't undo an adoption made a moment before.
+
+That is also why what you do while it says OFFLINE can be kept and sent when
+the link returns — the chair you bought, the job you finished. Every change is
+a small one, and a small change applies as well late as it would have on time,
+on top of whatever the others did while you were away.
 
 **If a machine can't hold a socket open.** Some can't — macOS Screen Time's
 Content & Privacy Restrictions is the one this was written for. The filter lets

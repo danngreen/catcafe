@@ -31,6 +31,15 @@ export const FIELDS = new Set([
   'deliveries', 'deliveriesRun', 'bear',
 ]);
 
+function isPlain(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+
+/** A key a client may name. Not one that would reach into the object itself. */
+function safeKey(key) {
+  if (typeof key !== 'string' || !key || key.length > 200) return null;
+  if (key === '__proto__' || key === 'constructor' || key === 'prototype') return null;
+  return key;
+}
+
 /**
  * Apply one operation. Returns the names of the fields it changed, so the room
  * knows what to echo; an unknown or malformed op changes nothing.
@@ -114,6 +123,62 @@ export function applyOp(world, op) {
       if ((world.questStep[id] || 0) >= n) return [];
       world.questStep[id] = n;
       return ['questStep'];
+    }
+    // Parts of a field, so that two people changing different parts of it both
+    // get what they did. Clients work these out by comparing a field they have
+    // touched with what we last told them it was — see src/net/diff.js.
+    case 'add': {                          // so much more of a tally
+      const k = String(op.k || '');
+      const d = Number(op.d);
+      if (!FIELDS.has(k) || !Number.isFinite(d) || !d) return [];
+      if (typeof world[k] !== 'number' && world[k] != null) return [];
+      world[k] = (world[k] || 0) + d;
+      return [k];
+    }
+    case 'put': {                          // one key of a map
+      const k = String(op.k || '');
+      const key = safeKey(op.key);
+      if (!FIELDS.has(k) || key === null || op.v === undefined) return [];
+      if (world[k] == null) world[k] = {};
+      if (!isPlain(world[k])) return [];
+      world[k][key] = op.v;
+      return [k];
+    }
+    case 'del': {
+      const k = String(op.k || '');
+      const key = safeKey(op.key);
+      if (!FIELDS.has(k) || key === null || !isPlain(world[k]) || !(key in world[k])) return [];
+      delete world[k][key];
+      return [k];
+    }
+    case 'item': {                         // one member of a list, by its id
+      const k = String(op.k || '');
+      const v = op.v;
+      if (!FIELDS.has(k) || !isPlain(v) || v.id == null) return [];
+      if (world[k] == null) world[k] = [];
+      if (!Array.isArray(world[k])) return [];
+      const i = world[k].findIndex((x) => x && x.id === v.id);
+      if (i >= 0) world[k][i] = v; else world[k].push(v);
+      return [k];
+    }
+    case 'patch': {                        // some parts of one member
+      const k = String(op.k || '');
+      if (!FIELDS.has(k) || !Array.isArray(world[k]) || !isPlain(op.f)) return [];
+      // Gone in the meantime — sold, or lapsed. A change to it is moot, and
+      // must not bring it back.
+      const it = world[k].find((x) => x && x.id === op.id);
+      if (!it) return [];
+      for (const [key, val] of Object.entries(op.f)) {
+        if (key !== 'id' && safeKey(key) !== null) it[key] = val;
+      }
+      return [k];
+    }
+    case 'itemDel': {
+      const k = String(op.k || '');
+      if (!FIELDS.has(k) || !Array.isArray(world[k])) return [];
+      const before = world[k].length;
+      world[k] = world[k].filter((x) => !(x && x.id === op.id));
+      return world[k].length === before ? [] : [k];
     }
     case 'set': {
       const k = String(op.k || '');
