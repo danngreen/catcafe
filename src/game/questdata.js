@@ -28,9 +28,9 @@ export const QUESTS = [
     id: 'honey_run',
     title: 'A Jar of Sunlight',
     giver: 'dough',
-    desc: "Dough wants a jar of Clover's honey from Oakhollow to work into a scone recipe.",
+    desc: "Dough wants a jar of Clover's honey from Oakhollow to use in a scone recipe.",
     objective: { type: 'item', item: 'honey', count: 1 },
-    progress: 'Buy a jar of honey from the beekeeper in Oakhollow. Follow the road east and then north, and look for the very large tree.',
+    progress: 'Buy a jar of honey from the beekeeper in Oakhollow.',
     reward: {
       money: 140,
       flags: ['recipe_honey'],
