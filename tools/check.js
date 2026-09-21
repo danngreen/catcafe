@@ -284,7 +284,9 @@ async function dropValley(id) {
 }
 
 async function main() {
-  const server = BASE ? null : await ownServer();
+  // A page of somebody else's (--url, which is how the editor's tests use
+  // this) needs no game served.
+  const server = BASE || args.includes('--url') ? null : await ownServer();
   process.on('exit', () => { if (server) server.kill(); });
 
   const chrome = spawn(CHROME, [
@@ -442,13 +444,13 @@ async function main() {
     await send('Page.navigate', { url });
 
     // Wait for the scenario to say it has finished rather than sleeping out
-    // its budget. Polling costs one tiny evaluate every 250ms and saves whole
+    // its budget. Polling costs one tiny evaluate every 60ms and saves whole
     // minutes across a sweep.
     const budget = forcedMs ?? BUDGET[sc] ?? DEFAULT_MS;
     const started = Date.now();
     let hung = false;
     for (;;) {
-      await sleep(250);
+      await sleep(60);
       const elapsed = Date.now() - started;
       if (elapsed >= budget) { hung = true; break; }
       const done = await send('Runtime.evaluate',

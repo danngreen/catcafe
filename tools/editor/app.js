@@ -361,12 +361,24 @@ function questForm(box) {
     stepBox.textContent = '';
     const single = !q.steps;
     if (single) {
-      stepBox.append(stepCard({ objective: q.objective, progress: q.progress, progressWhen: q.progressWhen },
+      // A quest with one step keeps that step's fields on the quest itself, so
+      // the card is given a view straight onto them rather than a copy. With a
+      // copy, anything typed into the card changed the copy: "If they ask how
+      // it is going" could be edited, saved, and come back exactly as it was,
+      // because the only thing that ever carried the copy back to the quest
+      // was redrawing the card — which typing, rightly, does not do.
+      const view = {
+        get objective() { return q.objective; },
+        set objective(v) { q.objective = v; },
+        get progress() { return q.progress; },
+        set progress(v) { if (v === undefined) delete q.progress; else q.progress = v; },
+        get progressWhen() { return q.progressWhen; },
+        set progressWhen(v) { if (v && v.length) q.progressWhen = v; else delete q.progressWhen; },
+      };
+      stepBox.append(stepCard(view,
         0, 1, {
-          onChange: (s) => {
-            q.objective = s.objective; q.progress = s.progress;
-            q.progressWhen = s.progressWhen?.length ? s.progressWhen : undefined;
-          },
+          single: true,
+          onChange: () => {},
           split: () => {
             q.steps = [{ objective: q.objective, progress: q.progress, progressWhen: q.progressWhen },
               { objective: { type: 'talk', to: q.giver } }];
@@ -452,8 +464,12 @@ function stepCard(step, i, total, opts) {
       }
     }
     body.append(row);
-    body.append(field('Journal note', text(step.note, (v) => { step.note = v || undefined; }),
-      'The short line in the journal — "Look at the hedge, after dark".'));
+    // Only a quest written out as steps has a journal note per step; on a
+    // one-step quest the field had nowhere to be kept and quietly kept nothing.
+    if (!opts.single) {
+      body.append(field('Journal note', text(step.note, (v) => { step.note = v || undefined; }),
+        'The short line in the journal — "Look at the hedge, after dark".'));
+    }
     body.append(field('If they ask how it is going', text(step.progress, (v) => { step.progress = v || undefined; }, { long: true }),
       'What the giver says while it is unfinished.'));
     if (total > 1) {

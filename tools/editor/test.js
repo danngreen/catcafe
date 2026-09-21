@@ -256,6 +256,32 @@ if (!quick) {
         multi.click();
         if (document.querySelectorAll('.step').length < 2) out.push('a multi-step quest drew fewer than two steps');
       }
+      // A quest with one step keeps what is typed into that step. The answer
+      // is read from what the page would send if Save were pressed now.
+      const single = [...document.querySelectorAll('#list li')].find((r) => r.textContent.includes('Jar of Sunlight'));
+      if (!single) out.push('no one-step quest to try');
+      else {
+        single.click();
+        const label = [...document.querySelectorAll('#form label, #form .field')]
+          .find((el) => el.textContent.includes('If they ask how it is going'));
+        const area = label && label.querySelector('textarea');
+        if (!area) out.push('no "how it is going" box on a one-step quest');
+        else {
+          area.value = 'PROBE how it is going';
+          area.dispatchEvent(new Event('input', { bubbles: true }));
+          let sent = null;
+          const realFetch = window.fetch;
+          window.fetch = (url, init) => { sent = init && init.body; return realFetch(url, init); };
+          const checkBtn = [...document.querySelectorAll('button')].find((b) => /^check/i.test(b.textContent.trim()));
+          if (checkBtn) checkBtn.click();
+          window.fetch = realFetch;
+          if (!sent) out.push('could not see what the page would save');
+          else {
+            const q = JSON.parse(sent).quests.find((x) => x.id === 'honey_run');
+            if (!q || q.progress !== 'PROBE how it is going') out.push('typed into a one-step quest and it was not kept: ' + (q && q.progress));
+          }
+        }
+      }
       // And the flag boxes offer what exists.
       if (!document.getElementById('flags-known')) out.push('no list of known flags');
       out.length ? out.join('; ') : 'ok';
