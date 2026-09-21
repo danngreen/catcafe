@@ -328,6 +328,11 @@ class Game {
       if (net.world && this.mode === 'play') st.adopt(net.world, net.clock);
       // Anything done while the line was down has just been sent after us, and
       // comes back as ordinary syncs on top of what we adopted above.
+      // Still holding a plan of the cafe: make sure it is still ours to hold.
+      const building = this.buildScreen;
+      if (building) {
+        net.requestBuild().then((res) => { if (!res.ok && !building.done) building.abandon(res.by); });
+      }
       this.hud.toast(net.caughtUp ? 'Back in the valley — what you did while away has been kept.'
         : 'Back in the valley.', 'good');
     });
@@ -354,6 +359,12 @@ class Game {
     });
     // The server asking for a morning's books that never arrived: whoever ran
     // the cafe was away when the day turned, and it is ours to do now.
+    // Our turn at rearranging the cafe went to somebody else: we were away too
+    // long. The plan is dropped, and what it had picked up goes back in the bag.
+    net.on('buildlost', (by) => {
+      const b = this.buildScreen;
+      if (b) b.abandon(by);
+    });
     net.on('cashup', (m) => this.onNewDay({ shared: true, day: m.day }));
     net.on('summary', (s) => this.showSummary(s));
     // Whoever runs the sim owns the customers. The new owner carries on with
@@ -782,8 +793,28 @@ class Game {
   push(s) { this.screens.push(s); }
   get topScreen() { return this.screens[this.screens.length - 1]; }
 
+  /**
+   * One person rearranges the cafe at a time, so in a shared valley this asks
+   * first. The answer is a round trip away; the screen opens when it comes.
+   */
   openBuildMode() {
-    this.push(new BuildScreen(this));
+    // Alone there is nobody to ask, and the screen opens at once as it always has.
+    if (!net.everConnected) { this.push(new BuildScreen(this)); return; }
+    if (this.openingBuild) return;
+    this.openingBuild = true;
+    net.requestBuild().then((res) => {
+      this.openingBuild = false;
+      if (res.ok) { this.push(new BuildScreen(this)); return; }
+      audio.sfx('ui_back', { gain: 0.6 });
+      this.hud.toast(res.by ? `${res.by} is rearranging the cafe — one at a time.`
+        : 'The cafe can\'t be rearranged while the valley is out of reach.', 'warn', 5);
+    });
+  }
+
+  /** The build screen, if it is open. */
+  get buildScreen() {
+    for (const s of this.screens) if (s instanceof BuildScreen) return s;
+    return null;
   }
 
   save() {

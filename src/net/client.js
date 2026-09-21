@@ -374,6 +374,17 @@ export class NetClient {
       case 'serve':
         this.emit('serve', msg);
         break;
+      // The answer to asking to rearrange the cafe — or, unasked, the news
+      // that our turn at it has been given to somebody else.
+      case 'build':
+        if (this.buildWait) {
+          const done = this.buildWait;
+          this.buildWait = null;
+          done({ ok: !!msg.ok, by: msg.by || null });
+        } else if (!msg.ok) {
+          this.emit('buildlost', msg.by || null);
+        }
+        break;
       // A morning that went by without anybody doing the books.
       case 'cashup':
         this.emit('cashup', msg);
@@ -550,6 +561,33 @@ export class NetClient {
     if (!world) return;
     for (const k of Object.keys(world)) this.baseJson[k] = JSON.stringify(world[k]);
   }
+
+  /**
+   * Ask to be the one rearranging the cafe. One at a time: a plan is laid over
+   * the cafe whole when it is finished, and a second one drawn up meanwhile
+   * would flatten the first. Resolves { ok, by } — `by` is who has it, or null
+   * if the trouble is that the valley can't be reached to ask.
+   *
+   * Alone there is nobody to ask and nobody to collide with.
+   */
+  requestBuild(timeoutMs) {
+    if (!this.everConnected) return Promise.resolve({ ok: true, by: null });
+    if (!this.shared) return Promise.resolve({ ok: false, by: null });
+    return new Promise((resolve) => {
+      if (this.buildWait) this.buildWait({ ok: false, by: null });
+      const timer = setTimeout(() => {
+        if (this.buildWait === done) { this.buildWait = null; resolve({ ok: false, by: null }); }
+      }, timeoutMs || 2500);
+      const done = (res) => { clearTimeout(timer); resolve(res); };
+      this.buildWait = done;
+      this.send({ t: 'build', on: true });
+    });
+  }
+
+  releaseBuild() { if (this.shared) this.send({ t: 'build', on: false }); }
+
+  /** In a valley, and unable to reach it just now. */
+  get offline() { return this.everConnected && !this.shared; }
 
   /** Offer the world we just built. The server keeps only the first offer. */
   seedWorld(world, clock) {

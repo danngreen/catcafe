@@ -5694,6 +5694,58 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!g.net.connected || !g.net.joined) window.__errors.push('never came back: ' + window.__drop);
         if (st.money !== before - 100) window.__errors.push('missed what happened while away: ' + window.__drop);
         bot.close();
+      } else if (SCRIPT === 'netbuildlock') {
+        // One person rearranges the cafe at a time. A plan is laid over the
+        // cafe whole when it is finished, so two drawn up at once meant the
+        // second flattened the first, furniture and all.
+        const st = g.state;
+        const { BuildScreen } = await import('../src/ui/build.js');
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const bot = new WebSocket(`${proto}//${location.host}/ws`);
+        const answers = [];
+        let synced = 0;
+        bot.onmessage = (ev) => {
+          const m = JSON.parse(ev.data);
+          if (m.t === 'welcome') bot.send(JSON.stringify({ t: 'join', name: 'Mason', look: st.playerLook, x: 0, y: 0, map: 'overworld' }));
+          if (m.t === 'build') answers.push(m);
+          if (m.t === 'sync' && m.k === 'cafe') synced++;
+        };
+        const ask = async (on) => { bot.send(JSON.stringify({ t: 'build', on })); await wait(400); return answers[answers.length - 1]; };
+        const open = () => g.screens.some((sc) => sc instanceof BuildScreen);
+        await wait(900);
+        // Mason has it: we are told so, and no plan opens.
+        const first = await ask(true);
+        g.hud.toasts.length = 0;
+        g.openBuildMode();
+        await wait(700);
+        const refused = !open();
+        const told = g.hud.toasts.some((t) => /Mason is rearranging/.test(t.text));
+        // He finishes: now it opens, and he is the one turned away.
+        await ask(false);
+        g.openBuildMode();
+        await wait(700);
+        const opened = open();
+        const his = await ask(true);
+        // While we hold it, a layout from him goes nowhere.
+        const chairs = st.cafe.furniture.length;
+        bot.send(JSON.stringify({ t: 'op', op: 'put', k: 'cafe', key: 'furniture', v: [] }));
+        await wait(500);
+        const held = st.cafe.furniture.length === chairs;
+        // We finish, and it is his for the asking.
+        const screen = g.screens.find((sc) => sc instanceof BuildScreen);
+        if (screen) screen.finish();
+        await wait(500);
+        const after = await ask(true);
+        window.__lock = `bot=${first && first.ok} refused=${refused} told=${told} opened=${opened}`
+          + ` botWhileOurs=${his && his.ok}/${his && his.by} held=${held} botAfter=${after && after.ok}`;
+        if (!first || !first.ok) window.__errors.push('the bot never got the cafe, so nothing was tested: ' + window.__lock);
+        if (!refused) window.__errors.push('a second plan opened while somebody had the cafe: ' + window.__lock);
+        if (!told) window.__errors.push('not told who has the cafe: ' + window.__lock);
+        if (!opened) window.__errors.push('could not rearrange a cafe nobody else had: ' + window.__lock);
+        if (!his || his.ok) window.__errors.push('the cafe was given out twice: ' + window.__lock);
+        if (!held) window.__errors.push('a layout from somebody without the cafe was taken: ' + window.__lock);
+        if (!after || !after.ok) window.__errors.push('finishing did not give the cafe up: ' + window.__lock);
+        bot.close();
       } else if (SCRIPT === 'netoffline') {
         // Things done while the link is down. The game changes its own books
         // first and coming back takes the server's wholesale, so these used to

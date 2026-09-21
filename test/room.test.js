@@ -197,3 +197,81 @@ test('a morning cashed up on time is never asked for', (t) => {
   assert.equal(a.count('cashup'), 0);
   assert.equal(room.cashedDay, 2);
 });
+
+// ------------------------------------------------------ rearranging the cafe
+
+const CAFE = { rooms: [{ x: 0, y: 0, w: 5, h: 5 }], furniture: [] };
+
+function building(t) {
+  const s = setup(t);
+  const a = s.join('Ada', 'wa');
+  const b = s.join('Bea', 'wb');
+  a.say({ t: 'seedworld', world: { ...WORLD, cafe: CAFE }, clock: { day: 1, t: 100 } });
+  s.pass(1000, [a, b]);
+  return { ...s, a, b };
+}
+
+test('one person rearranges the cafe at a time', (t) => {
+  const { room, a, b } = building(t);
+  a.say({ t: 'build', on: true });
+  assert.equal(a.last('build').ok, true);
+  b.say({ t: 'build', on: true });
+  assert.deepEqual(b.last('build'), { t: 'build', ok: false, by: 'Ada' });
+  // And a layout from anybody else is turned away, and they are put right.
+  b.say({ t: 'op', op: 'put', k: 'cafe', key: 'furniture', v: [{ type: 'sofa', x: 1, y: 1 }] });
+  assert.deepEqual(room.world.cafe.furniture, []);
+  assert.deepEqual(b.last('sync'), { t: 'sync', k: 'cafe', v: room.world.cafe });
+  // Ada's goes in; then it is Bea's turn.
+  a.say({ t: 'op', op: 'put', k: 'cafe', key: 'furniture', v: [{ type: 'chair', x: 2, y: 2 }] });
+  a.say({ t: 'build', on: false });
+  assert.equal(room.world.cafe.furniture[0].type, 'chair');
+  b.say({ t: 'build', on: true });
+  assert.equal(b.last('build').ok, true);
+});
+
+test('a builder who drops keeps their place, for a while', (t) => {
+  const { room, pass, join, a, b } = building(t);
+  a.say({ t: 'build', on: true });
+  a.close();
+  pass(5000, [b]);
+  b.say({ t: 'build', on: true });
+  assert.equal(b.last('build').ok, false);
+  const a2 = join('Ada', 'wa');
+  a2.say({ t: 'build', on: true });
+  assert.equal(a2.last('build').ok, true, 'back, and it is still hers');
+  a2.say({ t: 'op', op: 'put', k: 'cafe', key: 'furniture', v: [{ type: 'chair', x: 2, y: 2 }] });
+  assert.equal(room.world.cafe.furniture.length, 1);
+});
+
+test('but their place is not kept for ever', (t) => {
+  const { pass, a, b } = building(t);
+  a.say({ t: 'build', on: true });
+  a.close();
+  pass(31000, [b]);
+  b.say({ t: 'build', on: true });
+  assert.equal(b.last('build').ok, true);
+});
+
+test('nor at all if they left on purpose', (t) => {
+  const { a, b } = building(t);
+  a.say({ t: 'build', on: true });
+  a.say({ t: 'bye' });
+  a.close();
+  b.say({ t: 'build', on: true });
+  assert.equal(b.last('build').ok, true);
+});
+
+test('a plan left open in a tab nobody is looking at can be taken over', (t) => {
+  const { pass, a, b } = building(t);
+  a.say({ t: 'build', on: true });
+  pass(31000, [b]);                    // Ada is connected, but her tab is hidden
+  b.say({ t: 'build', on: true });
+  assert.equal(b.last('build').ok, true);
+  assert.deepEqual(a.last('build'), { t: 'build', ok: false, by: 'Bea' }, 'and she is told');
+});
+
+test('with nobody rearranging, anybody may write the layout', (t) => {
+  const { room, b } = building(t);
+  b.say({ t: 'op', op: 'put', k: 'cafe', key: 'wall', v: '#fff' });
+  assert.equal(room.world.cafe.wall, '#fff');
+});

@@ -159,6 +159,17 @@ each in arrival order, so two people changing different parts of the same
 field in the same second both get what they did, and the owner's end-of-day
 write of the cats can't undo an adoption made a moment before.
 
+The one thing that can't be sent as small differences is the cafe's layout: a
+plan is drawn up on a copy and laid over the cafe whole when you finish, and
+two plans have no honest combination — two sofas on one tile, a chair in a room
+the other plan knocked down. So **one person rearranges the cafe at a time.**
+The server gives out the turn; anybody else who opens build mode is told who
+has it, and a layout from anyone without the turn is turned away. Drop off the
+network mid-plan and your turn is kept for thirty seconds; leave a plan open in
+a tab nobody is looking at for longer than that and somebody else can take it,
+in which case your plan is put away and the furniture it had picked up goes
+back in the bag. `/status` shows the `builder`.
+
 That is also why what you do while it says OFFLINE can be kept and sent when
 the link returns — the chair you bought, the job you finished. Every change is
 a small one, and a small change applies as well late as it would have on time,

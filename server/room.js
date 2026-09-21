@@ -29,6 +29,10 @@ const FRAME_STALE_MS = 5_000;
 // come back before giving the cafe to somebody else. A wifi blip is two or
 // three seconds, and a handover is the more disruptive of the two.
 const OWNER_GRACE_MS = 10_000;
+// Somebody rearranging the cafe who drops off the network is holding a plan
+// with half the furniture picked up. Keep their place for this long; after
+// that somebody else may have it.
+const BUILD_HOLD_MS = 30_000;
 // How long to wait for the morning's books before asking for them again.
 const CASHUP_RETRY_MS = 4_000;
 
@@ -48,6 +52,12 @@ export class Room {
     // know to ask again rather than letting the day go unpaid.
     this.cashedDay = this.clock.day;
     this.cashAskedAt = 0;
+    // Who is rearranging the cafe, if anybody: { id, who, name, goneAt }. One
+    // at a time. A plan is drawn up on a copy and laid over the cafe whole when
+    // it is finished, so two drawn up at once means the second flattens the
+    // first — and there is no honest way to combine them: two sofas on one
+    // tile, a chair in a room the other plan knocked down.
+    this.builder = null;
     this.dirty = false;
     this.lastTick = Date.now();
     this.sinceClock = 0;
@@ -99,6 +109,10 @@ export class Room {
       if (this.owner === player.id && player.who && !ws.leftOnPurpose && this.count) {
         this.ownerGrace = { who: player.who, until: Date.now() + OWNER_GRACE_MS };
       }
+      if (this.builder && this.builder.id === player.id) {
+        if (ws.leftOnPurpose || !player.who) this.builder = null;
+        else this.builder.goneAt = Date.now();
+      }
       this.chooseOwner();
       this.announcePresence();
       if (!this.count) this.persist();     // the last one out saves the valley
@@ -147,6 +161,11 @@ export class Room {
         player.frameAt = Date.now();
         // The same person on a new connection keeps the cafe they were running.
         if (tookOver) this.setOwner(player.id);
+        // And the plan they were in the middle of.
+        if (this.builder && player.who && this.builder.who === player.who) {
+          this.builder.id = player.id;
+          this.builder.goneAt = null;
+        }
         this.broadcast({ t: 'joined', p: Room.describe(player) }, player.id);
         // They may not have got the name they asked for.
         player.ws.sendJSON({ t: 'youare', name: player.name });
@@ -188,8 +207,39 @@ export class Room {
         this.broadcast({ t: 'world', world: this.world, clock: this.clock.save() }, player.id);
         break;
       }
+      // Asking to rearrange the cafe, or saying they have finished.
+      case 'build': {
+        if (!player.joined) break;
+        if (!msg.on) {
+          if (this.builder && this.builder.id === player.id) this.builder = null;
+          break;
+        }
+        const b = this.builder;
+        const holder = b && this.players.get(b.id);
+        const theirs = b && (b.id === player.id || (player.who && b.who === player.who));
+        // Free, or ours already, or held by somebody who isn't there to use
+        // it: gone past their time, or a tab nobody has looked at for a while.
+        const lapsed = b && !theirs && (holder
+          ? Date.now() - holder.frameAt > BUILD_HOLD_MS
+          : Date.now() - (b.goneAt || 0) > BUILD_HOLD_MS);
+        if (b && !theirs && !lapsed) {
+          player.ws.sendJSON({ t: 'build', ok: false, by: b.name });
+          break;
+        }
+        if (lapsed && holder) holder.ws.sendJSON({ t: 'build', ok: false, by: player.name });
+        this.builder = { id: player.id, who: player.who, name: player.name, goneAt: null };
+        player.ws.sendJSON({ t: 'build', ok: true });
+        break;
+      }
       case 'op': {
         if (!this.world) break;
+        // The cafe's layout belongs to whoever is rearranging it. Anybody
+        // else's write is turned away and they are told what the cafe really
+        // looks like, so their screen and the books agree again.
+        if (msg.k === 'cafe' && this.builder && this.builder.id !== player.id) {
+          player.ws.sendJSON({ t: 'sync', k: 'cafe', v: this.world.cafe });
+          break;
+        }
         const changed = applyOp(this.world, msg);
         if (!changed.length) break;
         this.dirty = true;
@@ -330,6 +380,7 @@ export class Room {
       money: this.world ? this.world.money : null,
       owner: this.owner,
       cashedDay: this.cashedDay,
+      builder: this.builder ? this.builder.name : null,
       sockets: this.players.size,
       playing: this.count,
       players: [...this.players.values()].map((p) => ({
@@ -428,6 +479,10 @@ export class Room {
     if (this.ownerGrace ? now >= this.ownerGrace.until
       : (joined.length && (!owner || now - owner.frameAt >= FRAME_STALE_MS))) {
       this.chooseOwner();
+    }
+
+    if (this.builder && this.builder.goneAt && now - this.builder.goneAt > BUILD_HOLD_MS) {
+      this.builder = null;
     }
 
     // A morning nobody has cashed up: the owner was away when it came, or

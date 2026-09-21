@@ -76,6 +76,9 @@ export class BuildScreen extends Screen {
     this.draft = JSON.parse(JSON.stringify(st.cafe));
     this.spentMoney = 0;
     this.spentMaterials = 0;
+    // What this plan has taken out of the bag and put back, so that a plan
+    // which has to be dropped can leave the bag as it found it.
+    this.bagDelta = {};
     this.modes = ALL_MODES.filter((m) => st.workers > 0 || !CREW_ONLY.has(m));
     this.mode = 0;
     this.cur = { x: 0, y: 0 };
@@ -151,6 +154,9 @@ export class BuildScreen extends Screen {
   // --------------------------------------------------------------- update
 
   update(dt, input) {
+    // Dropped from under us while a confirmation sat on top: nothing pressed
+    // now may build it.
+    if (this.done) return;
     this.t += dt;
     if (this.msgT > 0) this.msgT -= dt;
     const st = this.game.state;
@@ -312,6 +318,7 @@ export class BuildScreen extends Screen {
     const key = invKey(id, f.variant || 0);
     st.inventory[key] = (st.inventory[key] || 0) + 1;
     st.pub({ op: 'inv', key, d: 1 });
+    this.bagDelta[key] = (this.bagDelta[key] || 0) + 1;
   }
 
   takeFurniture(id) {
@@ -319,6 +326,7 @@ export class BuildScreen extends Screen {
     st.inventory[id]--;
     if (st.inventory[id] <= 0) delete st.inventory[id];
     st.pub({ op: 'inv', key: id, d: -1 });
+    this.bagDelta[id] = (this.bagDelta[id] || 0) - 1;
   }
 
   updateFurnish(dt, input) {
@@ -463,13 +471,41 @@ export class BuildScreen extends Screen {
     return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
   }
 
+  /**
+   * Drop the plan without building it: somebody else has the cafe now. The
+   * furniture it moved between the bag and the floor goes back where it was,
+   * since the floor it was moved to or from is not going to exist.
+   */
+  abandon(by) {
+    if (this.done) return;
+    const st = this.game.state;
+    for (const key of Object.keys(this.bagDelta)) {
+      const d = -this.bagDelta[key];
+      if (!d) continue;
+      const n = (st.inventory[key] || 0) + d;
+      if (n > 0) st.inventory[key] = n; else delete st.inventory[key];
+      st.pub({ op: 'inv', key, d });
+    }
+    this.done = true;
+    audio.sfx('ui_back', { gain: 0.7 });
+    st.toast(by ? `You were away too long — ${by} is rearranging the cafe now. Your plan was put away.`
+      : 'Your plan for the cafe was put away.', 'warn');
+  }
+
   finish() {
     const st = this.game.state;
+    // Built while out of reach, this would be sent later to a cafe that may
+    // by then be somebody else's to rearrange. Wait for the valley.
+    if (st.net && st.net.offline) {
+      this.flash('Out of reach of the valley — wait a moment to finish.', true);
+      return;
+    }
     st.spend(this.spentMoney);
     st.materials -= this.spentMaterials;
     st.touch('materials');
     st.cafe = this.draft;
     st.touch('cafe');
+    if (st.net) st.net.releaseBuild();
     st.rebuildCafe();
     this.done = true;
     audio.sfx('levelup', { gain: 0.7 });
