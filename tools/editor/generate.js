@@ -16,7 +16,7 @@ const ORDER = [
   'note', 'desc', 'cat', 'icon', 'glyph', 'colour',
   'when', 'night', 'regular', 'visitChance', 'seat', 'spot', 'ghost', 'sells',
   'tellsFirst', 'requires', 'secret', 'arrives',
-  'objective', 'steps', 'evidence', 'progress', 'progressWhen', 'reward',
+  'objective', 'steps', 'progress', 'progressWhen', 'reward',
   'offer', 'complete', 'done', 'lines', 'hint', 'sold',
 ];
 

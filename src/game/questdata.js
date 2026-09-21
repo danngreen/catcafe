@@ -83,8 +83,9 @@ export const QUESTS = [
     steps: [
       {
         note: 'Ask around in Saltmere for a spiral seashell.',
-        objective: { type: 'deliver', item: 'seashell', to: 'anchor' },
-        evidence: 'seashell_acquired',
+        objective: { type: 'talk', to: 'anchor' },
+        gives: [['seashell', 1]],
+        sets: ['seashell_acquired'],
         progress: 'Someone in Saltmere has to have a spiral seashell lying around. They live on the beach for goodness sake, they probably have shells lining their gardens.',
         done: 'Anchor had a spiral seashell they were willing to part with as a kindness.',
       },
@@ -206,7 +207,6 @@ export const QUESTS = [
       {
         note: 'Look at the hedge at the end of the lane, after dark',
         objective: { type: 'flag', flag: 'saw_the_hedge' },
-        evidence: 'saw_the_hedge',
         progress: 'Go and look at the hedge after dark. It does nothing in daylight — I have stood there checking, repeatedly.',
         done: 'You SAW it? Ha! HA! I am not daft, then. Right. What do we do about it?',
       },
@@ -219,14 +219,12 @@ export const QUESTS = [
       {
         note: 'Read about Sir Woofers at the Reading Room in Brambleford',
         objective: { type: 'flag', flag: 'read_town_history' },
-        evidence: 'read_town_history',
         progress: 'Read the town history at the Reading Room in Brambleford. Somebody will have written about famous dog dying — somebody writes everything down.',
         done: 'Saltsouth Pier. 1800. He wore it to the opening and never came home with it.\n\nAnd Saltsouth, according to the margin, is Saltmere.',
       },
       {
         note: 'Search the mud at the end of Saltmere Pier',
         objective: { type: 'item', item: 'golden_collar', count: 1 },
-        evidence: 'got_collar',
         progress: 'Go to the end of the pier at Saltmere and search the mud under it, not on it.',
         done: 'Two hundred years in the mud, and still bright.',
       },

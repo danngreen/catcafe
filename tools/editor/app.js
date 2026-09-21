@@ -161,7 +161,6 @@ function knownFlags() {
     const steps = q.steps || [{ objective: q.objective, progressWhen: q.progressWhen }];
     for (const s of steps) {
       if (s.objective?.type === 'flag' && s.objective.flag) out.add(s.objective.flag);
-      if (s.evidence) out.add(s.evidence);
       for (const a of s.progressWhen || []) if (a.flag) out.add(a.flag);
     }
     for (const a of q.progressWhen || []) if (a.flag) out.add(a.flag);
@@ -459,9 +458,6 @@ function stepCard(step, i, total, opts) {
       'What the giver says while it is unfinished.'));
     if (total > 1) {
       body.append(field('On finishing this step', text(step.done, (v) => { step.done = v || undefined; }, { long: true })));
-      body.append(field('Counts as done if this flag is set', flagBox(step.evidence, (v) => { step.evidence = v || undefined; }),
-        'For steps that consume what they ask for: once the collar is handed over you '
-        + 'are not holding it, and without this the step looks unfinished for ever.'));
     }
     body.append(conditionalNotes(step));
     opts.onChange(step);

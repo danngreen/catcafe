@@ -97,3 +97,21 @@ test('the server refuses fields it does not keep and keys that are not keys', ()
   assert.deepEqual(applyOp({ money: 5 }, { op: 'put', k: 'money', key: 'a', v: 1 }), [], 'not a map');
   assert.deepEqual(applyOp({ cats: [] }, { op: 'add', k: 'cats', d: 1 }), [], 'not a tally');
 });
+
+test('two letters posted on the same day both get a reply', () => {
+  const mine = { id: 'l1', from: 'Owl', day: 3 };
+  const theirs = { id: 'l2', from: 'Fox', day: 4 };
+  // Whichever arrives first goes first, which for letters is neither here
+  // nor there; what matters is that both are in the bag.
+  for (const order of [[mine, theirs], [theirs, mine]]) {
+    const world = { pendingLetters: [] };
+    for (const l of order) for (const op of diffOps('pendingLetters', [], [l])) applyOp(world, op);
+    assert.deepEqual(world.pendingLetters.map((l) => l.id).sort(), ['l1', 'l2']);
+  }
+});
+
+test('reading a letter takes that letter out, not the mailbag back to how we saw it', () => {
+  const a = { id: 'l1', from: 'Owl' }, b = { id: 'l2', from: 'Fox' }, c = { id: 'l3', from: 'Moth' };
+  const out = race('mail', [a, b], [b], [a, b, c]);      // we read one as another arrives
+  assert.deepEqual(out.map((l) => l.id), ['l2', 'l3']);
+});

@@ -74,6 +74,7 @@ const BUDGET = {
   netpollgone: 60000,
   netoffline: 30000,
   netbuildlock: 30000,
+  questready: 40000,
   netidle: 60000,
   netidletitle: 58000,
   netping: 68000,
@@ -89,6 +90,7 @@ const BUDGET = {
   nettitleme: 18000,
   netlobby: 26000,
   netlobbydel: 30000,
+  netlobbyback: 30000,
   netlobbyone: 14000,
   barrierreach: 16000,
   netgameone: 20000,
@@ -173,7 +175,7 @@ const BUDGET = {
 // Named sets, so a change can be checked against the things it could plausibly
 // have broken without running everything. `all` is what to run before a commit.
 const GROUPS = {
-  quests: ['ghostquest', 'deliverquest', 'journalstep', 'questrepair', 'ghoststuck',
+  quests: ['questready', 'ghostquest', 'deliverquest', 'journalstep', 'questrepair', 'ghoststuck',
     'barriers', 'nightfolk', 'nightplaces', 'questchain', 'logbook', 'hedgestuck', 'freshstones', 'questwalk', 'piercheck', 'hedgewalk', 'shellchain', 'spotcheck', 'coatgoal', 'ghosthidden', 'shellwalk', 'hintheard', 'bear', 'deliverspots', 'rugs', 'taxitime', 'snowday', 'firelight', 'confirmbox', 'bearlegs', 'cottages', 'content', 'questextras', 'regular', 'barstool'],
   cafe: ['cafe', 'takeover', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers', 'employee',
     'weathercafe', 'hourly'],
@@ -195,7 +197,7 @@ const GROUPS = {
   // and left a client connected takes it. Running it first is not a fix for
   // that — it is a way of not paying for it every sweep.
   net: ['netclock', 'net', 'netmobile', 'netbooks', 'netdrop', 'netoffline', 'netbuildlock', 'netforget',
-    'netpollbooks', 'netpollgone', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbydel', 'netlobbyone', 'netnewvalley', 'netexit', 'netbookfields', 'nettitlecontinue', 'nettitleghost', 'nettitleghostpoll', 'netghostmove', 'netghostmovepoll', 'solo'],
+    'netpollbooks', 'netpollgone', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbyback', 'netlobbydel', 'netlobbyone', 'netnewvalley', 'netexit', 'netbookfields', 'nettitlecontinue', 'nettitleghost', 'nettitleghostpoll', 'netghostmove', 'netghostmovepoll', 'solo'],
   slow: ['netidle', 'netping', 'netmute', 'netpollquiet', 'netidletitle'],
 };
 GROUPS.all = [...new Set([

@@ -405,6 +405,7 @@ export class Hud {
     drawTextRight(ctx, mtxt, VIEW_W - 10, 8, { color: pulse, shadow: P.uiShadow });
 
     // --- cafe status strip, when it matters ---
+    let stripEnd = 4;
     if (st.shopOpen) {
       const openNow = st.cafeSim.isOpen;
       const label = openNow ? 'CAFE OPEN' : 'CAFE SHUT';
@@ -414,6 +415,20 @@ export class Hud {
       ctx.fillStyle = openNow ? P.uiGreen : P.uiRed;
       ctx.fillRect(4, 34, cw, 1);
       drawText(ctx, label, 10, 36, { color: P.uiText, shadow: P.uiShadow });
+      stripEnd = 4 + cw + 3;
+    }
+
+    // --- who you are, in a valley with other people in it ---
+    // The server may have renamed you, the browser may have remembered a name
+    // from last month, and on a sofa with three tablets it is not obvious
+    // which one is yours. Alone there is nobody to be told apart from.
+    if (st.playerName && st.net && st.net.everConnected) {
+      const nw = textWidth(st.playerName) + 12;
+      ctx.fillStyle = 'rgba(30,25,45,0.86)';
+      ctx.fillRect(stripEnd, 34, nw, 12);
+      ctx.fillStyle = (st.playerLook && st.playerLook.cloth) || P.uiGold;
+      ctx.fillRect(stripEnd, 34, nw, 1);
+      drawText(ctx, st.playerName, stripEnd + 6, 36, { color: P.uiGold, shadow: P.uiShadow });
     }
 
     // --- the link, when it isn't well ---

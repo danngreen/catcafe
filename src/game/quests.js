@@ -169,24 +169,6 @@ export function progressText(q, st) {
 }
 
 /**
- * Put a job back where the world says it should be.
- *
- * A quest's step number and the state of the world can disagree — most obviously
- * because two players could once both accept the same job, which reset the count
- * under whoever was ahead. Rather than trust the number, walk the steps and skip
- * any whose objective is already satisfied: if you are holding the collar, you
- * are past the step that asks you to find it, whatever the save says.
- *
- * Only ever moves forward, and only over steps that are genuinely done, so
- * running it on a healthy save changes nothing.
- */
-/**
- * Has this step been done? Either its objective still reads as satisfied, or a
- * flag it left behind says so. The second half matters for steps that consume
- * what they asked for: once the collar is handed over you are not holding it,
- * and "are you holding the collar" is then false forever.
- */
-/**
  * The flag a job waits on before anybody will offer it, if it waits on one.
  *
  * `requires` names the flag itself. It replaced `needsHint`, which named a
@@ -197,64 +179,4 @@ export function progressText(q, st) {
  */
 export function requiredFlag(q) {
   return q.requires || (q.needsHint ? `heard_hint_${q.needsHint}` : null);
-}
-
-export function stepDone(step, st) {
-  if (step.evidence && st.flags && st.flags[step.evidence]) return true;
-  return stepMet(step.objective, st);
-}
-
-/**
- * Put back a one-off quest item the player is supposed to have and hasn't.
- *
- * Some things exist once in the whole valley — the golden collar is dug out of
- * the pier and the pier will not do it twice. If the flag says you found it,
- * the job still wants it, and it is not in your bag, then it went missing to a
- * bug and the job is unfinishable until it comes back.
- */
-export function repairLostItems(st, give) {
-  let fixed = 0;
-  for (const q of QUESTS) {
-    if (st.quests[q.id] !== 'active') continue;
-    const steps = questSteps(q);
-    const cur = steps[Math.min((st.questStep && st.questStep[q.id]) || 0, steps.length - 1)];
-    const o = cur.objective;
-    const want = o.type === 'item' || o.type === 'deliver' ? o.item : null;
-    if (!want || (st.inventory[want] || 0) > 0) continue;
-    const proof = steps.find((s) => s.evidence && s.objective.item === want);
-    if (!proof || !st.flags || !st.flags[proof.evidence]) continue;
-    give(want, 1);
-    fixed++;
-  }
-  return fixed;
-}
-
-export function repairStep(q, st) {
-  if (st.quests[q.id] !== 'active') return 0;
-  const steps = questSteps(q);
-
-  // Look for the furthest step we can *prove* has been done, and take that as
-  // where the player has got to. Scanning forward rather than walking matters:
-  // `talk` and `deliver` steps leave no trace, but a later step that has
-  // plainly been finished proves the untestable ones in between were too —
-  // you cannot be holding the collar without having met the dog who wants it.
-  let target = 0;
-  for (let i = 0; i < steps.length; i++) {
-    if (stepDone(steps[i], st)) target = i + 1;
-  }
-  // Never past the last step: finishing a job takes a conversation, and the
-  // reward and the closing scene belong to that conversation.
-  target = Math.min(target, steps.length - 1);
-
-  const from = (st.questStep && st.questStep[q.id]) || 0;
-  if (target <= from) return 0;
-  st.setQuestStep(q.id, target);
-  return target - from;
-}
-
-/** Repair every job in play. Returns how many were moved on. */
-export function repairAllSteps(st) {
-  let moved = 0;
-  for (const q of QUESTS) if (repairStep(q, st) > 0) moved++;
-  return moved;
 }

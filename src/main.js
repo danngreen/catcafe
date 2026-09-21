@@ -37,8 +37,8 @@ import {
   timeFraction, timeLeft, expired,
 } from './game/deliveries.js';
 import { BOOK_BY_ID } from './world/places.js';
-import { QUESTS, QUESTS_BY_GIVER, objectiveMet, questSteps, currentStep, repairLostItems,
-  stepIndex, isLastStep, progressText, objectiveText, repairAllSteps, requiredFlag } from './game/quests.js';
+import { QUESTS, QUESTS_BY_GIVER, objectiveMet, questSteps, currentStep,
+  stepIndex, isLastStep, progressText, objectiveText, requiredFlag } from './game/quests.js';
 
 import { Dialogue, Hud, Fader, panel, panelTitle, dim, cursor } from './ui/core.js';
 import { SAFE, safeCenterX } from './engine/safe.js';
@@ -310,6 +310,21 @@ class Game {
     return ok;
   }
 
+  /**
+   * Out of the valley whose title screen this is, and back to the list of
+   * them. Hangs up, so the server stops counting us as somebody in the lobby
+   * for it — which is also what stops it being deleted.
+   */
+  backToLobby() {
+    try { net.leave(); } catch { /* going anyway */ }
+    net.gameId = null;
+    this.titleScreen = null;
+    const lobby = new LobbyScreen(this, this.lobbyGames || []);
+    this.screens.length = 0;
+    this.screens.push(lobby);
+    lobby.refresh();
+  }
+
   wireNet() {
     const st = this.state;
     st.net = net;
@@ -350,10 +365,13 @@ class Game {
       if (this.mode !== 'play') return;
       st.adopt(world, clock);
       this.applyClearedBarriers();
-      this.repairQuests();
+      this.refreshQuestMarks();
     });
     net.on('clock', (c) => { st.clock.day = c.day; st.clock.t = c.t; });
     net.on('newday', (m) => {
+      // Connected to a valley is not in it. Somebody still choosing between
+      // Resume and New has no day to be told the end of.
+      if (this.mode !== 'play') return;
       if (m.by) this.hud.toast(`${m.by} slept until morning.`, 'info');
       this.onNewDay({ slept: !!m.by, shared: true, day: m.day });
     });
@@ -366,7 +384,10 @@ class Game {
       if (b) b.abandon(by);
     });
     net.on('cashup', (m) => this.onNewDay({ shared: true, day: m.day }));
-    net.on('summary', (s) => this.showSummary(s));
+    // Only for somebody in the valley. Everybody connected is sent the morning
+    // card, and one left on the title screen past midnight used to have the
+    // takings of a cafe they had not yet walked into put up over it.
+    net.on('summary', (s) => { if (this.mode === 'play') this.showSummary(s); });
     // Whoever runs the sim owns the customers. The new owner carries on with
     // the copies it was already drawing; everybody else's copies are simply
     // overwritten by the next thing it publishes.
@@ -753,7 +774,7 @@ class Game {
     this.announce();
     this.hud.toast('Welcome back.', 'good');
     this.applyClearedBarriers();
-    this.repairQuests();
+    this.refreshQuestMarks();
   }
 
   /** Tell the session who we are and where we're standing. */
@@ -770,7 +791,7 @@ class Game {
       this.maps.set('cafe', st.cafeMap);
       this.joinedExisting = true;
       this.applyClearedBarriers();
-      this.repairQuests();
+      this.refreshQuestMarks();
     } else {
       net.seedWorld(st.snapshot(), st.clock.save());
     }
@@ -2292,6 +2313,10 @@ class Game {
         audio.sfx('wing', { gain: 0.7 });
         // They'll write back in a day or two, sometimes with something in the envelope.
         st.pendingLetters.push({
+          // Its own name, so a letter is sent and read as one letter. Without
+          // it the whole mailbag is published at once, and two people posting
+          // on the same day lose one of the replies.
+          id: `l${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`,
           from: name,
           day: st.clock.day + 1 + Math.floor(Math.random() * 2),
           text: replyText(name),
@@ -2413,6 +2438,10 @@ class Game {
           audio.sfx('quest', { gain: 0.7 });
           this.hud.toast(`New in your journal: ${q.title}`, 'good');
           this.refreshQuestMarks();
+          // Asked for something you have already done — four cats, with five
+          // at home. Say so now, rather than leaving them stood there with a
+          // mark over their head, asking for it, until you talk to them again.
+          if (this.stepReady(q)) { v.talking = true; this.advanceQuest(q, v, finish, currentStep(q, st)); }
         },
       });
       v.hasQuestMark = false;
@@ -2513,11 +2542,46 @@ class Game {
    * this step ends with, and handing over anything the next one needs — or, if
    * that was the last, finish the whole thing.
    */
+  /**
+   * A job that ends in "bring me one" ends with them having it. Only the last
+   * step: an `item` step earlier in a job is "go and get one", and the thing
+   * is still wanted — to deliver, or to leave in a stone circle — later on.
+   * `keep: true` on the objective is for a job where showing it is enough.
+   */
+  handOver(step) {
+    const o = step && step.objective;
+    if (!o || o.type !== 'item' || o.keep) return;
+    this.state.take(o.item, o.count || 1);
+  }
+
+  /** Is the step in play one that is done and only wants reporting? */
+  stepReady(q) {
+    const st = this.state;
+    if (st.quests[q.id] !== 'active') return false;
+    const o = currentStep(q, st).objective;
+    return o.type !== 'deliver' && o.type !== 'talk' && objectiveMet(q, st);
+  }
+
   advanceQuest(q, v, finish, step) {
     const st = this.state;
+    // Somebody else finished it while we were reading.
+    if (st.quests[q.id] !== 'active') { if (finish) finish(); this.refreshQuestMarks(); return; }
     // The last step's own flags are applied here rather than inside
     // completeQuest, which is also reached by jobs that have no steps at all.
-    if (isLastStep(q, st)) { this.applyStepFlags(step); this.completeQuest(q, v, finish); return; }
+    if (isLastStep(q, st)) {
+      // A job that ends in paying for something needs the money to be there
+      // at the end, not just at the step that asked you to save it up.
+      const cost = q.reward && q.reward.money < 0 ? -q.reward.money : 0;
+      if (cost && st.money < cost) {
+        this.dialogue.say(`That will be ${money(cost)}, and you have ${money(st.money)}. Come back when you have it.`,
+          { speaker: v ? v.def.name : q.title, onDone: () => { if (finish) finish(); } });
+        return;
+      }
+      this.handOver(step);
+      this.applyStepFlags(step);
+      this.completeQuest(q, v, finish);
+      return;
+    }
 
     st.setQuestStep(q.id, stepIndex(q, st) + 1);
     if (step.gives) for (const [id, n] of step.gives) st.give(id, n);
@@ -2532,7 +2596,16 @@ class Game {
     audio.sfx('quest', { gain: 0.55 });
     this.dialogue.say(step.done || 'Right. Next thing, then.', {
       speaker: v ? v.def.name : q.title,
-      onDone: () => { if (finish) finish(); this.refreshQuestMarks(); },
+      onDone: () => {
+        if (finish) finish();
+        this.refreshQuestMarks();
+        // The next thing may be done already too: carry on in the same
+        // conversation rather than making them come back once per step.
+        if (v && v.def.id === q.giver && this.stepReady(q)) {
+          v.talking = true;
+          this.advanceQuest(q, v, finish, currentStep(q, st));
+        }
+      },
     });
     this.hud.toast(`${q.title}: ${objectiveText(q, st)}`, 'good', 6);
   }
@@ -2548,7 +2621,8 @@ class Game {
     if (r.friendship) for (const f of r.friendship) st.friends[f] = clamp((st.friends[f] || 0) + 0.4, 0, 1);
     for (const k of ['flags', 'reputation', 'friends']) st.touch(k);
     audio.sfx('fanfare', { gain: 0.7 });
-    const rewardLine = r.money ? `\n\n(+${money(r.money)})` : '';
+    const rewardLine = r.money > 0 ? `\n\n(+${money(r.money)})`
+      : r.money < 0 ? `\n\n(-${money(-r.money)})` : '';
     this.dialogue.say(q.complete + rewardLine, {
       speaker: v.def.name,
       onDone: () => { finish(); this.refreshQuestMarks(); },
@@ -2590,12 +2664,6 @@ class Game {
   }
 
   /**
-   * Bring every job in play back into line with what has actually been done,
-   * and say so if anything moved. Cheap, and called at the points where the
-   * world has just changed, so a job can't sit stuck behind a step you have
-   * demonstrably finished.
-   */
-  /**
    * Take every barrier that has already been cleared back out of the world.
    *
    * Clearing one removes its boulders there and then, which is right for the
@@ -2618,29 +2686,6 @@ class Game {
     }
     if (removed) this.renderer.invalidateAll();
     return removed;
-  }
-
-  /**
-   * Reconcile a save with the world it describes. Only for loading and joining:
-   * in play, a step moving is progress rather than a correction, and saying so
-   * is alarming.
-   */
-  repairQuests() {
-    const st = this.state;
-    // Put back anything one-of-a-kind that has gone astray before working out
-    // where the player has got to — a step that wants the collar cannot be
-    // judged while the collar is missing.
-    const found = repairLostItems(st, (id, n) => {
-      st.give(id, n);
-      this.hud.toast(`${st.itemName(id)} turned up again — check your bag.`, 'good', 7);
-    });
-    const moved = repairAllSteps(st);
-    if (!moved && !found) return;
-    if (moved) {
-      this.hud.toast(moved === 1 ? 'Your journal was out of date. Fixed.'
-        : `${moved} journal entries were out of date. Fixed.`, 'good', 6);
-    }
-    this.refreshQuestMarks();
   }
 
   /**
@@ -3187,6 +3232,8 @@ class LobbyScreen extends Screen {
   }
 }
 
+const BACK_OPTION = 'Back to the valleys';
+
 class TitleScreen extends Screen {
   constructor(game) {
     super();
@@ -3202,7 +3249,12 @@ class TitleScreen extends Screen {
     // save at all" when we happen not to be connected is how a save of one
     // valley ends up being offered as the way back into another.
     const mine = GameState.hasSave(game.worldSeed, !NetClient.available());
+    // Came here by picking a valley from a list, so there is a list to go back
+    // to: the wrong one is one press away from the right one. A direct link,
+    // or no server, has nowhere to go back to.
+    this.canGoBack = !!(game.lobbyGames && !new URLSearchParams(location.search).get('game'));
     this.options = mine ? ['Resume Game', 'New game'] : ['New game'];
+    if (this.canGoBack) this.options.push(BACK_OPTION);
     // Whatever this browser played as last time, so the usual answer is just
     // to press Space.
     const me = loadMe();
@@ -3239,6 +3291,7 @@ class TitleScreen extends Screen {
     // up rather than starting again on the doorstep every time you rejoin.
     this.options = GameState.hasSave(this.game.worldSeed)
       ? ['Resume Game', 'Start new game in valley'] : ['Start new game in valley'];
+    if (this.canGoBack) this.options.push(BACK_OPTION);
     this.index = 0;
     this.row = Math.min(this.row, 2);
     const c = this.game.net.world.cafe;
@@ -3252,6 +3305,14 @@ class TitleScreen extends Screen {
     if (this.stage === 'title') {
       if (input.repeat('up', dt)) { this.index = (this.index - 1 + this.options.length) % this.options.length; audio.sfx('ui_move'); }
       if (input.repeat('down', dt)) { this.index = (this.index + 1) % this.options.length; audio.sfx('ui_move'); }
+      const back = this.canGoBack
+        && (input.hit('cancel') || (input.hit('use') && this.options[this.index] === BACK_OPTION));
+      if (back) {
+        audio.sfx('ui_back');
+        this.done = true;
+        this.game.backToLobby();
+        return;
+      }
       if (input.hit('use')) {
         audio.sfx('ui_ok');
         if (this.options[this.index] === 'Resume Game') { this.done = true; this.game.continueGame(); }
@@ -3299,11 +3360,14 @@ class TitleScreen extends Screen {
       drawTextCentered(ctx, 'a small business in a large valley', VIEW_W / 2, 96, { color: '#3d4a2a' });
 
       // The player character and a cat, waiting on the grass.
+      // A third option makes the panel taller, so they stand a little lower
+      // rather than having it drawn over their heads.
+      const drop = Math.max(0, (118 + this.options.length * 18 + 16) - 166);
       const bob = Math.sin(this.t * 3) > 0 ? 0 : 1;
       const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, 'down', Math.floor(this.t * 4) % 4);
-      ctx.drawImage(spr, 0, 0, spr.width, spr.height, VIEW_W / 2 - 40, 168 + bob, spr.width * 2, spr.height * 2);
+      ctx.drawImage(spr, 0, 0, spr.width, spr.height, VIEW_W / 2 - 40, 168 + drop + bob, spr.width * 2, spr.height * 2);
       const cs = catSprite('tabby', 'right', Math.floor(this.t * 3) % 4, 'sit');
-      ctx.drawImage(cs, 0, 0, cs.width, cs.height, VIEW_W / 2 + 8, 192, cs.width * 2, cs.height * 2);
+      ctx.drawImage(cs, 0, 0, cs.width, cs.height, VIEW_W / 2 + 8, 192 + drop, cs.width * 2, cs.height * 2);
 
       // Wide enough for the longest thing on offer: "Start new game in
       // valley" is half again the width of "New game", and a panel sized for

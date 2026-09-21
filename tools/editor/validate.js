@@ -158,7 +158,6 @@ function flagIsSet(flag, quests, villagers) {
     if ((q.reward?.flags || []).includes(flag)) return true;
     const steps = q.steps || [];
     for (const s of steps) {
-      if (s.evidence === flag) return true;
       if ((s.sets || s.flags || []).includes(flag)) return true;
     }
   }

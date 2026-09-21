@@ -2040,20 +2040,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // Without evidence there is nothing to move: prove the old code was
         // stuck by asking whether the step's own objective reads as done.
         const objectiveSaysDone = Q.stepMet(q.steps[3].objective, st);
-        const evidenceSaysDone = Q.stepDone(q.steps[3], st);
 
-        // The repair, as the journal runs it.
-        g.repairQuests();
-        await wait(500);
-        const stepAfter = stepOf();
-        const heldAfter = st.inventory.golden_collar || 0;
-        const textAfter = said();
-        const onLastStep = Q.isLastStep(q, st);
-
-        // And the pier is no longer a dead end either: put the state back and
-        // walk up to it, and the mud gives one up.
-        st.questStep.lane_end_hedge = 3;
-        delete st.inventory.golden_collar;
+        // The pier is not a dead end: walk up to it, and the mud gives one up.
         const res = SEARCH_SPOTS.pier_mud(st, g);
         const pierGives = !!(res && res.give && res.give[0] === 'golden_collar');
         // Once the job is over the mud is just mud again.
@@ -2067,16 +2055,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const noSeconds = !(holdingRes && holdingRes.give);
 
         window.__hedge = `stuck="${stuckText}" objectiveDone=${objectiveSaysDone}`
-          + ` evidenceDone=${evidenceSaysDone} step ${3}->${stepAfter}`
-          + ` collar ${heldBefore}->${heldAfter} now="${textAfter}" last=${onLastStep}`
           + ` pierGives=${pierGives} quietAfter=${quietAfterwards} noSeconds=${noSeconds}`;
         if (!/Search the mud/.test(stuckText)) window.__errors.push('did not reproduce the stuck step: ' + window.__hedge);
         if (objectiveSaysDone) window.__errors.push('the objective was satisfiable after all: ' + window.__hedge);
-        if (!evidenceSaysDone) window.__errors.push('the flag does not prove the step was done: ' + window.__hedge);
-        if (stepAfter !== 4) window.__errors.push('the repair did not move it on: ' + window.__hedge);
-        if (heldAfter !== 1) window.__errors.push('the lost collar was not put back: ' + window.__hedge);
-        if (!/Sir Woofers/.test(textAfter)) window.__errors.push('the journal still asks for the mud: ' + window.__hedge);
-        if (!onLastStep) window.__errors.push('it is not on the final step: ' + window.__hedge);
         if (!pierGives) window.__errors.push('the pier still refuses a replacement: ' + window.__hedge);
         if (!quietAfterwards) window.__errors.push('the pier hands out collars after the job: ' + window.__hedge);
         if (!noSeconds) window.__errors.push('the pier hands out a second collar: ' + window.__hedge);
@@ -2527,49 +2508,111 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!afterTelling) window.__errors.push('told Button and the ghost never turned up: ' + window.__ghost);
         if (!talkable) window.__errors.push('the ghost is there but cannot be talked to: ' + window.__ghost);
         if (byDay) window.__errors.push('the ghost is out in daylight: ' + window.__ghost);
+      } else if (SCRIPT === 'questready') {
+        // Two things about jobs whose conditions are already true.
+        //
+        // Asked for something you have done already, the giver says so in the
+        // same conversation, instead of standing there with a mark over their
+        // head asking for it until spoken to a second time. And a job that
+        // ends in paying for something checks the money is there at the end:
+        // the telephone could be had with an empty till, which went negative.
+        const st = g.state;
+        const find = (id) => {
+          const out = g.villagers.find((v) => v.def.id === id);
+          if (out) return out;
+          for (const [, map] of g.maps) {
+            const v = (map.villagers || []).find((x) => x.def.id === id);
+            if (v) return v;
+          }
+          return null;
+        };
+        const talkThrough = async (v) => {
+          g.talkTo(v);
+          await wait(300);
+          for (let i = 0; i < 40 && g.dialogue.active; i++) {
+            key('Space', true); await wait(90); key('Space', false); await wait(160);
+          }
+        };
+        st.quests = {}; st.questStep = {};
+        while (st.cats.length < 4) st.adoptCat('tabby');
+        const thimble = find('thimble');
+        const before = st.money;
+        if (thimble) await talkThrough(thimble);
+        const cats = `${st.quests.four_cats} money ${before}->${st.money}`;
+
+        // Shopkeepers only exist once somebody has walked into their shop.
+        const { Villager } = await import('../src/game/entities.js');
+        const { VILLAGERS } = await import('../src/world/places.js');
+        const hollisDef = VILLAGERS.find((v) => v.id === 'hollis');
+        const hollis = find('hollis') || (hollisDef && new Villager(hollisDef, g.player.x, g.player.y));
+        st.quests.the_telephone = 'active';
+        st.questStep.the_telephone = 3;
+        st.money = 100;
+        if (hollis) await talkThrough(hollis);
+        const broke = `${st.quests.the_telephone} money=${st.money} phone=${st.inventory.f_telephone || 0}`;
+        st.money = 700;
+        if (hollis) await talkThrough(hollis);
+        const paid = `${st.quests.the_telephone} money=${st.money} phone=${st.inventory.f_telephone || 0}`;
+
+        // "Bring me a jar of honey" ends with Dough having the honey.
+        const dough = find('dough') || new Villager(VILLAGERS.find((v) => v.id === 'dough'), g.player.x, g.player.y);
+        st.give('honey', 2);
+        const honey0 = st.inventory.honey || 0;
+        await talkThrough(dough);
+        const honey = `${st.quests.honey_run} honey ${honey0}->${st.inventory.honey || 0}`;
+        if (st.quests.honey_run !== 'done' || (st.inventory.honey || 0) !== honey0 - 1) {
+          window.__errors.push('the honey was asked for and not taken: ' + honey);
+        }
+
+        window.__ready = `honey[${honey}] found=${!!thimble}/${!!hollis} cats[${cats}] broke[${broke}] paid[${paid}]`;
+        if (!thimble || !hollis) window.__errors.push('could not find who to talk to: ' + window.__ready);
+        if (st.quests.four_cats !== 'done') window.__errors.push('a job already done was not finished on the spot: ' + window.__ready);
+        if (!/^active money=100 phone=0$/.test(broke)) window.__errors.push('the telephone was sold to an empty till: ' + window.__ready);
+        if (!/^done money=100 phone=1$/.test(paid)) window.__errors.push('the telephone could not be bought with the money there: ' + window.__ready);
       } else if (SCRIPT === 'shellwalk') {
-        // The whole shell errand, the way a player meets it: Juniper asks,
-        // Saltmere answers, and the journal has to carry what you were told
-        // from one town to the other.
+        // The whole shell errand, the way a player meets it now that the story
+        // has changed: Juniper asks, you ask around Saltmere, Anchor parts with
+        // one, and Juniper keeps it and gives you ferns instead. The shell is
+        // handed to you by Anchor — not by Juniper when she asks for it, which
+        // is what an earlier version of the content did — and it is gone from
+        // the bag at the end.
         const Q = await import('../src/game/quests.js');
         const st = g.state;
-        st.quests = { sea_shell: 'active' };
-        st.questStep = { sea_shell: 0 };
-        st.flags = {};
-        st.clock.t = 22 * (1200 / 24);        // Moth only counts after dark
-        await wait(500);
-        const quest = Q.QUESTS.find((q) => q.id === 'sea_shell');
-        const noteBefore = Q.progressText(quest, st);
-
-        // Talk to Shrimp until he says his piece, as a player would.
-        const shrimp = g.villagers.find((v) => v.def.id === 'shrimp');
-        let heardIn = 0;
-        for (let n = 1; n <= 3 && shrimp && !st.flags.heard_hint_shrimp; n++) {
-          g.player.x = shrimp.x; g.player.y = shrimp.y + 10;
-          await wait(150);
-          g.talkTo(shrimp);
-          await wait(400);
-          for (let i = 0; i < 6 && g.dialogue.active; i++) {
-            key('Space', true); await wait(100); key('Space', false); await wait(170);
+        const { Villager } = await import('../src/game/entities.js');
+        const { VILLAGERS } = await import('../src/world/places.js');
+        const who = (id) => g.villagers.find((v) => v.def.id === id)
+          || new Villager(VILLAGERS.find((v) => v.id === id), g.player.x, g.player.y);
+        const talkThrough = async (v) => {
+          g.talkTo(v);
+          await wait(300);
+          for (let i = 0; i < 40 && g.dialogue.active; i++) {
+            key('Space', true); await wait(90); key('Space', false); await wait(160);
           }
-          heardIn = n;
-        }
-        const noteAfter = Q.progressText(quest, st);
-        const toasted = (g.hud.toasts || []).some((t) => /journal/i.test(t.text || ''));
+        };
+        const shells = () => st.inventory.seashell || 0;
+        const plants = () => Object.keys(st.inventory).filter((k) => k.indexOf('f_plant') === 0)
+          .reduce((n, k) => n + st.inventory[k], 0);
+        const quest = Q.QUEST_BY_ID.sea_shell;
+        st.quests = {}; st.questStep = {};
+        delete st.inventory.seashell;
+        const plants0 = plants();
 
-        // The note has to name who has it and when they are about.
-        const names = /Moth/.test(noteAfter) && /Brambleford/.test(noteAfter) && /dark/i.test(noteAfter);
-        // And Moth will now raise the job that ends in the shell.
-        const moth = Q.QUESTS.find((q) => q.id === 'moth_count');
-        const offers = g.questAvailable(moth);
+        await talkThrough(who('juniper'));
+        const asked = `${st.quests.sea_shell}/${shells()}`;
+        const noteAsked = Q.objectiveText(quest, st);
+        await talkThrough(who('anchor'));
+        const given = `${st.questStep.sea_shell}/${shells()}`;
+        const noteGiven = Q.objectiveText(quest, st);
+        await talkThrough(who('juniper'));
 
-        window.__shellw = `heardIn=${heardIn} note0="${noteBefore.slice(0, 30)}"`
-          + ` note1="${noteAfter.slice(0, 46)}" toast=${toasted} names=${names} mothOffers=${offers}`;
-        if (!heardIn) window.__errors.push('Shrimp never said where it went: ' + window.__shellw);
-        if (noteAfter === noteBefore) window.__errors.push('the journal still says ask around: ' + window.__shellw);
-        if (!names) window.__errors.push('the journal does not say who has it or when: ' + window.__shellw);
-        if (!toasted) window.__errors.push('nothing said the journal had changed: ' + window.__shellw);
-        if (!offers) window.__errors.push('Moth will not raise the job that ends in the shell: ' + window.__shellw);
+        window.__shellw = `asked=${asked} given=${given} end=${st.quests.sea_shell}/${shells()}`
+          + ` plants ${plants0}->${plants()} note0="${noteAsked.slice(0, 28)}" note1="${noteGiven.slice(0, 28)}"`;
+        if (asked !== 'active/0') window.__errors.push('Juniper handed over the shell she was asking for: ' + window.__shellw);
+        if (given !== '1/1') window.__errors.push('Anchor did not part with one: ' + window.__shellw);
+        if (noteGiven === noteAsked) window.__errors.push('the journal still says ask around: ' + window.__shellw);
+        if (st.quests.sea_shell !== 'done') window.__errors.push('the errand could not be finished: ' + window.__shellw);
+        if (shells() !== 0) window.__errors.push('delivered, and still in the bag: ' + window.__shellw);
+        if (plants() !== plants0 + 2) window.__errors.push('no ferns: ' + window.__shellw);
       } else if (SCRIPT === 'hintheard') {
         // A hint that comes up by chance still counts. It is the same sentence
         // either way, and a player told exactly where to go should not find the
@@ -4959,42 +5002,43 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           }
         }
       } else if (SCRIPT === 'questrepair') {
-        // The save people are actually holding: the hedge job stuck at step 0
-        // with the collar already in the bag, because somebody else's accept
-        // reset it. The world says which step you are really on; trust that.
+        // The save the repair was written for: the hedge job back at its first
+        // step with everything already done and the collar in the bag. The
+        // repair has gone — it moved jobs on for the wrong reasons as readily
+        // as the right ones — so check that such a save is not stuck without
+        // it: reporting in walks it forward, several done steps at a time.
         const st = g.state;
-        st.quests.lane_end_hedge = 'active';
-        st.questStep.lane_end_hedge = 0;
+        const { Villager } = await import('../src/game/entities.js');
+        const { VILLAGERS } = await import('../src/world/places.js');
+        const who = (id) => g.villagers.find((v) => v.def.id === id)
+          || new Villager(VILLAGERS.find((v) => v.id === id), g.player.x, g.player.y);
+        const talkThrough = async (v) => {
+          g.talkTo(v);
+          await wait(300);
+          for (let i = 0; i < 40 && g.dialogue.active; i++) {
+            key('Space', true); await wait(90); key('Space', false); await wait(160);
+          }
+        };
+        st.quests = { lane_end_hedge: 'active' };
+        st.questStep = { lane_end_hedge: 0 };
         st.flags.saw_the_hedge = true;
         st.flags.read_town_history = true;
         st.give('golden_collar', 1);
-        g.repairQuests();
-        await wait(300);
-        const fixed = st.questStep.lane_end_hedge;
-
-        // It must not run past a step that needs a conversation: the last one
-        // is handing the collar over, and only Sir Woofers can accept it.
-        const { QUEST_BY_ID, objectiveText } = await import('../src/game/quests.js');
-        const now = objectiveText(QUEST_BY_ID.lane_end_hedge, st);
-
-        // A job that is genuinely at the start stays there.
-        st.quests.moth_count = 'active';
-        st.questStep.moth_count = 0;
-        g.repairQuests();
-        await wait(200);
-        const untouched = st.questStep.moth_count;
-
-        // And running it again changes nothing.
-        g.repairQuests();
-        await wait(200);
-        window.__repair = `hedge 0->${fixed} ("${now}") moth=${untouched}`
-          + ` stable=${st.questStep.lane_end_hedge === fixed}`;
-        if (fixed !== 4) window.__errors.push('did not skip the finished steps: ' + window.__repair);
-        if (!/Sir Woofers/.test(now)) window.__errors.push('wrong step after repair: ' + window.__repair);
-        if (untouched !== 0) window.__errors.push('moved a job that was not stuck: ' + window.__repair);
-        if (st.questStep.lane_end_hedge !== fixed) {
-          window.__errors.push('not stable on a second run: ' + window.__repair);
-        }
+        const loaded = st.questStep.lane_end_hedge;      // nothing moves by itself
+        await talkThrough(who('button'));                // saw the hedge -> go and see Woofers
+        const s1 = st.questStep.lane_end_hedge;
+        await talkThrough(who('woofers'));               // met him -> read the history
+        const s2 = st.questStep.lane_end_hedge;
+        await talkThrough(who('button'));                // read it, and have the collar -> take it to him
+        const s3 = st.questStep.lane_end_hedge;
+        await talkThrough(who('woofers'));
+        window.__repair = `steps ${loaded}->${s1}->${s2}->${s3} end=${st.quests.lane_end_hedge}`
+          + ` collar=${st.inventory.golden_collar || 0}`;
+        if (loaded !== 0) window.__errors.push('a job moved without anybody being told: ' + window.__repair);
+        if (s1 !== 1 || s2 !== 2) window.__errors.push('reporting in did not move it on: ' + window.__repair);
+        if (s3 !== 4) window.__errors.push('two finished steps were not taken in one conversation: ' + window.__repair);
+        if (st.quests.lane_end_hedge !== 'done') window.__errors.push('the job could not be finished: ' + window.__repair);
+        if (st.inventory.golden_collar) window.__errors.push('the collar was delivered and is still in the bag: ' + window.__repair);
       } else if (SCRIPT === 'barriers') {
         // Where the blocked shortcuts actually are, and what they actually
         // block. A barrier that only shortens a trip is fine; a quest that
@@ -5694,6 +5738,41 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (!g.net.connected || !g.net.joined) window.__errors.push('never came back: ' + window.__drop);
         if (st.money !== before - 100) window.__errors.push('missed what happened while away: ' + window.__drop);
         bot.close();
+      } else if (SCRIPT === 'netlobbyback') {
+        // Picked the wrong valley. The title screen for it has a way back to
+        // the list, which hangs up — so the server stops counting us as being
+        // in the lobby for that one — and a morning card sent to everybody
+        // connected is not put up over a title screen.
+        const names = () => g.screens.map((sc) => sc.constructor.name).join(',');
+        const press = async (code) => { key(code, true); await wait(90); key(code, false); await wait(200); };
+        const here = async () => (await (await fetch('/status?game=001', { cache: 'no-store' })).json()).sockets;
+        await wait(800);
+        const start = names();
+        await press('Space');                              // into the first valley
+        for (let i = 0; i < 30 && !g.titleScreen; i++) await wait(150);
+        await wait(300);
+        const title = g.titleScreen;
+        const options = title ? title.options.join('/') : '';
+        const inLobbyFor = await here();
+
+        // Midnight, while we are still deciding.
+        g.net.receive({ t: 'newday', day: 2 });
+        g.net.receive({ t: 'summary', s: { lines: [], revenue: 0, costs: 0, profit: 0, customers: 0 } });
+        await wait(300);
+        const afterMidnight = names();
+
+        for (let i = 0; title && i < title.options.length - 1; i++) await press('ArrowDown');
+        const onBack = title && title.options[title.index];
+        await press('Space');
+        await wait(900);
+        const back = names();
+        const stillThere = await here();
+        window.__back = `start=${start} options=${options} midnight=${afterMidnight} picked="${onBack}"`
+          + ` after=${back} sockets ${inLobbyFor}->${stillThere} connected=${g.net.connected}`;
+        if (!/Back/.test(options)) window.__errors.push('no way back from the wrong valley: ' + window.__back);
+        if (/Summary/.test(afterMidnight)) window.__errors.push('the morning card came up over the title screen: ' + window.__back);
+        if (back !== 'LobbyScreen') window.__errors.push('Back did not go back to the valleys: ' + window.__back);
+        if (g.net.connected || stillThere >= inLobbyFor) window.__errors.push('still connected to the valley we backed out of: ' + window.__back);
       } else if (SCRIPT === 'netbuildlock') {
         // One person rearranges the cafe at a time. A plan is laid over the
         // cafe whole when it is finished, so two drawn up at once meant the

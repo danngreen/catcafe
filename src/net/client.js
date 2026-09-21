@@ -297,6 +297,12 @@ export class NetClient {
     this.joined = false;
     this.owner = null;
     this.remotes.clear();
+    // Nothing of that valley is ours to show any more: the title screen reads
+    // these to decide whether a cafe is already open in the one being joined.
+    this.world = null;
+    this.clock = null;
+    this.seed = null;
+    this.baseJson = {};
     if (this.keepalive) { clearInterval(this.keepalive); this.keepalive = null; }
   }
 
