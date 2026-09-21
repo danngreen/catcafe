@@ -22,7 +22,7 @@ export const QUESTS = [
       friendship: ['pip'],
     },
     offer: "You've opened a cafe, you're going to need some treats to sell.\n\nBuy ten portions of coffee or tea and I'll throw in some cookies for free.",
-    complete: "Take these cookies. It's your grandmother's recipe. \n\nI think of her kindness every time I bake those cookies. I sell them to other grocers in the Valley. \n\nYour grandmother helped me get my business started. Someday you'll get to help someone else start theirs too I hope.",
+    complete: "Oh, I see you're taking me up on my deal. Take these cookies. It's your grandmother's recipe. \n\nI think of her kindness every time I bake those cookies. I sell them to other grocers in the Valley. \n\nYour grandmother helped me get my business started. Someday you'll get to help someone else start theirs too I hope.",
   },
   {
     id: 'honey_run',
@@ -107,14 +107,14 @@ export const QUESTS = [
   },
   {
     id: 'clear_the_path',
-    title: 'The Fallen Chalk',
+    title: 'The Fallen Rock',
     giver: 'brook',
-    desc: 'A slab of chalk is blocking the river bridge on the road east. Brook says the right tool would move it.',
+    desc: 'A slab of rock is blocking the river bridge on the road east. Brook says the right tool would move it.',
     objective: { type: 'flag', flag: 'barrier_eastpass' },
     progress: 'Buy a chalk pick at the Chalk Pit Store in Hollowdown, then follow the road due east out of town to the river. You cannot miss the bridge, or the chalk sitting on it.',
-    reward: { money: 500, rep: 0.5, friendship: ['brook'] },
-    offer: "Water's high after the rain, and it took the bank out from under a chalk face east of here. Great lump of it came down right across the middle of the bridge, and it is deep water either side.\n\nThat was the road to Thistlewick, that was. You can still get there the long way round, by Hollowdown and Oakhollow, but it is the best part of an hour nobody should have to walk twice.\n\nGet a pick — the Chalk Pit Store up in Hollowdown has them — and move it. Everyone in this town will be quietly grateful, but not one of them will say so.",
-    complete: "You moved it? On your own?\n\nGreat! The bridge is open again, no more trailing all the way round by Hollowdown to get to Thistlewick.\n\nTake this, and don't argue.",
+    reward: { money: 600, rep: 0.5, friendship: ['brook'] },
+    offer: "Water's high after the rain, and it took the bank out from under a chalk face east of here. Great lump of the rock came down right across the middle of the bridge, and it is deep water either side.\n\nThat was the road to Thistlewick, that was. You can still get there the long way round, by Hollowdown and Oakhollow, but it is the best part of an hour nobody should have to walk twice.\n\nGet a rock pick — the Chalk Pit Store up in Hollowdown has them — and break that rock. Everyone in this town will be quietly grateful, but not one of them will say so.",
+    complete: "You broke that rock? On your own?\n\nGreat! The bridge is open again, no more trailing all the way round by Hollowdown to get to Thistlewick.\n\nTake this money, and don't argue.",
   },
   {
     id: 'bramble_path',
@@ -123,7 +123,7 @@ export const QUESTS = [
     desc: 'Brambles have swallowed the path to the old mill. Grist would like it opened.',
     objective: { type: 'flag', flag: 'barrier_millpath' },
     progress: 'Buy hedge shears at the Chalk Pit Store in Hollowdown, then go to the little bridge on the mill track, north-east of here.',
-    reward: { money: 220, items: [['valley_map', 1]] },
+    reward: { money: 380, items: [['valley_map', 1]] },
     offer: "The old mill's my family's, technically. Can't reach it — the brambles have taken the whole bridge across to it. Grown right over the deck, thick as rope.\n\nShears would do it. The hardware place up in Hollowdown sells them.",
     complete: "You got through! And you didn't fall through the floor. Both good.\n\nHere's a map of the valley. It's wrong about the north but it's better than nothing.",
   },
@@ -200,21 +200,21 @@ export const QUESTS = [
   },
   {
     id: 'lane_end_hedge',
-    title: 'The Hedge at Lane End',
+    title: 'The Mystery in the Hedge',
     giver: 'button',
-    desc: "Button's hedge moves at night. Button would like it to stop.",
+    desc: "Button's hedge moves at night and would like to know what that's all about.",
     steps: [
       {
         note: 'Look at the hedge at the end of the lane, after dark',
         objective: { type: 'flag', flag: 'saw_the_hedge' },
         progress: 'Go and look at the hedge after dark. It does nothing in daylight — I have stood there checking, repeatedly.',
-        done: 'You SAW it? Ha! HA! I am not daft, then. Right. What do we do about it?',
+        done: "You SAW it? Ha! HA! I'm not crazy, then. So.... what do we do about it?",
       },
       {
         note: 'Speak to whatever is in the hedge',
         objective: { type: 'talk', to: 'woofers' },
-        progress: 'Go back to the hedge after dark and talk to whatever is in it. It will not be me who does it.',
-        done: "*the shape in the hedge lifts its head*\n\nYou can see me? Nobody has been able to see me in a very long while.\n\nI lost my collar. It was gold, and it had my name upon it, and I've been looking in this hedge for — some time. I no longer recall where I had it last.\n\nI do not recall a great deal. I am fairly sure I was IMPORTANT ENOUGH TO APPEAR IN A HISTORY BOOK.",
+        progress: "Go back to the hedge after dark and talk to whatever is in it. I'm too scared, you have to do it without me!",
+        done: "*the shape in the hedge lifts its head*\n\nYou can see me? Nobody has been able to see me in a very long while.\n\nI lost my collar. It was gold, and it had my name upon it, and I've been looking in this hedge for — some time. I no longer recall where I had it last.\n\nI do not recall a great deal. I am fairly sure I was IMPORTANT ENOUGH TO APPEAR IN A HISTORY BOOK. MAYBE THE KIND OF BOOK THEY'D KEEP IN A LIBRARY?!",
       },
       {
         note: 'Read about Sir Woofers at the Reading Room in Brambleford',
@@ -225,7 +225,7 @@ export const QUESTS = [
       {
         note: 'Search the mud at the end of Saltmere Pier',
         objective: { type: 'item', item: 'golden_collar', count: 1 },
-        progress: 'Go to the end of the pier at Saltmere and search the mud under it, not on it.',
+        progress: 'Go to the end of the pier at Saltmere and search the mud near the end of it.',
         done: 'Two hundred years in the mud, and still bright.',
       },
       {
@@ -236,7 +236,7 @@ export const QUESTS = [
           to: 'woofers',
           give: false,
         },
-        progress: 'Take the collar back to the hedge after dark. He is always at the hedge.',
+        progress: 'Take the collar back to the hedge after dark.',
         done: "My soul can rest now that I've been reunited with my prized golden collar.\n\nThis collar brings back cherished memories, I thank you.",
       },
     ],
@@ -247,7 +247,7 @@ export const QUESTS = [
       items: [['catnip', 5]],
       journal: "Sir Woofer's soul can rest now that he's been reunited with his golden collar.",
     },
-    offer: 'Right. Short legs, long opinions, and here is one of them.\n\nThe hedge at the end of my lane MOVES. At night. Not the wind — one bit of it, going up and down like something is working along the bottom of it looking for a sock.\n\nI have barked at it. I have barked at it a great deal. It does not care, which is frankly insulting. You have cats. You are used to nonsense. Would you go and look?',
+    offer: "Yes, I'm a Corgi, Short legs and tall tales. I've got a tall tale for you. Or is it?\nJust listen.\nThe hedge in front of my house MOVES. At night. Not the wind — it's just one part of is shaking like a puppy is in there sniffing around looking for a snack.\n\nI've barked at it. I've barked at it until I can't bark anymore. It doesn't seem to care, which is frankly insulting. You have cats. You are used to nonsense. Would you go and look?",
     complete: 'Oh. Oh, that IS mine. That is my collar.\n\n*the very old dog stands still for the first time in two hundred years*\n\nThey put my name on it, you know. At the opening. There was a ribbon and everything.\n\nThank you. Thank you. I shall stop bothering the hedge.',
   },
   {

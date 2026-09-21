@@ -716,8 +716,8 @@ export const ITEM_DATA = {
     floor: true,
   },
   pickaxe: {
-    name: 'Chalk Pick',
-    desc: 'Heavy. Splits chalk like cheese.',
+    name: 'Rock Pick',
+    desc: 'Heavy. Splits rocks like cheese.',
     cat: 'key',
     icon: 'hammer',
     cost: 320,
