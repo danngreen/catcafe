@@ -102,25 +102,25 @@ export const SEARCH_SPOTS = {
   bushes: (st) => {
     if (st.clock.isDark) {
       return {
-        text: 'The hedge is moving. Not in the wind — in one place, steadily, as though '
-          + 'something is working its way along the bottom of it looking for something.\n\n'
-          + 'Whatever it is, it is about the size of a large and elderly dog.',
+        text: 'The hedge is moving. Not in the wind — just in one spot, steadily, like '
+          + 'something\'s working its way along the bottom of it, looking for something.\n\n'
+          + 'Whatever it is, it\'s about the size of a big old dog.',
         sfx: 'bush',
         flag: 'saw_the_hedge',
       };
     }
     return {
-      text: 'An ordinary hedge in ordinary daylight. Hawthorn, mostly, and a crisp packet '
-        + 'from some previous decade.\n\nNothing is moving at all.',
+      text: 'An ordinary hedge in ordinary daylight. Hawthorn, mostly, and a chip bag '
+        + 'from some previous decade.\n\nNothing\'s moving at all.',
       sfx: 'bush',
     };
   },
   stones: (st) => {
     if (!st.clock.isDark) {
       return {
-        text: 'Seven stones, leaning slightly inward, as if listening to something in the middle.\n\n'
-          + 'Somebody has left a jam jar of wildflowers at the foot of the tallest. In the '
-          + 'daylight they are just very large rocks, and you feel slightly silly.',
+        text: 'Seven stones, leaning in a little, like they\'re listening to something in the middle.\n\n'
+          + 'Somebody\'s left a jam jar of wildflowers at the foot of the tallest one. In '
+          + 'daylight they\'re just really big rocks, and you feel kind of silly.',
         sfx: 'ui_ok',
       };
     }
@@ -130,38 +130,38 @@ export const SEARCH_SPOTS = {
       st.take('milk');
       return {
         text: 'You put the saucer down in the middle of the circle and step back.\n\n'
-          + 'Nothing comes. Nothing comes for long enough that you start to feel foolish '
+          + 'Nothing comes. Nothing comes for so long that you start to feel silly '
           + 'again — and then the wind stops. All at once, everywhere, like a held breath.\n\n'
-          + 'When it starts again the saucer is empty and dry, and there is a single set '
-          + 'of small prints in the chalk dust that go in and do not come out.',
+          + 'When it picks up again, the saucer is empty and dry, and there\'s a single set '
+          + 'of small prints in the chalk dust that go in and don\'t come out.',
         sfx: 'spooky',
         flag: 'left_milk',
       };
     }
     return {
       text: 'You stand in the middle of the seven stones.\n\n'
-        + 'They are warm. Not sun-warm — it has been dark for hours — but warm the way a '
-        + 'sleeping animal is warm, all seven of them, at the same time.\n\n'
-        + 'Somewhere above you something enormous and silent goes over.',
+        + 'They\'re warm. Not sun-warm — it\'s been dark for hours — but warm like a '
+        + 'sleeping animal, all seven of them, all at once.\n\n'
+        + 'Somewhere above you, something huge and silent passes over.',
       sfx: 'spooky',
       flag: 'stood_in_stones',
     };
   },
   pier_mud: (st) => {
     if (!stillNeeds(st, 'lane_end_hedge', 'golden_collar')) {
-      return { text: 'Mud, rope, and the ribs of a boat nobody has thought about in a long time.', sfx: 'splash' };
+      return { text: 'Mud, rope, and the ribs of a boat nobody\'s thought about in a long time.', sfx: 'splash' };
     }
     if (!st.flags.read_town_history) {
       return {
-        text: 'You lean over the end of the pier. Below, the tide is out, and there is a '
-          + 'great deal of mud.\n\nIt is exactly as interesting as mud. You have no idea '
-          + 'what you would even be looking for.',
+        text: 'You lean over the end of the pier. The tide\'s out, and there\'s a lot of '
+          + 'mud down there.\n\nIt\'s exactly as interesting as mud. You have no idea '
+          + 'what you\'d even be looking for.',
         sfx: 'splash',
       };
     }
     return {
       text: 'You lean over the end of the pier, thinking about 1800, and a ribbon, and a '
-        + 'dog who did not go home.\n\nAnd there — under two hundred years of mud, catching '
+        + 'dog who didn\'t go home.\n\nAnd there — under two hundred years of mud, catching '
         + 'the lamplight — something gold.\n\nYou have to lie flat and put your whole arm in.',
       sfx: 'splash',
       give: ['golden_collar', 1],
@@ -178,15 +178,15 @@ export const SEARCH_SPOTS = {
     // to look — which is exactly how the collar became unfinishable.
     if (!stillNeeds(st, 'lighthouse_log', 'logbook')) {
       return {
-        text: 'The cold cup of tea is still there. Somebody should throw it away. '
-          + 'Nobody is going to be the one who does.',
+        text: 'The cold cup of tea is still there. Somebody should throw it out. '
+          + 'Nobody\'s going to be the one who does.',
         sfx: 'bush',
       };
     }
     return {
       text: 'A logbook, a cold cup of tea, and a note reading "back in five minutes", '
         + 'dated eleven years ago.\n\nThe book falls open on its own. Eleven years of wind '
-        + 'and tide in the same careful hand, and then, near the end, one line that is not '
+        + 'and tide in the same careful hand, and then, near the end, one line that isn\'t '
         + 'about the weather at all.\n\nYou put it under your arm. Somebody should read it.',
       sfx: 'quest',
       give: ['logbook', 1],
@@ -348,7 +348,7 @@ class Game {
       if (building) {
         net.requestBuild().then((res) => { if (!res.ok && !building.done) building.abandon(res.by); });
       }
-      this.hud.toast(net.caughtUp ? 'Back in the valley — what you did while away has been kept.'
+      this.hud.toast(net.caughtUp ? 'Back in the valley — everything you did while you were gone was saved.'
         : 'Back in the valley.', 'good');
     });
 
@@ -675,7 +675,7 @@ class Game {
       if (v.when === 'always') continue;
       v.setShift((v.when === 'night') === dark);
     }
-    this.hud.toast(dark ? 'The sun is down and a calm comes over the valley.' : 'Morning time. The streets fill up again.',
+    this.hud.toast(dark ? 'The sun\'s down, and a calm settles over the valley.' : 'Morning time. The streets fill up again.',
       'info', 5);
   }
 
@@ -742,7 +742,7 @@ class Game {
       ? `${st.cafe.name || 'The cafe'} welcomes you to the team! Buy snacks and beverages to keep our pantry full, serve customers, and `
         + 'keep the cats happy and healthy. Explore the valley and talk to the villagers!'
       : "Your grandmother's old tea room, two cats, and whatever you can carry. "
-        + 'Everything you need is out in the valley. Best get started.',
+        + 'Everything you need is out in the valley. Better get started.',
       { speaker: st.shared && this.joinedExisting ? st.cafe.name || 'The cafe' : 'Brambleford', instant: true },
     );
   }
@@ -846,7 +846,7 @@ class Game {
 
   save() {
     if (this.state.save()) this.hud.toast('Saved.', 'good');
-    else this.hud.toast('Could not save.', 'bad');
+    else this.hud.toast("Couldn't save.", 'bad');
     audio.sfx('ui_ok');
   }
 
@@ -874,7 +874,7 @@ class Game {
 
 
     try { net.leave(); } catch { /* going anyway */ }
-    this.hud.toast('Saving and leaving…', 'info', 3);
+    this.hud.toast('Saving and leaving...', 'info', 3);
     setTimeout(() => this.reloadPage(), 250);
   }
 
@@ -890,14 +890,14 @@ class Game {
   offerBear(def, v, finish) {
     const st = this.state;
     if (st.bear) {
-      const lines = def.sold || ['She is yours now.'];
+      const lines = def.sold || ["She's yours now."];
       this.dialogue.say(lines[v.lineIndex++ % lines.length], { speaker: def.name, onDone: finish });
       return;
     }
     const canPay = st.money >= BEAR_PRICE;
-    const pitch = 'That is her. She is nine years old, she is entirely reliable, and she is '
-      + 'quite fast.\n\n'
-      + `${money(BEAR_PRICE)}. One fresh fish a day and she will carry you anywhere in this `
+    const pitch = 'That\'s her. She\'s nine years old, she\'s completely reliable, and she\'s '
+      + 'pretty fast.\n\n'
+      + `${money(BEAR_PRICE)}. One fresh fish a day and she'll carry you anywhere in this `
       + 'valley, even over water.'
       + (canPay ? '' : `\n\nYou only have ${money(st.money)}. Come back when you have enough.`);
     this.dialogue.say(pitch, {
@@ -908,7 +908,7 @@ class Game {
         this.push(new ConfirmScreen({
           title: 'Buy the riding bear?',
           lines: [`${money(BEAR_PRICE)} — you have ${money(st.money)}`,
-            'There is only one of her.'],
+            "There's only one of her."],
           yes: 'Buy her',
           no: 'Not today',
           onYes: () => this.completeBearSale(def),
@@ -926,8 +926,8 @@ class Game {
     const at = deliverySpot(door);
     st.buyBear(at.x * TILE + TILE / 2, (at.y + 1) * TILE - 2, 'overworld');
     audio.sfx('levelup', { gain: 0.7 });
-    this.dialogue.say('Right. I will walk her over myself — she does not like carts.\n\n'
-      + 'She will be outside your place by the time you get back.',
+    this.dialogue.say('All right. I\'ll walk her over myself — she doesn\'t like carts.\n\n'
+      + 'She\'ll be outside your place by the time you get back.',
     { speaker: def.name });
     this.hud.toast('Drover Bell is walking the bear to your cafe.', 'good', 7);
   }
@@ -998,7 +998,7 @@ class Game {
     audio.sfx('rasp', { gain: 0.6, pitch: 0.5 });
     this.bear.pose = 'sniff';
     this.bear.stateT = 3;
-    this.hud.toast('She takes the whole fish in one go. That will do until morning.', 'good', 5);
+    this.hud.toast('She takes the whole fish in one gulp. That\'ll hold her until morning.', 'good', 5);
     this.mountBear();
   }
 
@@ -1016,7 +1016,7 @@ class Game {
     this.player.x = this.bear.x;
     this.player.y = this.bear.y;
     audio.sfx('rasp', { gain: 0.5, pitch: 0.4 });
-    this.hud.toast('Up you get. Space to get down again.', 'good', 5);
+    this.hud.toast('Up you go. Space to get down again.', 'good', 5);
   }
 
   dismountBear() {
@@ -1456,7 +1456,7 @@ class Game {
         species: SPECIES_LIST[rng.int(SPECIES_LIST.length)],
         coat: COAT_LIST[rng.int(COAT_LIST.length)],
         when: 'always',
-        lines: ['*waiting, with the look of somebody expecting a parcel*'],
+        lines: ['*waiting, with the look of somebody expecting a package*'],
       }, at.x * TILE + TILE / 2, (at.y + 1) * TILE - 2);
       v.recipient = d.id;
       v.mapId = 'overworld';
@@ -1517,7 +1517,7 @@ class Game {
       name: RESIDENT_NAMES[rng.int(RESIDENT_NAMES.length)],
       species: SPECIES_LIST[rng.int(SPECIES_LIST.length)],
       coat: COAT_LIST[rng.int(COAT_LIST.length)],
-      lines: ['*waiting, with the door on the latch*'],
+      lines: ['*waiting, with the door unlocked*'],
     };
     const v = new Villager(def, spot.x * TILE + TILE / 2, (spot.y + 1) * TILE - 2);
     v.recipient = d.id;
@@ -1550,18 +1550,18 @@ class Game {
 
     let text;
     if (!s.brought.length) {
-      text = `"...you have not brought any of it, have you."\n\n`
+      text = `"...you didn't bring any of it, did you."\n\n`
         + `They close the door with more patience than you deserve. `
-        + `You are not out of pocket, but you are not in it either.`;
+        + `You haven't lost any money. You haven't made any, either.`;
       audio.sfx('ui_back');
     } else if (s.missing.length) {
       text = `"Some of it, then."\n\nYou hand over ${orderText(s.brought)}. `
-        + `They had also asked for ${orderText(s.missing)}.\n\n`
+        + `They'd also asked for ${orderText(s.missing)}.\n\n`
         + `${money(s.goods)} for the goods and ${money(s.fee)} for the walk — `
-        + `${money(s.total)}. The fee is the fee whatever is in the bag.`;
+        + `${money(s.total)}. The fee's the fee, no matter what's in the bag.`;
       audio.sfx('cash', { gain: 0.7 });
     } else {
-      text = `"All of it. Marvellous."\n\nYou hand over ${orderText(s.brought)}.\n\n`
+      text = `"All of it. Marvelous."\n\nYou hand over ${orderText(s.brought)}.\n\n`
         + `${money(s.goods)} for the goods and ${money(s.fee)} for the walk — ${money(s.total)}.`;
       audio.sfx('cash', { gain: 0.8 });
       st.reputation = clamp(st.reputation + 0.02, 0, 1);
@@ -1615,7 +1615,7 @@ class Game {
     const st = this.state;
     const call = this.phoneCall();
     if (!call) {
-      this.dialogue.say('The telephone. Cream bakelite, heavier than it looks.\n\nNobody is on it.');
+      this.dialogue.say('The telephone. Cream bakelite, heavier than it looks.\n\nNobody\'s on the line.');
       return;
     }
     const spots = this.deliverySpots();
@@ -1634,7 +1634,7 @@ class Game {
     // fifth page of it.
     this.dialogue.say(
       `"${orderText(d.items)}, to ${d.name}."\n\n`
-      + `${money(fullValue(d))} all in. They can wait ${hours}h.`,
+      + `${money(fullValue(d))} total. They can wait ${hours}h.`,
       {
         speaker: 'On the telephone',
         choices: [
@@ -2176,7 +2176,7 @@ class Game {
     const shop = SHOPS.find((s) => s.id === shopId);
     if (shop && !shopOpen(shop, st.clock)) {
       audio.sfx('blocked', { gain: 0.6 });
-      this.dialogue.say(`${shop.name} is shut.\n\nOpening hours: ${hoursText(shop)}`, { speaker: 'A sign on the door' });
+      this.dialogue.say(`${shop.name} is closed.\n\nHours: ${hoursText(shop)}`, { speaker: 'A sign on the door' });
       return;
     }
     let map = this.maps.get(`shop:${shopId}`);
@@ -2208,7 +2208,7 @@ class Game {
     const st = this.state;
     const shop = SHOPS.find((s) => s.id === shopId);
     if (!shop) return;
-    const greet = shop.greet || 'Have a look round.';
+    const greet = shop.greet || 'Have a look around.';
 
     const openScreen = () => {
       switch (shop.kind) {
@@ -2305,7 +2305,7 @@ class Game {
     }
     const friends = Object.keys(st.friends).filter((f) => st.friends[f] > 0);
     if (!friends.length) {
-      this.dialogue.say('A red postbox with a little perch on top.\n\nNo letters for you today. You have nobody to write to yet, either — make some friends first.');
+      this.dialogue.say('A red mailbox with a little perch on top.\n\nNo letters for you today. You don\'t have anybody to write to yet, either — make some friends first.');
       return;
     }
     this.dialogue.say('Send a note to one of your friends?', {
@@ -2329,7 +2329,7 @@ class Game {
           gift: Math.random() < 0.55 ? [['treats', 2], ['honey', 1], ['wildflowers', 1], ['toy_yarn', 1]][Math.floor(Math.random() * 4)] : null,
         });
         st.touch('pendingLetters');
-        this.dialogue.say(`A mail bird takes the note, gives you a look that says "this had better be worth the trip", and flaps off towards ${name}.`);
+        this.dialogue.say(`A mail bird takes the note, gives you a look that says "this had better be worth the trip", and flaps off toward ${name}.`);
       },
     });
   }
@@ -2343,7 +2343,7 @@ class Game {
     }
     const places = st.knownPlaces();
     if (places.length < 2) {
-      this.dialogue.say('A taxi bird preens on the perch.\n\n"Not much point flying you somewhere you already are. Go and find a few places first."', { speaker: 'Taxi bird' });
+      this.dialogue.say('A taxi bird preens on the perch.\n\n"Not much point flying you somewhere you already are. Go find a few places first."', { speaker: 'Taxi bird' });
       return;
     }
     this.dialogue.say('"Where to? Anywhere you\'ve been before. Cash up front."', {
@@ -2579,7 +2579,7 @@ class Game {
       // at the end, not just at the step that asked you to save it up.
       const cost = q.reward && q.reward.money < 0 ? -q.reward.money : 0;
       if (cost && st.money < cost) {
-        this.dialogue.say(`That will be ${money(cost)}, and you have ${money(st.money)}. Come back when you have it.`,
+        this.dialogue.say(`That'll be ${money(cost)}, and you've got ${money(st.money)}. Come back when you have it.`,
           { speaker: v ? v.def.name : q.title, onDone: () => { if (finish) finish(); } });
         return;
       }
@@ -2600,7 +2600,7 @@ class Game {
     }
 
     audio.sfx('quest', { gain: 0.55 });
-    this.dialogue.say(step.done || 'Right. Next thing, then.', {
+    this.dialogue.say(step.done || 'Okay. Next thing, then.', {
       speaker: v ? v.def.name : q.title,
       onDone: () => {
         if (finish) finish();
@@ -2835,7 +2835,7 @@ class Game {
         label = it.kind === 'door' ? `Enter ${it.name || 'building'}`
           : it.kind === 'sign' ? 'Read'
             : it.kind === 'shopkeeper' ? 'Talk to the shopkeeper'
-              : it.kind === 'postbox' ? 'Postbox'
+              : it.kind === 'postbox' ? 'Mailbox'
                 : it.kind === 'taxi' ? 'Call a taxi bird'
                   : it.kind === 'barrier' ? 'Examine' : null;
       }
@@ -2894,7 +2894,7 @@ function catMood(cat) {
 function replyText(name) {
   const lines = [
     `Lovely to hear from you. The weather has been doing that thing again.\n\nCome by when you can. Bring a cat.\n\n— ${name}`,
-    `Your handwriting is terrible and I mean that fondly.\n\nEverything is much the same here. Enclosed: a small something.\n\n— ${name}`,
+    `Your handwriting is terrible and I mean that fondly.\n\nEverything's pretty much the same here. Enclosed: a small something.\n\n— ${name}`,
     `I read your note twice. Once for content, once for the pleasure of it.\n\nThe cafe sounds like it's coming along.\n\n— ${name}`,
     `Thank you for writing. Nobody writes.\n\nDo it again soon.\n\n— ${name}`,
   ];
@@ -3087,7 +3087,7 @@ class LobbyScreen extends Screen {
     if (input.hit('cancel')) {
       if (!this.canDelete(row)) {
         if (NetClient.locked) { this.msg = 'The host has locked the valleys.'; audio.sfx('error'); }
-        else if (row && !row.newGame) { this.msg = 'Somebody is in that one.'; audio.sfx('error'); }
+        else if (row && !row.newGame) { this.msg = "Somebody's in that one."; audio.sfx('error'); }
         return;
       }
       this.confirm = row;
@@ -3102,7 +3102,7 @@ class LobbyScreen extends Screen {
     if (row.newGame) {
       this.msg = 'Making a new valley...';
       NetClient.newGame().then((made) => {
-        if (!made) { this.busy = false; this.msg = 'The server would not make one.'; return; }
+        if (!made) { this.busy = false; this.msg = "The server wouldn't make one."; return; }
         this.enter(made.id);
       });
     } else {
@@ -3124,7 +3124,7 @@ class LobbyScreen extends Screen {
     this.game.enterGame(id).then((ok) => {
       if (ok) { this.done = true; return; }
       this.busy = false;
-      this.msg = 'Could not join that one. Try another.';
+      this.msg = "Couldn't join that one. Try another.";
     });
   }
 
@@ -3218,7 +3218,7 @@ class LobbyScreen extends Screen {
       drawTextCentered(ctx, `Day ${this.confirm.daysPlayed + 1}, ${this.confirm.cats} cats, `
         + `${money(this.confirm.money)}`, x + w / 2, y + 32, { color: P.uiTextDim, shadow: P.uiShadow });
     }
-    drawTextCentered(ctx, 'This cannot be undone.', x + w / 2, y + 46,
+    drawTextCentered(ctx, "This can't be undone.", x + w / 2, y + 46,
       { color: P.uiRed, shadow: P.uiShadow });
 
     const opts = [['No', !this.yes], ['Yes, delete it', this.yes]];

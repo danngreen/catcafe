@@ -223,8 +223,8 @@ export class Cafe {
     const [o, c] = st.shopHours;
     const staffed = st.employee && st.employee.onDuty;
     if (h < o) return staffed ? `${st.employee.name} clocks in at ${fmtHour(o)}` : `Opens at ${fmtHour(o)}`;
-    if (h >= c) return staffed ? `${st.employee.name} clocked off at ${fmtHour(c)}` : `Closed for the day at ${fmtHour(c)}`;
-    return 'Nobody is minding the counter';
+    if (h >= c) return staffed ? `${st.employee.name} clocked out at ${fmtHour(c)}` : `Closed for the day at ${fmtHour(c)}`;
+    return "Nobody's minding the counter";
   }
 
   // ------------------------------------------------------------- live sim
@@ -411,7 +411,7 @@ export class Cafe {
       this.passedBy++;
       if (performance.now() - this.lastPassMessage > 9000) {
         this.lastPassMessage = performance.now();
-        st.toast('Somebody looked in, saw no free seat, and walked on.', 'warn');
+        st.toast('Somebody looked in, saw no open seats, and kept walking.', 'warn');
       }
       return;
     }
@@ -851,8 +851,8 @@ export class Cafe {
       const fire = this.hearthComfort() * sky.warmth;
       summary.lines.push({
         text: fire >= 0.5
-          ? `${sky.name} out. The fire kept them coming.`
-          : `${sky.name} out. Fewer people about.`,
+          ? `${sky.name} out, but the fire kept them coming.`
+          : `${sky.name} out, so fewer people came by.`,
         tone: fire >= 0.5 ? 'good' : 'warn',
       });
     } else if (sky.crowd > 1.05) {
@@ -887,7 +887,7 @@ export class Cafe {
         summary.lines.push({ text: `${catCount - fed} cat${catCount - fed > 1 ? 's' : ''} went hungry.`, tone: 'bad' });
         quality = 0;
       } else {
-        const names = { 1: 'kibble', 2: 'good food', 3: 'fresh fish', 4: 'gourmet tins' };
+        const names = { 1: 'kibble', 2: 'good food', 3: 'fresh fish', 4: 'gourmet cans' };
         summary.lines.push({ text: `Cats fed on ${names[quality] || 'scraps'}.`, tone: 'good' });
       }
     }
@@ -911,7 +911,7 @@ export class Cafe {
       }
     }
     if (catCount > 0 && st.take('vitamins')) {
-      summary.lines.push({ text: 'Vitamins all round.', tone: 'good' });
+      summary.lines.push({ text: 'Vitamins all around.', tone: 'good' });
     }
 
     // --- daily costs ---

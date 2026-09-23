@@ -390,7 +390,7 @@ export class GameState {
     const gone = this.deliveries.filter((d) => expired(d, now));
     for (const d of gone) {
       this.clearDelivery(d.id);
-      this.toast(`Nobody waited for the order to ${d.name}.`, 'warn');
+      this.toast(`Delivery ran out of time: ${d.name}.`, 'warn');
     }
     return gone.length;
   }
@@ -423,7 +423,7 @@ export class GameState {
     }
 
     if (this.money < 0) {
-      summary.lines.push({ text: 'You are in the red. Sell something, or open earlier.', tone: 'bad' });
+      summary.lines.push({ text: "You're in the red. Sell something, or open earlier.", tone: 'bad' });
     }
 
     // Overnight touches most of the books at once, and only one client runs it.

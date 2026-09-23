@@ -711,7 +711,7 @@ function placeLandmarks(map, elev, reserved, inland, rng) {
     map.addObject('oak', x, y, { variant: 0 });
     map.addObject('oak', x + 1, y - 1, { variant: 1 });
     map.addObject('oak', x - 1, y - 1, { variant: 2 });
-    map.setInteract(x, y + 1, { kind: 'sign', text: 'THE GREAT OAK\n\nIt is enormous. Three of the village houses lean on it slightly, and it does not appear to mind.' });
+    map.setInteract(x, y + 1, { kind: 'sign', text: "THE GREAT OAK\n\nIt's enormous. Three of the village houses lean on it slightly, and it doesn't seem to mind." });
     out.push({ id: 'bigoak', x, y: y + 1, name: 'The Great Oak' });
   }
 
@@ -1005,12 +1005,12 @@ function placeBarriers(map, reserved, rng, passes, towns) {
     {
       id: 'eastpass', need: 'pickaxe', thing: 'boulder', pass: passes.eastpass,
       text: 'A slab of chalk the size of a cart has come down across the bridge.\n\n'
-        + 'There is deep water either side of it. You would need proper tools to shift this.',
+        + "There's deep water on either side. You'd need the right tools to move this.",
     },
     {
       id: 'millpath', need: 'shears', thing: 'berrybush', pass: passes.millpath,
       text: 'Brambles have swallowed the bridge to the mill entirely.\n\n'
-        + 'They are thick as rope and twice as unfriendly. You would need something sharp.',
+        + "They're thick as rope and twice as unfriendly. You'd need something sharp.",
     },
   ];
   for (const b of BRIDGES) {

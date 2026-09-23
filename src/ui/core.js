@@ -408,7 +408,7 @@ export class Hud {
     let stripEnd = 4;
     if (st.shopOpen) {
       const openNow = st.cafeSim.isOpen;
-      const label = openNow ? 'CAFE OPEN' : 'CAFE SHUT';
+      const label = openNow ? 'CAFE OPEN' : 'CAFE CLOSED';
       const cw = textWidth(label) + 12;
       ctx.fillStyle = openNow ? 'rgba(60,120,70,0.9)' : 'rgba(110,60,60,0.9)';
       ctx.fillRect(4, 34, cw, 12);

@@ -26,13 +26,13 @@ const CREW_ONLY = new Set(['Rooms', 'Floors']);
 const FLOORS = [
   { id: T.FLOOR_WOOD, name: 'Oak boards' },
   { id: T.FLOOR_WOOD_DK, name: 'Walnut boards' },
-  { id: T.FLOOR_TILE, name: 'Chequer tile' },
+  { id: T.FLOOR_TILE, name: 'Checker tile' },
   { id: T.FLOOR_TILE_RED, name: 'Terracotta tile' },
   { id: T.FLOOR_STONE, name: 'Flagstones' },
   { id: T.RUG, name: 'Red carpet' },
   { id: T.CARPET_GREEN, name: 'Green carpet' },
   { id: T.CARPET_BLUE, name: 'Blue carpet' },
-  { id: T.PATIO_SLAB, name: 'Paving slabs', outdoor: true },
+  { id: T.PATIO_SLAB, name: 'Paving stones', outdoor: true },
   { id: T.PATIO_BRICK, name: 'Brick paving', outdoor: true },
   { id: T.PATIO_DECK, name: 'Decking', outdoor: true },
 ];
@@ -212,14 +212,14 @@ export class BuildScreen extends Screen {
         this.dragStart = null;
         if (rect.w < 3 || rect.h < 3) { this.flash('Rooms need to be at least 3 by 3.', true); return; }
         if (this.overlapsExisting(rect)) { this.flash('That overlaps a room you already have.', true); return; }
-        if (!this.touchesExisting(rect)) { this.flash('New rooms must join onto the cafe.', true); return; }
+        if (!this.touchesExisting(rect)) { this.flash('New rooms have to connect to the cafe.', true); return; }
         const newArea = this.areaOf(this.draft.rooms) + rect.w * rect.h;
         if (newArea > st.maxFloorArea()) {
-          this.flash(`Too big — your crew can manage ${st.maxFloorArea()} tiles.`, true);
+          this.flash(`Too big — your crew can only handle ${st.maxFloorArea()} tiles.`, true);
           return;
         }
         const cost = this.costOf(rect);
-        if (st.money - this.spentMoney < cost) { this.flash(`That would cost ${cost}. You cannot afford it.`, true); return; }
+        if (st.money - this.spentMoney < cost) { this.flash(`That'd cost ${cost}. You can't afford it.`, true); return; }
         if (st.materials - this.spentMaterials < 1) { this.flash('You need timber and tile. Buy materials from Trowel.', true); return; }
         this.spentMoney += cost;
         this.spentMaterials += 1;
@@ -246,8 +246,8 @@ export class BuildScreen extends Screen {
           title: 'Take this room down?',
           lines: [
             `${r.name || 'This room'} — ${r.w} by ${r.h}`,
-            standing ? `${standing} thing${standing === 1 ? '' : 's'} in it go back in your bag`
-              : 'There is nothing in it',
+            standing ? `${standing} thing${standing === 1 ? '' : 's'} in it go${standing === 1 ? 'es' : ''} back in your bag`
+              : "There's nothing in it",
             `You get ${money(back)} of ${money(this.costOf(r))} back`,
           ],
           yes: 'Take it down',
@@ -255,7 +255,7 @@ export class BuildScreen extends Screen {
           onYes: () => this.demolish(r),
         }));
       } else if (i === 0) {
-        this.flash('You cannot demolish the original room.', true);
+        this.flash("You can't tear down the original room.", true);
       } else {
         this.finish();
       }
@@ -497,7 +497,7 @@ export class BuildScreen extends Screen {
     // Built while out of reach, this would be sent later to a cafe that may
     // by then be somebody else's to rearrange. Wait for the valley.
     if (st.net && st.net.offline) {
-      this.flash('Out of reach of the valley — wait a moment to finish.', true);
+      this.flash("Can't reach the valley — wait a moment, then finish.", true);
       return;
     }
     st.spend(this.spentMoney);

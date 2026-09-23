@@ -319,7 +319,7 @@ export class ShopScreen extends ListScreen {
           ly += Math.min(60, spr.height * Z) + 8;
         }
         if (cols) {
-          const name = (VARIANT_NAMES[it.place] || [])[this.variant] || `Colour ${this.variant + 1}`;
+          const name = (VARIANT_NAMES[it.place] || [])[this.variant] || `Color ${this.variant + 1}`;
           drawText(ctx, `< ${name} >`, dx + 8, ly, { color: P.uiGold, shadow: P.uiShadow });
           cols.forEach((c, i) => {
             const sx = dx + dw - 16 - (cols.length - i) * 14;
@@ -351,7 +351,7 @@ export class ShopScreen extends ListScreen {
       drawTextCentered(ctx, this.msg, VIEW_W / 2, y + h - 16, { color: P.uiGold, shadow: P.uiShadow });
     } else {
       drawTextCentered(ctx, this.qtyMode ? 'Up/Down qty   Space buy   X back'
-        : (this.colours(this.items[this.index]) ? 'Left/Right colour   Space to buy   X to leave' : 'Space to buy    X to leave'),
+        : (this.colours(this.items[this.index]) ? 'Left/Right color   Space to buy   X to leave' : 'Space to buy    X to leave'),
         VIEW_W / 2, y + h - 16, { color: P.uiTextDim, shadow: P.uiShadow });
     }
   }
@@ -479,7 +479,7 @@ export class ServiceScreen extends ListScreen {
       st.spend(c);
       if (this.kind === 'vet') {
         cat.sick = false; cat.sickDays = 0; cat.happiness = clamp(cat.happiness + 0.35, 0, 1);
-        this.msg = `${cat.name} is right as rain.`;
+        this.msg = `${cat.name} is good as new.`;
         audio.sfx('levelup', { gain: 0.6 });
       } else {
         cat.groomed = 7;
@@ -500,11 +500,11 @@ export class ServiceScreen extends ListScreen {
     const { x, w } = fitRect(30, VIEW_W - 60, 240);
     const y = 26, h = VIEW_H - 52;
     panel(ctx, x, y, w, h);
-    panelTitle(ctx, x, y, w, this.kind === 'vet' ? 'Surgery' : 'Grooming Parlour');
+    panelTitle(ctx, x, y, w, this.kind === 'vet' ? 'Vet Clinic' : 'Grooming Parlor');
     drawTextRight(ctx, money(this.game.state.money), x + w - 10, y + 8, { color: P.uiGold, shadow: P.uiShadow });
 
     if (!this.items.length) {
-      drawTextCentered(ctx, this.kind === 'vet' ? 'None of your cats are unwell. Good.' : 'You have no cats yet.',
+      drawTextCentered(ctx, this.kind === 'vet' ? 'None of your cats are sick. Good.' : 'You have no cats yet.',
         VIEW_W / 2, y + h / 2 - 8, { color: P.uiTextDim, shadow: P.uiShadow });
     }
 
@@ -526,12 +526,12 @@ export class ServiceScreen extends ListScreen {
         drawText(ctx, cat.groomed > 0 ? `groomed ${cat.groomed}d` : 'scruffy',
           x + 220, ry + 5, { color: cat.groomed > 0 ? P.uiGreen : P.uiTextDim, shadow: P.uiShadow });
       } else {
-        drawText(ctx, `ill ${cat.sickDays}d`, x + 220, ry + 5, { color: P.uiRed, shadow: P.uiShadow });
+        drawText(ctx, `sick ${cat.sickDays}d`, x + 220, ry + 5, { color: P.uiRed, shadow: P.uiShadow });
       }
       drawTextRight(ctx, String(this.cost(cat)), x + w - 14, ry + 5, { color: P.uiGold, shadow: P.uiShadow });
     }
 
-    drawTextCentered(ctx, this.msgT > 0 ? this.msg : 'Space to book in    X to leave',
+    drawTextCentered(ctx, this.msgT > 0 ? this.msg : 'Space to book a visit    X to leave',
       VIEW_W / 2, y + h - 16, { color: this.msgT > 0 ? P.uiGreen : P.uiTextDim, shadow: P.uiShadow });
   }
 }
@@ -800,7 +800,7 @@ export class CafeScreen extends Screen {
       const list = this.currentList();
       const row = list[this.index];
       if (row && row.kind === 'wage') { this.flash('Left and right to change the wage.'); audio.sfx('ui_move', { gain: 0.4 }); }
-      else if (row && row.kind === 'duty') { st.employee.onDuty = !st.employee.onDuty; this.flash(st.employee.onDuty ? 'On the rota.' : 'Off the rota — no hours, no wages.'); audio.sfx('ui_ok'); }
+      else if (row && row.kind === 'duty') { st.employee.onDuty = !st.employee.onDuty; this.flash(st.employee.onDuty ? 'On the schedule.' : 'Off the schedule — no hours, no wages.'); audio.sfx('ui_ok'); }
       else if (row && row.kind === 'fire') { this.flash(`${st.employee.name} packs up and goes.`); st.employee = null; audio.sfx('ui_back'); }
       st.touch('employee');
     } else {
@@ -957,16 +957,16 @@ export class CafeScreen extends Screen {
     const st = this.game.state;
     const sim = st.cafeSim;
     const unplaced = Object.keys(st.inventory).some((k) => (ITEMS[baseId(k)] || {}).place && st.inventory[k] > 0);
-    if (unplaced) return 'You have furniture in your bag. Press Space here to arrange it.';
+    if (unplaced) return "You've got furniture in your bag. Press Space here to arrange it.";
     if (!sim.availableMenu().length) return 'Your menu board is empty. Buy coffee or cake from a shop.';
-    if (sim.seats().length < 3) return 'Only a seat or two. More chairs means more customers at once — buy them at Velvet & Oak in Thistlewick.';
+    if (sim.seats().length < 3) return 'Only a seat or two. More chairs mean more customers at once — buy them at Velvet & Oak in Thistlewick.';
     if (!st.cats.length) return 'A cat cafe with no cats is just a cafe. Whisker & Paw is down the lane.';
     if (sim.freeSeats().length === 0) {
       return st.workers < 1
-        ? 'You are turning people away. To add a room you need builders: Trowel & Sons, up in Hollowdown.'
-        : 'You are turning people away. Press Space here to build another room, then fill it with tables.';
+        ? "You're turning people away. To add a room you need builders: Trowel & Sons, up in Hollowdown."
+        : "You're turning people away. Press Space here to build another room, then fill it with tables.";
     }
-    if (st.cats.some((c) => c.sick)) return 'A cat is unwell. The vet is in Saltmere, and it spreads.';
+    if (st.cats.some((c) => c.sick)) return "A cat's sick, and it spreads. The vet's in Saltmere.";
     if (sim.furnitureAppeal() < 6) return 'The room is a bit bare. Plants, a rug, a painting — people stay longer. Velvet & Oak, in Thistlewick.';
     if (!st.employee && st.money > 900) return 'You could hire someone. Then the cafe earns while you explore.';
     if (st.cats.every((c) => c.groomed <= 0) && st.cats.length) return 'None of your cats have been groomed lately. Fluff & Tumble, up in Hollowdown.';
@@ -1057,7 +1057,7 @@ export class CafeScreen extends Screen {
       const hrs = shiftHours(st.shopHours);
       const day = Math.round(hrs * e.wage);
       const rows = [
-        [`On the rota: ${e.onDuty ? 'yes' : 'no'}`,
+        [`On the schedule: ${e.onDuty ? 'yes' : 'no'}`,
           `They work your posted hours — ${fmtHour(st.shopHours[0])} to ${fmtHour(st.shopHours[1])}.`],
         [`Wage: < ${e.wage}/hour >`,
           `A fair rate here is about ${e.fairWage} an hour. Under it and service suffers.`],
@@ -1072,7 +1072,7 @@ export class CafeScreen extends Screen {
       });
       // The figure that actually leaves the till, since the wage is per hour
       // and the hours are set on a different screen.
-      drawText(ctx, e.onDuty ? `${hrs}h a day — ${day} in wages` : 'Not on the rota — no wages',
+      drawText(ctx, e.onDuty ? `${hrs}h a day — ${day} in wages` : 'Not on the schedule — no wages',
         x + 12, y + 30, { color: P.uiTextDim, shadow: P.uiShadow });
       drawText(ctx, 'Service quality', x + w - 180, y + 20, { color: P.uiTextDim, shadow: P.uiShadow });
       bar(ctx, x + w - 180, y + 32, 160, 8, e.quality, e.quality > 0.6 ? P.uiGreen : e.quality > 0.35 ? P.uiGold : P.uiRed);
@@ -1119,7 +1119,7 @@ export class CafeScreen extends Screen {
       drawTextRight(ctx, `< ${hh}${hv < 12 || hv === 24 ? 'am' : 'pm'} >`, barX + barW - 18, ry + 3,
         { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
     }
-    drawTextCentered(ctx, 'While you are out, only an employee can keep it open.',
+    drawTextCentered(ctx, "While you're out, only an employee can keep it open.",
       cx, y + h - 34, { color: P.uiTextDim, shadow: P.uiShadow });
   }
 }
@@ -1152,7 +1152,7 @@ export class JournalScreen extends ListScreen {
     panelTitle(ctx, x, y, w, 'Journal');
 
     if (!this.items.length) {
-      drawTextCentered(ctx, 'Nothing on the go just now.', VIEW_W / 2, y + h / 2 - 10, { color: P.uiTextDim, shadow: P.uiShadow });
+      drawTextCentered(ctx, 'Nothing going on right now.', VIEW_W / 2, y + h / 2 - 10, { color: P.uiTextDim, shadow: P.uiShadow });
       drawTextCentered(ctx, 'Talk to people. Somebody always wants something.', VIEW_W / 2, y + h / 2 + 4, { color: P.uiTextDim, shadow: P.uiShadow });
     }
 
@@ -1231,7 +1231,7 @@ export class BagScreen extends ListScreen {
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, 'Bag');
     if (!this.items.length) {
-      drawTextCentered(ctx, 'Empty. You are travelling light.', VIEW_W / 2, y + h / 2 - 6, { color: P.uiTextDim, shadow: P.uiShadow });
+      drawTextCentered(ctx, "Empty. You're traveling light.", VIEW_W / 2, y + h / 2 - 6, { color: P.uiTextDim, shadow: P.uiShadow });
     }
     const listY = y + 26;
     for (let i = 0; i < Math.min(this.visible, this.items.length); i++) {
@@ -1541,7 +1541,7 @@ export class MapScreen extends Screen {
     const shop = here && !run ? SHOPS.find((s2) => s2.id === here.id) : null;
     if (shop) {
       const open = shopOpen(shop, this.game.state.clock);
-      const line = `${hoursText(shop)}  —  ${open ? 'open now' : 'shut now'}`;
+      const line = `${hoursText(shop)}  —  ${open ? 'open now' : 'closed now'}`;
       drawTextCentered(ctx, line, VIEW_W / 2, y + h - 26,
         { color: open ? P.uiGreen : P.uiTextDim, shadow: P.uiShadow });
     }
@@ -1690,7 +1690,7 @@ export class FriendsScreen extends Screen {
   }
 
   static warmth(level) {
-    if (level >= 0.75) return 'Firm friends';
+    if (level >= 0.75) return 'Close friends';
     if (level >= 0.45) return 'Friendly';
     if (level >= 0.2) return 'On good terms';
     return 'Passing acquaintance';
@@ -1717,9 +1717,9 @@ export class FriendsScreen extends Screen {
     panelTitle(ctx, x, y, w, 'Friends');
 
     if (!this.rows.length) {
-      drawTextCentered(ctx, 'You have not got to know anybody yet.', x + w / 2, y + 46,
+      drawTextCentered(ctx, "You haven't gotten to know anybody yet.", x + w / 2, y + 46,
         { color: P.uiTextDim, shadow: P.uiShadow });
-      drawTextCentered(ctx, 'Talk to people. It is mostly that.', x + w / 2, y + 60,
+      drawTextCentered(ctx, "Talk to people. That's mostly it.", x + w / 2, y + 60,
         { color: P.uiTextDim, shadow: P.uiShadow });
       drawTextCentered(ctx, 'Space or X to close', x + w / 2, y + h - 14, { color: P.uiTextDim, shadow: P.uiShadow });
       return;

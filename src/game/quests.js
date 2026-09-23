@@ -137,15 +137,15 @@ function stepText(o, st, step) {
       return `Get ${st.itemName(o.item)} (${Math.min(held, want)}/${want})`;
     }
     case 'deliver': return `Take ${st.itemName(o.item)} to ${st.villagerName(o.to)}`;
-    case 'talk': return `Go and see ${st.villagerName(o.to)}`;
-    case 'flag': return 'Clear whatever is in the way';
+    case 'talk': return `Go see ${st.villagerName(o.to)}`;
+    case 'flag': return "Clear whatever's in the way";
     case 'cats': return `Adopt ${o.count} cats (${st.cats.length}/${o.count})`;
     case 'coat': return 'Feed a cat well until its coat improves';
     case 'rooms': return `Build another room onto the cafe (${st.cafe.rooms.length}/${o.count})`;
     case 'profit': return `Clear ${o.amount} profit in one day (best so far: ${Math.round(st.bestDayProfit)})`;
     case 'money': return `Save up ${o.amount} (${Math.min(st.money, o.amount)}/${o.amount})`;
     case 'seatsEver': return `Have ${o.count} seats in the cafe (${Math.min(st.flags.most_seats || 0, o.count)}/${o.count})`;
-    case 'gross': return `Take ${o.amount} in one day (best so far: ${Math.round(st.bestDayGross || 0)})`;
+    case 'gross': return `Bring in ${o.amount} in one day (best so far: ${Math.round(st.bestDayGross || 0)})`;
     case 'rarecat': return 'Adopt a rare breed';
     case 'furniture': return `Put ${placeName(o.place)} in the cafe`;
     default: return '';
@@ -155,7 +155,7 @@ function stepText(o, st, step) {
 /** The line the giver says while you're partway through. */
 export function progressText(q, st) {
   if (reportBack(q, st)) {
-    return `That part is done. Go and tell ${st.villagerName(q.giver)} about it.`;
+    return `That part's done. Go tell ${st.villagerName(q.giver)} about it.`;
   }
   // A note can change once you have been told something. "Ask around Saltmere"
   // is right until somebody down there answers and quite wrong afterwards, so a
@@ -165,7 +165,7 @@ export function progressText(q, st) {
   const step = currentStep(q, st);
   const when = [...(step.progressWhen || []), ...(q.progressWhen || [])];
   for (const alt of when) if (alt.flag && st.flags && st.flags[alt.flag]) return alt.text;
-  return step.progress || q.progress || 'Still on it, then?';
+  return step.progress || q.progress || 'Still working on it?';
 }
 
 /**
