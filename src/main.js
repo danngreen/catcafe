@@ -1139,7 +1139,13 @@ class Game {
     if (!talking && !this.cutscene) {
       this.player.update(dt, this.input, map, !this.fader.busy);
       this.checkWarp();
-      if (this.input.hit('use')) this.interact();
+      // A keeper who had a job to talk about first: now that they've said
+      // their piece, the shop menu you walked up for.
+      if (this.pendingCounter) {
+        const id = this.pendingCounter;
+        this.pendingCounter = null;
+        if (st.mapId === `shop:${id}`) this.openShopCounter(id);
+      } else if (this.input.hit('use')) this.interact();
       if (this.input.hit('menu')) { this.push(new PauseScreen(this)); audio.sfx('ui_ok', { gain: 0.5 }); }
       if (this.input.hit('perf')) { this.perf.show = !this.perf.show; this.perf.clear(); }
       if (this.input.hit('cafe')) { this.push(new CafeScreen(this)); audio.sfx('ui_ok', { gain: 0.5 }); }
@@ -1930,7 +1936,34 @@ class Game {
     // both of them sound the same.
     if (st.inCafe && this.tryServe()) return;
 
-    // Someone to talk to?
+    const target = this.reachTarget();
+    if (target && target.counter) { this.useCounter(target.counter, target.keeper); return; }
+    if (target && target.villager) { this.talkTo(target.villager); return; }
+    if (target && target.it) { this.handleInteract(target.it, target.tile); return; }
+
+    // Cats respond to being greeted.
+    if (st.inCafe) {
+      let near = null, nearD = 24;
+      for (const cat of st.catActors) {
+        const d = Math.hypot(cat.x - this.player.x, cat.y - this.player.y);
+        if (d < nearD) { nearD = d; near = cat; }
+      }
+      if (near) { this.greetCat(near); return; }
+    }
+  }
+
+  /**
+   * Who or what a press of Space reaches from where you stand. The prompt and
+   * the press both ask this, so the label on screen is always what you get.
+   *
+   * In a shop the keeper and the counter in front of them are one thing: which
+   * of the two you got used to depend on exactly where you stood and where the
+   * keeper had wandered, and the label flickered between them as they moved.
+   */
+  reachTarget() {
+    const st = this.state;
+    const map = this.currentMap;
+    const f = this.player.facingTile();
     const list = (st.mapId === 'overworld' ? this.villagers : (map.villagers || []))
       .filter((v) => v.shift === 'here');
     let best = null, bestD = 26;
@@ -1949,28 +1982,62 @@ class Game {
     // other side.
     const onIt = best && best.tx === f.x && best.ty === f.y
       && !(facing && facing.kind === 'door');
-    if (best && (!facing || onIt)) { this.talkTo(best); return; }
-
+    let target = null;
+    if (best && (!facing || onIt)) target = { villager: best };
     // Then whatever tile we're facing, or the one we're standing on. Pass the
     // tile the trigger was actually found on — doors record it as the spot to
     // put you back on when you come out, and the facing tile is the wall.
-    let tile = f;
-    let it = facing;
-    if (!it) {
-      tile = { x: this.player.tx, y: this.player.ty };
-      it = map.interactAt(tile.x, tile.y);
+    else if (facing) target = { it: facing, tile: f };
+    else {
+      const tile = { x: this.player.tx, y: this.player.ty };
+      const it = map.interactAt(tile.x, tile.y);
+      if (it) target = { it, tile };
     }
-    if (it) { this.handleInteract(it, tile); return; }
+    if (!target) return null;
 
-    // Cats respond to being greeted.
-    if (st.inCafe) {
-      let near = null, nearD = 24;
-      for (const cat of st.catActors) {
-        const d = Math.hypot(cat.x - this.player.x, cat.y - this.player.y);
-        if (d < nearD) { nearD = d; near = cat; }
-      }
-      if (near) { this.greetCat(near); return; }
+    const shop = map.meta && map.meta.shop && SHOPS.find((s) => s.id === map.meta.shop);
+    if (shop && shop.keeper) {
+      const keeper = list.find((v) => v.def.id === shop.keeper) || null;
+      const atCounter = target.it && target.it.kind === 'shopkeeper';
+      if (atCounter || (keeper && target.villager === keeper)) return { counter: shop, keeper };
     }
+    return target;
+  }
+
+  /**
+   * Whether a villager has something to say about a job: a parcel you are
+   * carrying for them, a question you were sent to ask, a job to hand in or a
+   * new one to offer. The same order `talkTo` works through.
+   */
+  hasQuestBusiness(v) {
+    const st = this.state;
+    const id = v.def.id;
+    if (v.recipient) return true;
+    for (const q of QUESTS) {
+      if (st.quests[q.id] !== 'active') continue;
+      const o = currentStep(q, st).objective;
+      if (o.type === 'deliver' && o.to === id && st.has(o.item)) return true;
+      if (o.type === 'talk' && o.to === id) return true;
+    }
+    return (QUESTS_BY_GIVER[id] || []).some((q) => this.wantsToTalk(q, st));
+  }
+
+  /**
+   * Walking up to a shop counter. A keeper with a job for you says so first,
+   * and the shop menu follows once they're done; otherwise it's straight to the
+   * menu. A library has nothing to sell, so it's only ever a conversation.
+   */
+  useCounter(shop, keeper) {
+    if (shop.kind === 'library') {
+      if (keeper) this.talkTo(keeper);
+      return;
+    }
+    if (keeper && this.hasQuestBusiness(keeper)) {
+      this.pendingCounter = shop.id;
+      this.talkTo(keeper);
+      return;
+    }
+    this.openShopCounter(shop.id);
   }
 
   /** Walk up to a cat and you get offered whatever you're carrying for them. */
@@ -2223,7 +2290,7 @@ class Game {
         case 'groomer': this.push(new ServiceScreen(this, 'groom', shop)); break;
         case 'vet': this.push(new ServiceScreen(this, 'vet', shop)); break;
         case 'builder': this.push(new BuilderScreen(this)); break;
-        case 'inn': this.restAtInn(); break;
+        case 'inn': this.sleepAtInn(); break;
         case 'flea': {
           if (!this.fleaStock) {
             const rng = makeRng(WORLD_SEED + st.clock.day * 977);
@@ -2240,34 +2307,49 @@ class Game {
       }
     };
 
-    this.dialogue.say(greet, { speaker: shopKeeperName(shop), onDone: openScreen });
+    // The greeting asks the question: shop, chat, or neither. Chatting needs
+    // the keeper to be standing there, which they are whenever you are.
+    const keeper = (this.currentMap.villagers || [])
+      .find((v) => v.def.id === shop.keeper && v.shift === 'here');
+    const choices = [{ label: SHOP_CHOICE[shop.kind] || SHOP_CHOICE.shop, value: 'shop' }];
+    if (keeper) choices.push({ label: 'Just here to chat', value: 'chat' });
+    choices.push({ label: 'Never mind', value: null });
+    this.dialogue.say(greet, {
+      speaker: shopKeeperName(shop),
+      choices,
+      onDone: (pick) => {
+        if (pick === 'shop') openScreen();
+        else if (pick === 'chat') this.talkTo(keeper);
+      },
+    });
   }
 
   restAtInn() {
-    const st = this.state;
     this.dialogue.say('Sleep until morning?', {
       speaker: 'Hollis',
       choices: [{ label: 'Yes please', value: true }, { label: 'Not yet', value: false }],
-      onDone: (yes) => {
-        if (!yes) return;
-        // Walk to the foot of the stairs and climb out of sight before the
-        // screen fades — the trip upstairs is half the charm of an inn.
-        const map = this.currentMap;
-        const stairs = map.meta && map.meta.stairs
-          ? map.meta.stairs
-          : { x: this.player.tx, y: this.player.ty - 2 };
-        this.cutscene = new StairWalk(this.player, stairs, () => {
-          this.fader.out(() => {
-            this.player.alpha = 1;
-            this.hud.toast('You slept like a log.', 'good');
-            // One valley, one morning: the server moves everybody's clock and
-            // tells us all that the day rolled.
-            if (st.shared) { net.skipTo(7); return; }
-            st.clock.skipTo(7);
-            this.onNewDay({ slept: true });
-          });
-        });
-      },
+      onDone: (yes) => { if (yes) this.sleepAtInn(); },
+    });
+  }
+
+  sleepAtInn() {
+    const st = this.state;
+    // Walk to the foot of the stairs and climb out of sight before the
+    // screen fades — the trip upstairs is half the charm of an inn.
+    const map = this.currentMap;
+    const stairs = map.meta && map.meta.stairs
+      ? map.meta.stairs
+      : { x: this.player.tx, y: this.player.ty - 2 };
+    this.cutscene = new StairWalk(this.player, stairs, () => {
+      this.fader.out(() => {
+        this.player.alpha = 1;
+        this.hud.toast('You slept like a log.', 'good');
+        // One valley, one morning: the server moves everybody's clock and
+        // tells us all that the day rolled.
+        if (st.shared) { net.skipTo(7); return; }
+        st.clock.skipTo(7);
+        this.onNewDay({ slept: true });
+      });
     });
   }
 
@@ -2823,23 +2905,19 @@ class Game {
     if (!label && this.bearInReach() && !map.interactAt(f.x, f.y)) {
       label = bearPrompt(st.bear, st.clock, this.fishToHand());
     }
-    if (!label) {
-      const list = st.mapId === 'overworld' ? this.villagers : (map.villagers || []);
-      for (const v of list) {
-        if (v.shift !== 'here') continue;
-        if (Math.hypot(v.x - this.player.x, v.y - this.player.y) < 26) { label = `Talk to ${v.def.name}`; break; }
-      }
-    }
-    if (!label) {
-      const it = map.interactAt(f.x, f.y) || map.interactAt(this.player.tx, this.player.ty);
-      if (it) {
-        label = it.kind === 'door' ? `Enter ${it.name || 'building'}`
-          : it.kind === 'sign' ? 'Read'
-            : it.kind === 'shopkeeper' ? 'Talk to the shopkeeper'
-              : it.kind === 'postbox' ? 'Mailbox'
-                : it.kind === 'taxi' ? 'Call a taxi bird'
-                  : it.kind === 'barrier' ? 'Examine' : null;
-      }
+    const target = label ? null : this.reachTarget();
+    if (target && target.counter) {
+      label = `Talk to ${target.keeper ? target.keeper.def.name : shopKeeperName(target.counter)}`;
+    } else if (target && target.villager) {
+      label = `Talk to ${target.villager.def.name}`;
+    } else if (target && target.it) {
+      const it = target.it;
+      label = it.kind === 'door' ? `Enter ${it.name || 'building'}`
+        : it.kind === 'sign' ? 'Read'
+          : it.kind === 'shopkeeper' ? `Talk to ${shopKeeperName(SHOPS.find((s) => s.id === it.shop) || {})}`
+            : it.kind === 'postbox' ? 'Mailbox'
+              : it.kind === 'taxi' ? 'Call a taxi bird'
+                : it.kind === 'barrier' ? 'Examine' : null;
     }
     this.promptLabel = label;
     if (!label) return;
@@ -2883,6 +2961,17 @@ function shopKeeperName(shop) {
   const v = VILLAGERS.find((x) => x.id === shop.keeper);
   return v ? v.name : 'Shopkeeper';
 }
+
+/** What you say to a keeper to get down to business, by the kind of shop. */
+const SHOP_CHOICE = {
+  shop: "Let's see what you've got",
+  flea: "Let's see what you've got",
+  cats: 'Can I see the cats?',
+  groomer: "I'd like to book a grooming",
+  vet: 'I need the vet',
+  builder: "Let's talk about building",
+  inn: "I'd like a room for the night",
+};
 
 function catMood(cat) {
   if (cat.sick) return 'They feel warm and keep sneezing. They\'re grumpy and miserable, and they need a vet!';

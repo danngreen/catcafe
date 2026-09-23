@@ -5465,6 +5465,73 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.openShopCounter('grocer');
         await settle();
         await pressKey('Space');
+      } else if (SCRIPT === 'counter') {
+        // A keeper and their counter are one thing: the same prompt from
+        // anywhere in front of it, however the keeper wanders, and a press
+        // gives any quest business first, then shop / chat / never mind.
+        const st = g.state;
+        st.clock.t = 10 * (1200 / 24);
+        delete st.quests.first_beans;
+        const door = g.doorByShop.get('grocer');
+        g.player.x = door.x * 16 + 8; g.player.y = (door.y + 1) * 16 - 2;
+        g.openDoor({ kind: 'door', shop: 'grocer', name: 'grocer' }, door);
+        await settle();
+        const map = g.currentMap;
+        const pip = (map.villagers || []).find((v) => v.def.id === 'pip');
+        const spots = [...map.interacts.entries()].filter(([, it]) => it.kind === 'shopkeeper')
+          .map(([k]) => k.split(',').map(Number));
+        if (!pip || !spots.length) window.__errors.push(`no keeper or counter: pip=${!!pip} spots=${spots.length}`);
+        const labels = new Set();
+        const home = { x: pip.x, y: pip.y };
+        // Every counter tile, facing it or not, with the keeper at either end of their beat.
+        for (const [sx, sy] of spots) {
+          for (const dir of ['up', 'down', 'left']) {
+            for (const dx of [-10, 0, 10]) {
+              pip.x = home.x + dx;
+              g.player.x = sx * 16 + 8; g.player.y = (sy + 1) * 16 - 2; g.player.dir = dir;
+              const t = g.reachTarget();
+              if (!t || !t.counter) window.__errors.push(`counter ${sx},${sy} facing ${dir}, keeper ${dx}: got ${t ? Object.keys(t).join('/') : 'nothing'}`);
+              await frames(1);
+              labels.add(g.promptLabel);
+            }
+          }
+        }
+        pip.x = home.x;
+        if (labels.size !== 1 || !labels.has('Talk to Pip')) window.__errors.push(`prompt varied: ${[...labels].join(' | ')}`);
+        g.player.dir = 'up';
+        // 1. Pip has a job to offer, so that comes first and the menu follows.
+        await pressKey('Space');
+        const offered = g.dialogue.active && !g.dialogue.choices;
+        for (let i = 0; i < 12 && g.dialogue.active && !g.dialogue.choices; i++) await pressKey('Space');
+        await until(() => g.dialogue.active && g.dialogue.choices && g.dialogue.pageComplete, 3000);
+        const menu = g.dialogue.choices ? g.dialogue.choices.map((c) => c.label) : [];
+        if (!offered) window.__errors.push('the quest offer did not come first');
+        if (!st.quests.first_beans) window.__errors.push('the offered job was not taken on');
+        if (menu.length !== 3) window.__errors.push(`menu after the job: ${menu.join(' | ') || 'none'}`);
+        // 2. Just here to chat: Pip talks, no shop.
+        key('ArrowDown', true); await wait(230); key('ArrowDown', false);
+        await pressKey('Space');
+        const chatted = g.dialogue.active && !g.dialogue.choices && !g.screens.length;
+        if (!chatted) window.__errors.push('chatting did not start a conversation');
+        for (let i = 0; i < 12 && g.dialogue.active; i++) await pressKey('Space');
+        await settle();
+        // 3. No business now, so the menu comes straight away; Never mind closes it.
+        await pressKey('Space');
+        const direct = !!(g.dialogue.active && g.dialogue.choices);
+        await until(() => g.dialogue.pageComplete, 3000);
+        if (!direct) window.__errors.push('with nothing to discuss, the menu did not come first');
+        for (let i = 0; i < 2; i++) { key('ArrowDown', true); await wait(230); key('ArrowDown', false); await frames(2); }
+        await pressKey('Space');
+        await settle();
+        if (g.dialogue.active || g.screens.length) window.__errors.push('never mind left something open');
+        // 4. The first choice goes straight into the shop, with no greeting after it.
+        await pressKey('Space');
+        await until(() => g.dialogue.pageComplete, 3000);
+        await pressKey('Space');
+        await settle();
+        const top = g.screens.length ? g.screens[g.screens.length - 1].constructor.name : 'none';
+        if (top !== 'ShopScreen') window.__errors.push(`shopping opened ${top}`);
+        window.__cont = `labels=[${[...labels].join('|')}] menu=[${menu.join('|')}] shop=${top}`;
       } else if (SCRIPT === 'menus') {
         // Every menu reachable from a key: it must open, scroll, and close
         // again, leaving the player back in play mode each time.

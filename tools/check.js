@@ -54,6 +54,7 @@ const BUDGET = {
   // Cutscenes and long walks run in real time and can't be hurried.
   taxi: 22000,
   sleep: 20000,
+  counter: 20000,
   door: 20000,
   doorblock: 25000,
   resumeplace: 25000,
@@ -196,7 +197,7 @@ const GROUPS = {
   // read slower without anything being wrong, so they assert on what the code
   // does — how much work it asks for — rather than on how long it took.
   perf: ['waterperf'],
-  ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'exterior',
+  ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'counter', 'exterior',
     'summarylines', 'journalstep', 'titleme', 'signkeys', 'menukeys', 'oldsafari', 'patio', 'deaditems', 'booktabs', 'bigpieces', 'painting', 'friends', 'confirm', 'catvoices', 'delivery', 'deliverhouse', 'clearnight', 'wagekeys', 'patiorain'],
   cutscene: ['taxi', 'sleep', 'door'],
   mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile', 'pickupmobile', 'slidepad', 'bookmobile', 'staffmobile', 'hoursmobile'],
@@ -498,7 +499,9 @@ async function main() {
       await dropValley(valley);
     }
 
-    const real = problems.filter((p) => !p.includes('favicon'));
+    // `.deployed` only exists on a deployed copy (deploy/push.sh writes it); the
+    // display report asks for it anyway and expects the 404 from a working tree.
+    const real = problems.filter((p) => !p.includes('favicon') && !p.includes('/.deployed'));
     console.log(`--- ${sc} --- ${(took / 1000).toFixed(1)}s${hung ? ` (hit its ${budget / 1000}s ceiling)` : ''}`);
     console.log(summary.trim() || '(no in-page summary)');
     if (real.length) {
