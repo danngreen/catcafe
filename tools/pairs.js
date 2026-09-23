@@ -56,6 +56,8 @@ function run(scenario, hold = 0, game = null) {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, BASE: `http://localhost:${PORT}` },
     });
+    children.add(p);
+    p.on('close', () => children.delete(p));
     let out = '';
     p.stdout.on('data', (d) => { out += d; });
     p.stderr.on('data', (d) => { out += d; });
@@ -84,6 +86,13 @@ counts these pairs assert on will not match.
   }
 } catch { /* nothing there: exactly what we want */ }
 
+// Take everything down with us if we are interrupted: each half is a check.js
+// with a browser under it, and the server is ours too.
+const children = new Set();
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(sig, () => { for (const c of children) { try { c.kill(sig); } catch { /* gone */ } } process.exit(130); });
+}
+
 let failed = 0;
 for (const pair of pairs) {
   // A fresh room each time, so a previous pair's players aren't still in it.
@@ -91,6 +100,8 @@ for (const pair of pairs) {
     stdio: 'ignore',
     env: { ...process.env, SESSION_SAVE: '0' },
   });
+  children.add(server);
+  server.on('close', () => children.delete(server));
   await sleep(1500);
   if (pair.setup) await SETUP[pair.setup]();
 

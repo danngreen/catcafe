@@ -3576,4 +3576,8 @@ if (location.search.includes('autostart')) (async () => {
     { wall: WALL_CHOICES[0], roof: ROOF_CHOICES[0], awning: AWNING_CHOICES[0],
       floor: T.FLOOR_WOOD, name: DEFAULT_CAFE_NAME });
   g.dialogue.active = false;
+  // Something for the test harness to wait on. Choosing a valley and joining
+  // it takes a round trip or two, and a scenario that begins before this has
+  // finished is standing in a game with no cafe in it yet.
+  g.autostarted = true;
 })();

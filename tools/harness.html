@@ -159,6 +159,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
     }
 
     (async () => {
+      // The game is up, and — if it was asked to start itself — has finished
+      // doing so: picked a valley, joined it, and opened the cafe.
+      await until(() => window.game, 8000);
+      if (window.game) await Promise.race([window.game.ready, wait(8000)]);
+      if (location.search.includes('autostart')) await until(() => window.game && window.game.autostarted, 12000);
       await settle();
       const g = window.game;
       if (!g) {
@@ -228,7 +233,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const seatedOk = sim.customers.filter((c) => c.state === 'seated')
           .every((c) => c.seat && c.seat.taken === c);
         const kept = sim.customers.reduce((n, c) => n + (c.spend || 0), 0);
-        await wait(5000);
+        await until(() => sim.customers.some((c) => c.state === 'waiting' && c.emoteIcon), 8000);
         const later = sim.customers.map((c) => c.state);
         const waiting = sim.customers.filter((c) => c.state === 'waiting');
         window.__takeover = `before=[${before}] after=[${after}] later=[${later}]`
@@ -2385,7 +2390,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.searchSpot = (sp) => { trace.push('search:' + sp); return _search(sp); };
         // He fades in on his shift; pressing while he is still arriving would
         // test nothing, because an arriving villager is not a talk target.
-        for (let i = 0; i < 90 && ghost && ghost.shift !== 'here'; i++) await wait(100);
+        await until(() => !(ghost && ghost.shift !== 'here'), 9000);
         // Beside the hedge, not on it — which is where he stands in a real
         // valley, and near enough to have swallowed every press meant for it.
         if (ghost) { ghost.x = (tx + 1) * 16 + 8; ghost.y = ty * 16 + 14; }
@@ -2568,14 +2573,14 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await settle();
         const afterTelling = seen();
         // He walks in from the treeline like anyone else, so give him the walk.
-        for (let i = 0; i < 100 && ghost().shift !== 'here'; i++) await wait(100);
+        await until(() => !(ghost().shift !== 'here'), 10000);
         const g2 = ghost();
         const talkable = !!g2 && g2.shift === 'here';
 
         // And by day he is gone again like any other night villager.
         st.clock.t = 11 * (1200 / 24);
         // He fades out and walks off rather than blinking away, so wait him out.
-        for (let i = 0; i < 80 && seen(); i++) await wait(100);
+        await until(() => !(seen()), 8000);
         const byDay = seen();
 
         window.__ghost = `before=${before} onQuest=${onQuest} afterLooking=${afterLooking}`
@@ -2896,7 +2901,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           }
           await settle();
           key('ArrowRight', true);
-          for (let i = 0; i < 40 && Math.floor(g.player.x / 16) < wet.tx; i++) await wait(100);
+          await until(() => !(Math.floor(g.player.x / 16) < wet.tx), 4000);
           key('ArrowRight', false);
           await settle();
           swamIn = W.WATER_TILES.includes(g.overworld.get(g.player.tx, g.player.ty));
@@ -3236,7 +3241,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const before = { day: st.clock.day, t: st.clock.t, live: st.liveDeliveries().length };
         g.flyTaxi({ x: spot.x, y: spot.y, name: spot.name });
         // The flight is a cutscene, then a fade, then the drop.
-        for (let i = 0; i < 120 && (g.cutscene || g.fader.busy); i++) await wait(100);
+        await until(() => !(g.cutscene || g.fader.busy), 12000);
         await wait(600);
 
         const cost = (st.clock.day - before.day) * TT.DAY_SECONDS + (st.clock.t - before.t);
@@ -3254,7 +3259,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await settle();
         const eveBefore = st.clock.day;
         g.flyTaxi({ x: g.homeDoor.x, y: g.homeDoor.y, name: 'home' });
-        for (let i = 0; i < 120 && (g.cutscene || g.fader.busy); i++) await wait(100);
+        await until(() => !(g.cutscene || g.fader.busy), 12000);
         await wait(700);
         const eveRolled = st.clock.day !== eveBefore;
         const eveSummary = g.screens.some((s2) => s2.constructor.name === 'SummaryScreen');
@@ -5178,7 +5183,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         st.questStep = { ...st.questStep, lane_end_hedge: 1 };
         st.clock.t = 21 * (1200 / 24);
         g.updateVillagerShift();
-        await wait(14000);
+        await until(() => g.villagers.filter((v) => v.def.when === 'night').every((v) => v.shift === 'here'), 14000);
         const night = g.villagers.filter((v) => v.def.when === 'night');
         const stuck = night.filter((v) => v.shift !== 'here');
         const w = g.villagers.find((v) => v.def.id === 'woofers');
@@ -5818,7 +5823,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await roundTrip();
         const start = names();
         await press('Space');                              // into the first valley
-        for (let i = 0; i < 30 && !g.titleScreen; i++) await wait(150);
+        await until(() => !(!g.titleScreen), 4500);
         await settle();
         const title = g.titleScreen;
         const options = title ? title.options.join('/') : '';
@@ -5912,7 +5917,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const before = st.money;
         const rejoins0 = g.net.rejoinCount;
         g.net.link.ws.close();
-        for (let i = 0; i < 100 && g.net.connected; i++) await wait(10);
+        await until(() => !(g.net.connected), 1000);
         const wasDown = !g.net.connected;
         // Offline: a purchase, a flag, a friendship and a place found.
         st.spend(50);
@@ -6142,7 +6147,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           }
         };
         await wait(900);
-        for (let i = 0; i < 40 && !g.net.simOwner; i++) await wait(100);
+        await until(() => !(!g.net.simOwner), 4000);
         const day0 = st.clock.day, money0 = st.money, played0 = st.daysPlayed;
         if (!g.net.simOwner) {
           window.__errors.push('somebody else owns this valley, so nothing here means anything');

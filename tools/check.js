@@ -316,6 +316,15 @@ async function main() {
     'about:blank',
   ], { stdio: 'ignore' });
 
+  // Never leave the browser behind. A run that is interrupted — Ctrl-C, a
+  // closed terminal, a parent that is killed — used to orphan it with a game
+  // page still open, and the game reconnects by itself: the orphan sat there
+  // for days rejoining any server that came up on its port, as a player nobody
+  // had started, who had joined first and so ran the cafe.
+  const tidy = () => { try { chrome.kill('SIGKILL'); } catch { /* gone */ } if (server) { try { server.kill(); } catch { /* gone */ } } };
+  process.on('exit', tidy);
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { tidy(); process.exit(130); });
+
   let wsUrl = null;
   for (let i = 0; i < 60 && !wsUrl; i++) {
     await sleep(150);
