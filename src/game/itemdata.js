@@ -10,7 +10,7 @@
 export const ITEM_DATA = {
   house_coffee: {
     name: 'House Coffee',
-    desc: 'Dependable. Nobody has ever complained about it, which is its own kind of praise.',
+    desc: "It's dependable. Nobody has ever complained about it, which is its own kind of praise.",
     cat: 'drink',
     icon: 'coffee',
     cost: 4,
@@ -21,7 +21,7 @@ export const ITEM_DATA = {
   },
   espresso: {
     name: 'Espresso',
-    desc: 'Small, dark, and extremely serious.',
+    desc: "It's small, dark, and extremely serious.",
     cat: 'drink',
     icon: 'espresso',
     cost: 5,
@@ -32,7 +32,7 @@ export const ITEM_DATA = {
   },
   latte: {
     name: 'Latte',
-    desc: 'The foam has a cat face on it. It takes you nine tries each time.',
+    desc: "There's a cat face in the foam, and it takes you nine tries every time.",
     cat: 'drink',
     icon: 'latte',
     cost: 7,
@@ -43,7 +43,7 @@ export const ITEM_DATA = {
   },
   black_tea: {
     name: 'Black Tea',
-    desc: "Strong enough to stand a spoon in, if that's how you like it.",
+    desc: "It's strong enough to stand a spoon in, if that's how you like it.",
     cat: 'drink',
     icon: 'tea',
     cost: 3,
@@ -54,7 +54,7 @@ export const ITEM_DATA = {
   },
   herbal_tea: {
     name: 'Herbal Tea',
-    desc: 'Chamomile, mostly. People fall asleep in the window seat.',
+    desc: "It's mostly chamomile, and people keep falling asleep in the window seat.",
     cat: 'drink',
     icon: 'herbal',
     cost: 5,
@@ -65,7 +65,7 @@ export const ITEM_DATA = {
   },
   matcha: {
     name: 'Matcha',
-    desc: 'Bright green and quietly expensive.',
+    desc: "It's bright green and quietly expensive.",
     cat: 'drink',
     icon: 'matcha',
     cost: 9,
@@ -76,7 +76,7 @@ export const ITEM_DATA = {
   },
   cocoa: {
     name: 'Hot Cocoa',
-    desc: 'Two marshmallows. Three if you like them.',
+    desc: 'It comes with two marshmallows, or three if you like them.',
     cat: 'drink',
     icon: 'cocoa',
     cost: 6,
@@ -87,7 +87,7 @@ export const ITEM_DATA = {
   },
   lemonade: {
     name: 'Lemonade',
-    desc: 'Made fresh, which is why it never lasts.',
+    desc: "It's made fresh, which is why it never lasts.",
     cat: 'drink',
     icon: 'lemonade',
     cost: 4,
@@ -109,7 +109,7 @@ export const ITEM_DATA = {
   },
   dandelion: {
     name: 'Dandelion Cordial',
-    desc: 'Made from a weed by somebody who knows exactly which weed. Tastes like a field in June.',
+    desc: "It's made from a weed by somebody who knows exactly which weed, and it tastes like a field in June.",
     cat: 'drink',
     icon: 'dandelion',
     cost: 6,
@@ -120,7 +120,7 @@ export const ITEM_DATA = {
   },
   iced_coffee: {
     name: 'Iced Coffee',
-    desc: "Over lots of ice, in a tall glass, for the one week a year it's warranted.",
+    desc: "It's served over lots of ice in a tall glass, for the one week a year when it's hot enough.",
     cat: 'drink',
     icon: 'icedCoffee',
     cost: 5,
@@ -131,7 +131,7 @@ export const ITEM_DATA = {
   },
   iced_tea: {
     name: 'Iced Tea',
-    desc: 'With a slice of lemon balanced on the rim, which nobody eats.',
+    desc: 'It comes with a slice of lemon balanced on the rim, which nobody ever eats.',
     cat: 'drink',
     icon: 'icedTea',
     cost: 4,
@@ -142,7 +142,7 @@ export const ITEM_DATA = {
   },
   cider: {
     name: 'Cloudy Cider',
-    desc: 'Pressed from the orchard up the valley. Very cloudy. Very good.',
+    desc: "It's pressed from the orchard up the valley, and it's very cloudy and very good.",
     cat: 'drink',
     icon: 'cider',
     cost: 8,
@@ -153,7 +153,7 @@ export const ITEM_DATA = {
   },
   smoked_tea: {
     name: 'Smoked Lapsang',
-    desc: 'Tastes like a bonfire in the best possible way. Divisive. Profitable.',
+    desc: "It tastes like a bonfire in the best possible way. Not everyone loves it, but it's very profitable.",
     cat: 'drink',
     icon: 'tea',
     cost: 14,
@@ -165,7 +165,7 @@ export const ITEM_DATA = {
   },
   cookie: {
     name: 'Butter Cookie',
-    desc: 'Shaped like a paw. Badly, but sincerely.',
+    desc: "It's shaped like a paw, badly but sincerely.",
     cat: 'food',
     icon: 'cookie',
     cost: 3,
@@ -175,7 +175,7 @@ export const ITEM_DATA = {
   },
   scone: {
     name: 'Scone',
-    desc: "Jam first. In this valley, that's not negotiable.",
+    desc: "The jam goes on first. In this valley, that's not negotiable.",
     cat: 'food',
     icon: 'scone',
     cost: 5,
@@ -185,7 +185,7 @@ export const ITEM_DATA = {
   },
   croissant: {
     name: 'Croissant',
-    desc: 'Leaves flakes everywhere. The cats consider this a feature.',
+    desc: 'It leaves flakes everywhere, and the cats consider that a feature.',
     cat: 'food',
     icon: 'croissant',
     cost: 6,
@@ -195,7 +195,7 @@ export const ITEM_DATA = {
   },
   muffin: {
     name: 'Berry Muffin',
-    desc: 'Berries from the hedgerow, mostly picked by you.',
+    desc: "It's full of berries from the hedgerow, and you picked most of them yourself.",
     cat: 'food',
     icon: 'muffin',
     cost: 5,
@@ -205,7 +205,7 @@ export const ITEM_DATA = {
   },
   sandwich: {
     name: 'Sandwich',
-    desc: 'Cut into triangles, because squares are for weekdays.',
+    desc: "It's cut into triangles, because squares are for weekdays.",
     cat: 'food',
     icon: 'sandwich',
     cost: 7,
@@ -215,7 +215,7 @@ export const ITEM_DATA = {
   },
   toast: {
     name: 'Honey Toast',
-    desc: 'Thick-cut, dripping. Deeply unserious food.',
+    desc: "It's cut thick and dripping with honey. This is deeply unserious food.",
     cat: 'food',
     icon: 'toast',
     cost: 6,
@@ -226,7 +226,7 @@ export const ITEM_DATA = {
   },
   cake: {
     name: 'Sponge Cake',
-    desc: 'A slice big enough to justify a second visit.',
+    desc: 'The slices are big enough to justify a second visit.',
     cat: 'food',
     icon: 'cake',
     cost: 9,
@@ -236,7 +236,7 @@ export const ITEM_DATA = {
   },
   pancakes: {
     name: 'Pancake Stack',
-    desc: 'Weekend food. People come just for these.',
+    desc: 'Pancakes are weekend food, and people come in just for them.',
     cat: 'food',
     icon: 'pancakes',
     cost: 8,
@@ -247,7 +247,7 @@ export const ITEM_DATA = {
   },
   parfait: {
     name: 'Berry Parfait',
-    desc: 'Layered in a tall glass so it looks like it took effort.',
+    desc: "It's layered in a tall glass so it looks like it took effort.",
     cat: 'food',
     icon: 'parfait',
     cost: 11,
@@ -258,7 +258,7 @@ export const ITEM_DATA = {
   },
   pie: {
     name: 'Fruit Pie',
-    desc: 'Whole pie, sold by the slice, gone by three.',
+    desc: "It's a whole pie sold by the slice, and it's gone by three.",
     cat: 'food',
     icon: 'pie',
     cost: 12,
@@ -269,7 +269,7 @@ export const ITEM_DATA = {
   },
   honey_scone: {
     name: 'Honey Scone',
-    desc: "Clover's honey, warm from the oven. People have written letters about this.",
+    desc: "It's made with Clover's honey and served warm from the oven. People have written letters about it.",
     cat: 'food',
     icon: 'scone',
     cost: 8,
@@ -281,7 +281,7 @@ export const ITEM_DATA = {
   },
   ice_cream: {
     name: 'Ice Cream',
-    desc: 'Two scoops. Melts faster than anybody plans for.',
+    desc: "It's two scoops, and it melts faster than anybody plans for.",
     cat: 'food',
     icon: 'iceCream',
     cost: 6,
@@ -303,7 +303,7 @@ export const ITEM_DATA = {
   },
   kibble: {
     name: 'Everyday Kibble',
-    desc: 'Keeps a cat alive and mildly disappointed.',
+    desc: 'It keeps a cat alive and mildly disappointed.',
     cat: 'catfood',
     icon: 'catfood',
     cost: 8,
@@ -313,7 +313,7 @@ export const ITEM_DATA = {
   },
   good_food: {
     name: 'Good Cat Food',
-    desc: 'Coats get glossier within the week. Customers notice.',
+    desc: 'Coats get glossier within a week, and customers notice.',
     cat: 'catfood',
     icon: 'catfoodPremium',
     cost: 18,
@@ -323,7 +323,7 @@ export const ITEM_DATA = {
   },
   fresh_fish: {
     name: 'Fresh Fish',
-    desc: 'Landed this morning. Silky coats, delighted cats, very short shelf life.',
+    desc: "It was landed this morning. It makes for silky coats and delighted cats, but it doesn't keep for long.",
     cat: 'catfood',
     icon: 'fish',
     cost: 30,
@@ -333,7 +333,7 @@ export const ITEM_DATA = {
   },
   gourmet: {
     name: 'Gourmet Cans',
-    desc: 'Absurd. Effective. The cats get visibly smug.',
+    desc: "It's absurd, but it works. The cats get visibly smug.",
     cat: 'catfood',
     icon: 'catfoodGourmet',
     cost: 44,
@@ -344,7 +344,7 @@ export const ITEM_DATA = {
   },
   catnip: {
     name: 'Catnip',
-    desc: 'One pinch and the whole room becomes entertainment for an hour.',
+    desc: 'One pinch turns the whole room into entertainment for an hour.',
     cat: 'supply',
     icon: 'catnip',
     cost: 22,
@@ -352,7 +352,7 @@ export const ITEM_DATA = {
   },
   treats: {
     name: 'Cat Treats',
-    desc: 'The universal apology.',
+    desc: "It's the universal apology.",
     cat: 'supply',
     icon: 'treats',
     cost: 14,
@@ -360,7 +360,7 @@ export const ITEM_DATA = {
   },
   medicine: {
     name: 'Cat Medicine',
-    desc: 'Treats one sick cat at home, if you catch it early.',
+    desc: 'It treats one sick cat at home, if you catch it early.',
     cat: 'supply',
     icon: 'medicine',
     cost: 46,
@@ -368,7 +368,7 @@ export const ITEM_DATA = {
   },
   vitamins: {
     name: 'Vitamins',
-    desc: 'Makes illness less likely for a while. Tastes revolting, apparently.',
+    desc: 'It makes illness less likely for a while. Apparently it tastes revolting.',
     cat: 'supply',
     icon: 'vitamins',
     cost: 34,
@@ -376,7 +376,7 @@ export const ITEM_DATA = {
   },
   brush: {
     name: 'Grooming Brush',
-    desc: 'Do a rough job yourself between trips to the groomer.',
+    desc: 'Use it to do a rough job yourself between trips to the groomer.',
     cat: 'supply',
     icon: 'brush',
     cost: 60,
@@ -384,7 +384,7 @@ export const ITEM_DATA = {
   },
   ribbon: {
     name: 'Ribbon Collar',
-    desc: 'Purely decorative. Extremely effective.',
+    desc: "It's purely decorative, and it's extremely effective.",
     cat: 'supply',
     icon: 'ribbon',
     cost: 40,
@@ -393,7 +393,7 @@ export const ITEM_DATA = {
   },
   bell: {
     name: 'Little Bell',
-    desc: 'You always know where they are. So does everyone else.',
+    desc: 'With a bell on, you always know where they are. So does everyone else.',
     cat: 'supply',
     icon: 'bell',
     cost: 55,
@@ -402,7 +402,7 @@ export const ITEM_DATA = {
   },
   toy_ball: {
     name: 'Bouncy Ball',
-    desc: 'Ends up under the furniture within the hour. Put it down and the cats will find it.',
+    desc: 'It ends up under the furniture within the hour. Put it down and the cats will find it.',
     cat: 'supply',
     icon: 'toyBall',
     cost: 28,
@@ -412,7 +412,7 @@ export const ITEM_DATA = {
   },
   toy_yarn: {
     name: 'Ball of Yarn',
-    desc: 'Classic. Undefeated. Set it out and see.',
+    desc: "It's a classic that has never been beaten. Set it out and see.",
     cat: 'supply',
     icon: 'toyYarn',
     cost: 24,
@@ -433,7 +433,7 @@ export const ITEM_DATA = {
   },
   f_chair: {
     name: 'Wooden Chair',
-    desc: 'A place to sit. The foundation of hospitality.',
+    desc: "It's a place to sit, which is the foundation of hospitality.",
     cat: 'furniture',
     icon: 'chair',
     cost: 55,
@@ -443,7 +443,7 @@ export const ITEM_DATA = {
   },
   f_stool: {
     name: 'Padded Stool',
-    desc: 'No back, but cheerful.',
+    desc: "It has no back, but it's cheerful.",
     cat: 'furniture',
     icon: 'stool',
     cost: 70,
@@ -453,7 +453,7 @@ export const ITEM_DATA = {
   },
   f_table: {
     name: 'Round Table',
-    desc: 'Fits two comfortably, three if they like each other.',
+    desc: 'It fits two comfortably, or three if they like each other.',
     cat: 'furniture',
     icon: 'table',
     cost: 110,
@@ -471,7 +471,7 @@ export const ITEM_DATA = {
   },
   f_table_long: {
     name: 'Long Table',
-    desc: 'For groups. Groups order more.',
+    desc: "It's for groups, and groups order more.",
     cat: 'furniture',
     icon: 'tableLong',
     cost: 210,
@@ -490,7 +490,7 @@ export const ITEM_DATA = {
   },
   f_plant: {
     name: 'Potted Fern',
-    desc: 'Instantly makes a room look cared for.',
+    desc: 'It instantly makes a room look cared for.',
     cat: 'furniture',
     icon: 'plant',
     cost: 90,
@@ -499,7 +499,7 @@ export const ITEM_DATA = {
   },
   f_lamp: {
     name: 'Floor Lamp',
-    desc: 'Warm pool of light. Essential after dark.',
+    desc: 'It casts a warm pool of light, which is essential after dark.',
     cat: 'furniture',
     icon: 'floorlamp',
     cost: 130,
@@ -509,7 +509,7 @@ export const ITEM_DATA = {
   },
   f_painting: {
     name: 'Landscape Painting',
-    desc: 'The valley, badly painted, beloved.',
+    desc: "It's the valley, badly painted and dearly loved.",
     cat: 'furniture',
     icon: 'painting',
     cost: 160,
@@ -519,7 +519,7 @@ export const ITEM_DATA = {
   },
   f_bookshelf: {
     name: 'Bookshelf',
-    desc: 'People browse. Browsing people order tea.',
+    desc: 'People browse, and browsing people order tea.',
     cat: 'furniture',
     icon: 'bookshelf',
     cost: 240,
@@ -558,7 +558,7 @@ export const ITEM_DATA = {
   },
   f_catbed: {
     name: 'Cat Bed',
-    desc: "They'll sleep in the box it came in. Then, eventually, in this.",
+    desc: "They'll sleep in the box it came in first. Eventually, they'll sleep in this.",
     cat: 'furniture',
     icon: 'catbed',
     cost: 85,
@@ -568,7 +568,7 @@ export const ITEM_DATA = {
   },
   f_scratch: {
     name: 'Scratching Post',
-    desc: 'Saves the couch. Worth every fish.',
+    desc: "It saves the couch, and it's worth every fish.",
     cat: 'furniture',
     icon: 'scratchpost',
     cost: 95,
@@ -578,7 +578,7 @@ export const ITEM_DATA = {
   },
   f_bowl: {
     name: 'Feeding Bowl',
-    desc: 'More bowls, fewer arguments.',
+    desc: 'More bowls means fewer arguments.',
     cat: 'furniture',
     icon: 'catbowl',
     cost: 35,
@@ -588,7 +588,7 @@ export const ITEM_DATA = {
   },
   f_patio_chair: {
     name: 'Patio Chair',
-    desc: 'Slatted, stackable, and surprisingly comfortable for what it is.',
+    desc: "It's slatted, stackable, and surprisingly comfortable for what it is.",
     cat: 'furniture',
     icon: 'patioChair',
     cost: 65,
@@ -599,7 +599,7 @@ export const ITEM_DATA = {
   },
   f_patio_stool: {
     name: 'Patio Stool',
-    desc: 'Light enough to move, heavy enough to stay put in a breeze.',
+    desc: "It's light enough to move but heavy enough to stay put in a breeze.",
     cat: 'furniture',
     icon: 'patioStool',
     cost: 55,
@@ -610,7 +610,7 @@ export const ITEM_DATA = {
   },
   f_patio_table: {
     name: 'Patio Table',
-    desc: 'Mesh top. Rain goes straight through, which is the entire idea.',
+    desc: "It has a mesh top, so rain goes straight through. That's the whole idea.",
     cat: 'furniture',
     icon: 'patioTable',
     cost: 130,
@@ -620,7 +620,7 @@ export const ITEM_DATA = {
   },
   f_patio_bench: {
     name: 'Garden Bench',
-    desc: 'Seats three politely, two comfortably, one gloriously.',
+    desc: 'It seats three politely, two comfortably, or one gloriously.',
     cat: 'furniture',
     icon: 'patioBench',
     cost: 260,
@@ -631,7 +631,7 @@ export const ITEM_DATA = {
   },
   f_umbrella: {
     name: 'Umbrella Table',
-    desc: 'Shade on the hot days, shelter on the sudden ones. Earns its keep either way.',
+    desc: 'It gives shade on hot days and shelter when the rain comes suddenly, so it earns its keep either way.',
     cat: 'furniture',
     icon: 'umbrella',
     cost: 340,
@@ -641,7 +641,7 @@ export const ITEM_DATA = {
   },
   f_fountain: {
     name: 'Stone Fountain',
-    desc: 'Absurdly expensive. People sit near it and forget to leave, and the cats stare at it for hours.',
+    desc: "It's absurdly expensive. People sit near it and forget to leave, and the cats stare at it for hours.",
     cat: 'furniture',
     icon: 'fountain',
     cost: 1400,
@@ -653,7 +653,7 @@ export const ITEM_DATA = {
   },
   f_telephone: {
     name: 'Telephone',
-    desc: 'Cream bakelite, a dial, and a bell loud enough to be heard from the pantry. People call up wanting things brought to them.',
+    desc: "It's cream Bakelite with a dial and a bell loud enough to hear from the pantry. People call up wanting things brought to them.",
     cat: 'furniture',
     icon: 'phone',
     place: 'phone',
@@ -661,7 +661,7 @@ export const ITEM_DATA = {
   },
   f_counter: {
     name: 'Service Counter',
-    desc: 'Where the money happens.',
+    desc: 'This is where the money happens.',
     cat: 'furniture',
     icon: 'counterUnit',
     cost: 260,
@@ -679,7 +679,7 @@ export const ITEM_DATA = {
   },
   f_machine: {
     name: 'Coffee Machine',
-    desc: 'Hisses impressively. Customers trust a machine that hisses.',
+    desc: 'It hisses impressively, and customers trust a machine that hisses.',
     cat: 'furniture',
     icon: 'grinder',
     cost: 380,
@@ -688,7 +688,7 @@ export const ITEM_DATA = {
   },
   f_bar: {
     name: 'Bar Counter',
-    desc: "Three yards of polished oak. People who'd never take a table will happily perch at a bar.",
+    desc: "It's three yards of polished oak. People who'd never take a table will happily perch at a bar.",
     cat: 'furniture',
     icon: 'bar',
     cost: 480,
@@ -697,7 +697,7 @@ export const ITEM_DATA = {
   },
   f_barstool: {
     name: 'Bar Stool',
-    desc: 'Tall, swivelly, and always taken by whoever got here first.',
+    desc: "It's tall and swivelly, and it's always taken by whoever got here first.",
     cat: 'furniture',
     icon: 'barstool',
     cost: 95,
@@ -707,7 +707,7 @@ export const ITEM_DATA = {
   },
   f_rug: {
     name: 'Woven Rug',
-    desc: 'Softens the whole room, and the acoustics with it.',
+    desc: 'It softens the whole room, and the acoustics with it.',
     cat: 'furniture',
     icon: 'rug',
     cost: 140,
@@ -717,28 +717,28 @@ export const ITEM_DATA = {
   },
   pickaxe: {
     name: 'Rock Pick',
-    desc: 'Heavy. Splits rocks like cheese.',
+    desc: "It's heavy, and it splits rocks like cheese.",
     cat: 'key',
     icon: 'hammer',
     cost: 320,
   },
   shears: {
     name: 'Hedge Shears',
-    desc: 'For brambles that have gotten too big for their britches.',
+    desc: "They're for brambles that have gotten too big for their britches.",
     cat: 'key',
     icon: 'hammer',
     cost: 180,
   },
   rope: {
     name: 'Coil of Rope',
-    desc: 'Twenty fathoms of good hemp.',
+    desc: "It's twenty fathoms of good hemp.",
     cat: 'key',
     icon: 'bag',
     cost: 150,
   },
   valley_map: {
     name: 'Valley Map',
-    desc: "Hand-drawn, slightly wrong about the north, but it shows every village and every taxi perch — including the ones you haven't walked to yet.",
+    desc: "It's hand-drawn and slightly wrong about the north, but it shows every village and every taxi perch, including the ones you haven't walked to yet.",
     cat: 'key',
     icon: 'map',
     cost: 240,
@@ -746,20 +746,20 @@ export const ITEM_DATA = {
   },
   honey: {
     name: 'Jar of Honey',
-    desc: 'Sunlight in a jar. Unlocks honey bakes if the baker sees it.',
+    desc: "It's sunlight in a jar. If the baker sees it, honey bakes will be on the menu.",
     cat: 'key',
     icon: 'honey',
     cost: 55,
   },
   seashell: {
     name: 'Spiral Shell',
-    desc: 'Holds the sound of the sea, or of your own blood, depending on who you ask.',
+    desc: 'It holds the sound of the sea, or of your own blood, depending on who you ask.',
     cat: 'key',
     icon: 'shell',
   },
   wildflowers: {
     name: 'Wildflowers',
-    desc: 'Picked from the meadow. Wilting slightly, still lovely.',
+    desc: "You picked them from the meadow. They're wilting slightly, but they're still lovely.",
     cat: 'key',
     icon: 'bouquet',
   },
@@ -771,26 +771,26 @@ export const ITEM_DATA = {
   },
   golden_collar: {
     name: 'A Golden Collar',
-    desc: 'Heavier than it looks, and still bright under two centuries of river mud. Engraved: SIR WOOFERS.',
+    desc: "It's heavier than it looks, and still bright under two centuries of river mud. The engraving says SIR WOOFERS.",
     cat: 'key',
     icon: 'bell',
   },
   lantern: {
     name: 'Storm Lantern',
-    desc: 'Burns steady in the wind. Things out at night are easier to see, and a little harder to ignore.',
+    desc: 'It burns steady in the wind. Things out at night are easier to see, and a little harder to ignore.',
     cat: 'key',
     icon: 'floorlamp',
     price: 90,
   },
   logbook: {
     name: "Keeper's Logbook",
-    desc: 'Eleven years of weather, tides, and one line about a cat.',
+    desc: 'It holds eleven years of weather and tides, and one line about a cat.',
     cat: 'key',
     icon: 'book',
   },
   letter: {
     name: 'A Letter',
-    desc: 'Sealed, addressed, and waiting for a bird.',
+    desc: "It's sealed and addressed, and it's waiting for a bird.",
     cat: 'key',
     icon: 'letter',
   },

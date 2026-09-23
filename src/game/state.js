@@ -390,7 +390,7 @@ export class GameState {
     const gone = this.deliveries.filter((d) => expired(d, now));
     for (const d of gone) {
       this.clearDelivery(d.id);
-      this.toast(`Delivery ran out of time: ${d.name}.`, 'warn');
+      this.toast(`You didn't get the order to ${d.name} in time.`, 'warn');
     }
     return gone.length;
   }

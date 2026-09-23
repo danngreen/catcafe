@@ -165,7 +165,7 @@ export function buildShopInterior(shopId) {
   if (stairs) {
     for (let k = -1; k <= 1; k++) map.addObject('stairs', stairs.x + k, stairs.y, { flat: true, variant: (k + 1) % 3 });
     map.addObject('stairs', stairs.x, stairs.y - 1, { flat: true, variant: 2 });
-    map.setInteract(stairs.x, stairs.y + 1, { kind: 'sign', text: 'Stairs up to the rooms. The third one creaks, exactly as promised.' });
+    map.setInteract(stairs.x, stairs.y + 1, { kind: 'sign', text: 'These stairs lead up to the rooms. The third one creaks, exactly as promised.' });
   }
 
   // A library is a shop where the goods are free and can't leave the building.
@@ -307,7 +307,7 @@ export function buildSpecialInterior(id) {
     map.addObject('crate', 3, 5); map.addObject('barrel', 4, 10);
     map.addObject('shelf', 11, 5); map.addObject('stump', 6, 7);
     map.addObject('windowIn', 5, 2, { offY: WALL_MOUNT });
-    map.setInteract(8, 6, { kind: 'sign', text: 'The great millstone, still and cold.\n\nSomething small and warm is asleep in the flour hopper. It opens one eye, decides you\'re acceptable, and goes back to sleep.' });
+    map.setInteract(8, 6, { kind: 'sign', text: 'The great millstone sits still and cold.\n\nSomething small and warm is asleep in the flour hopper. It opens one eye, decides you\'re acceptable, and goes back to sleep.' });
     map.meta = { special: 'oldmill' };
     map.lights.push({ x: 8 * 16, y: 7 * 16, r: 90, color: '#c9b48a' });
     map.indexObjects();

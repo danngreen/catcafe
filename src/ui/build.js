@@ -215,7 +215,7 @@ export class BuildScreen extends Screen {
         if (!this.touchesExisting(rect)) { this.flash('New rooms have to connect to the cafe.', true); return; }
         const newArea = this.areaOf(this.draft.rooms) + rect.w * rect.h;
         if (newArea > st.maxFloorArea()) {
-          this.flash(`Too big — your crew can only handle ${st.maxFloorArea()} tiles.`, true);
+          this.flash(`That's too big. Your crew can only handle ${st.maxFloorArea()} tiles.`, true);
           return;
         }
         const cost = this.costOf(rect);
@@ -227,7 +227,7 @@ export class BuildScreen extends Screen {
         this.rebuild();
         audio.sfx('hammer', { gain: 0.9 });
         setTimeout(() => audio.sfx('saw', { gain: 0.6 }), 180);
-        this.flash(`Room added. ${cost} for the work.`);
+        this.flash(`You added a room, and the work cost ${cost}.`);
       }
     }
     if (input.hit('cancel')) {
@@ -276,7 +276,7 @@ export class BuildScreen extends Screen {
     this.spentMaterials -= 1;
     this.rebuild();
     audio.sfx('hammer', { gain: 0.8 });
-    this.flash('Room taken down. You get some of it back.');
+    this.flash('You took the room down and got some of the money back.');
   }
 
   /**
@@ -350,7 +350,7 @@ export class BuildScreen extends Screen {
 
     if (input.hit('use')) {
       const key = stock[this.palette];
-      if (!key) { this.flash('Nothing left to place. Buy furniture from Velvet & Oak.', true); return; }
+      if (!key) { this.flash("You're out of furniture to place. Buy more from Velvet & Oak.", true); return; }
       const def = ITEMS[baseId(key)];
       const room = this.fits(def.place, this.cur.x, this.cur.y);
       if (!room.ok) { this.flash(room.why, true); return; }
@@ -368,7 +368,7 @@ export class BuildScreen extends Screen {
     // build mode, which is a long way to fall for a near miss on a bookshelf.
     if (input.hit('cancel')) {
       const f = this.furnitureAt(this.cur.x, this.cur.y);
-      if (!f) { this.flash('Nothing there to pick up. Esc to finish.'); return; }
+      if (!f) { this.flash("There's nothing there to pick up. Press Esc to finish."); return; }
       // Fixtures that came with the shop stay put.
       if (['counter', 'register', 'coffeeMachine', 'menuBoard'].includes(f.type) && this.countType(f.type) <= 1) {
         this.flash('You need to keep at least one of those.', true);
@@ -419,7 +419,7 @@ export class BuildScreen extends Screen {
               : 'That would stick out of the building.',
           };
         }
-        if (this.furnitureAt(cx, cy)) return { ok: false, why: 'Something is already there.' };
+        if (this.furnitureAt(cx, cy)) return { ok: false, why: "Something's already there." };
       }
     }
     return { ok: true };
@@ -497,7 +497,7 @@ export class BuildScreen extends Screen {
     // Built while out of reach, this would be sent later to a cafe that may
     // by then be somebody else's to rearrange. Wait for the valley.
     if (st.net && st.net.offline) {
-      this.flash("Can't reach the valley — wait a moment, then finish.", true);
+      this.flash("You can't reach the valley right now. Wait a moment, then finish.", true);
       return;
     }
     st.spend(this.spentMoney);
@@ -650,7 +650,7 @@ export class BuildScreen extends Screen {
       const stock = this.furnitureStock;
       this.slotRects = [];
       if (!stock.length) {
-        drawText(ctx, 'Nothing to place. Buy furniture at Velvet & Oak in Thistlewick.', 10 + SAFE.left, VIEW_H - 34, { color: P.uiTextDim, shadow: P.uiShadow });
+        drawText(ctx, "You're out of furniture. Buy more at Velvet & Oak in Thistlewick.", 10 + SAFE.left, VIEW_H - 34, { color: P.uiTextDim, shadow: P.uiShadow });
       } else {
         for (let i = 0; i < Math.min(stock.length, 12); i++) {
           const key = stock[(this.palette + i) % stock.length];

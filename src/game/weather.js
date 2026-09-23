@@ -20,12 +20,12 @@ import { setting } from '../engine/settings.js';
  */
 export const WEATHER = {
   sunny: {
-    id: 'sunny', name: 'Sunny', blurb: "Not a cloud. Everyone's out.",
+    id: 'sunny', name: 'Sunny', blurb: "Everyone's out in the sun.",
     crowd: 1.28, warmth: 0, dim: 0, cold: -0.35,
     drink: { cold: 2.4, hot: 0.28 },
   },
   cloudy: {
-    id: 'cloudy', name: 'Cloudy', blurb: 'Flat gray. Perfectly ordinary.',
+    id: 'cloudy', name: 'Cloudy', blurb: "It's a gray, ordinary day.",
     crowd: 1.0, warmth: 0, dim: 0.1, cold: 0,
     drink: {},
   },
@@ -40,12 +40,12 @@ export const WEATHER = {
     drink: { hot: 1.5, cold: 0.6 },
   },
   rain: {
-    id: 'rain', name: 'Rainy', blurb: 'Steady, soaking, and here to stay.',
+    id: 'rain', name: 'Rainy', blurb: "It's going to pour all day.",
     crowd: 0.52, warmth: 1, dim: 0.26, cold: 0.5,
     drink: { hot: 1.9, cold: 0.4 },
   },
   snow: {
-    id: 'snow', name: 'Snowy', blurb: 'Thick and silent. Hardly anyone out.',
+    id: 'snow', name: 'Snowy', blurb: "Hardly anyone's out in it.",
     crowd: 0.42, warmth: 1.25, dim: 0.16, cold: 1,
     drink: { hot: 2.6, cold: 0.22 },
   },
@@ -363,7 +363,7 @@ export function weatherName(w, dark) {
 /** "Rainy — steady, soaking, and in for the day." */
 export function weatherLine(w, dark) {
   const blurb = w.id === 'sunny' && dark
-    ? "not a cloud. every star's out."
+    ? "there isn't a cloud, and every star's out."
     : w.blurb.toLowerCase();
   return `${weatherName(w, dark)} — ${blurb}`;
 }

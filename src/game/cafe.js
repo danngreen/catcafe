@@ -851,12 +851,12 @@ export class Cafe {
       const fire = this.hearthComfort() * sky.warmth;
       summary.lines.push({
         text: fire >= 0.5
-          ? `${sky.name} out, but the fire kept them coming.`
-          : `${sky.name} out, so fewer people came by.`,
+          ? `It was ${sky.name.toLowerCase()}, but the fire drew people in.`
+          : `It was ${sky.name.toLowerCase()}, so fewer people came by.`,
         tone: fire >= 0.5 ? 'good' : 'warn',
       });
     } else if (sky.crowd > 1.05) {
-      summary.lines.push({ text: `${sky.name} all day. The valley was out and about.`, tone: 'good' });
+      summary.lines.push({ text: `It was ${sky.name.toLowerCase()} all day, and everyone was out.`, tone: 'good' });
     }
     // The day you are about to walk into — the clock has already rolled by the
     // time we cash up. This is what makes the morning shop a decision: you know
@@ -888,7 +888,7 @@ export class Cafe {
         quality = 0;
       } else {
         const names = { 1: 'kibble', 2: 'good food', 3: 'fresh fish', 4: 'gourmet cans' };
-        summary.lines.push({ text: `Cats fed on ${names[quality] || 'scraps'}.`, tone: 'good' });
+        summary.lines.push({ text: `The cats ate ${names[quality] || 'scraps'}.`, tone: 'good' });
       }
     }
 
@@ -911,7 +911,7 @@ export class Cafe {
       }
     }
     if (catCount > 0 && st.take('vitamins')) {
-      summary.lines.push({ text: 'Vitamins all around.', tone: 'good' });
+      summary.lines.push({ text: 'All the cats got their vitamins.', tone: 'good' });
     }
 
     // --- daily costs ---
@@ -961,7 +961,7 @@ export class Cafe {
     const wanted = Object.entries(this.missed).sort((a, b) => b[1] - a[1]).slice(0, 2);
     for (const [id, n] of wanted) {
       summary.lines.push({
-        text: `${n} asked for ${(ITEMS[id] || {}).name || id}. You had none.`,
+        text: `${n} wanted ${(ITEMS[id] || {}).name || id}. You were out.`,
         tone: 'warn',
       });
     }
@@ -1063,13 +1063,13 @@ export function fmtHour(h) {
 // Wages are per hour. A day is however many hours you post on the sign, so
 // the same person costs what you ask of them.
 export const HIRE_POOL = [
-  { id: 'saffron', name: 'Saffron', fairWage: 9, blurb: 'Quick, chatty, remembers everyone\'s order.',
+  { id: 'saffron', name: 'Saffron', fairWage: 9, blurb: "They're quick and chatty, and they remember everyone's order.",
     look: { species: 'fox', coat: 'fox', cloth: '#e08b3f' } },
-  { id: 'moss', name: 'Moss', fairWage: 7, blurb: 'Slow but unfailingly kind. Customers relax around him.',
+  { id: 'moss', name: 'Moss', fairWage: 7, blurb: "He's slow but unfailingly kind. Customers relax around him.",
     look: { species: 'bear', coat: 'bear', cloth: '#6b9e8f' } },
-  { id: 'thimble', name: 'Thimble', fairWage: 6, blurb: 'Small, tireless, slightly frightened of the espresso machine.',
+  { id: 'thimble', name: 'Thimble', fairWage: 6, blurb: "They're small and tireless, but scared of the espresso machine.",
     look: { species: 'mouse', coat: 'grey', cloth: '#8fa8c9' } },
-  { id: 'copper', name: 'Copper', fairWage: 12, blurb: 'Worked market stalls for years. Sells like breathing.',
+  { id: 'copper', name: 'Copper', fairWage: 12, blurb: 'They worked market stalls for years and sell like they breathe.',
     look: { species: 'squirrel', coat: 'ginger', cloth: '#c05a7a' } },
 ];
 

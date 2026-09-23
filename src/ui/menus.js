@@ -378,9 +378,9 @@ export class CatShopScreen extends ListScreen {
       const key = this.items[this.index];
       const b = CAT_BREEDS[key];
       const st = this.game.state;
-      if (st.money < b.price) { this.msg = "Not enough."; this.msgT = 2; audio.sfx('error'); return; }
+      if (st.money < b.price) { this.msg = "You can't afford that."; this.msgT = 2; audio.sfx('error'); return; }
       if (st.cats.length >= st.catCapacity()) {
-        this.msg = 'No room — build more space first.'; this.msgT = 2.6; audio.sfx('error'); return;
+        this.msg = "There's no room. Build more space first."; this.msgT = 2.6; audio.sfx('error'); return;
       }
       st.spend(b.price);
       const cat = st.adoptCat(key);
@@ -475,7 +475,7 @@ export class ServiceScreen extends ListScreen {
     if (input.hit('use') && this.items.length) {
       const cat = this.items[this.index];
       const c = this.cost(cat);
-      if (st.money < c) { this.msg = 'Not enough money.'; this.msgT = 2; audio.sfx('error'); return; }
+      if (st.money < c) { this.msg = "You can't afford that."; this.msgT = 2; audio.sfx('error'); return; }
       st.spend(c);
       if (this.kind === 'vet') {
         cat.sick = false; cat.sickDays = 0; cat.happiness = clamp(cat.happiness + 0.35, 0, 1);
@@ -575,15 +575,15 @@ export class BuilderScreen extends ListScreen {
         st.workers++;
         st.touch('workers');
         audio.sfx('hammer', { gain: 0.9 });
-        this.flash(`Hired. You have ${st.workers} builder${st.workers > 1 ? 's' : ''}.`);
+        this.flash(`You hired a builder. Now you have ${st.workers} builder${st.workers > 1 ? 's' : ''}.`);
         this.refresh();
       } else if (it.kind === 'materials') {
-        if (st.money < it.cost) { this.flash("Not enough."); return; }
+        if (st.money < it.cost) { this.flash("You can't afford that."); return; }
         st.spend(it.cost);
         st.materials++;
         st.touch('materials');
         audio.sfx('saw', { gain: 0.8 });
-        this.flash(`Materials delivered. You have ${st.materials} lot${st.materials > 1 ? 's' : ''}.`);
+        this.flash(`The materials are here. You have enough for ${st.materials} room${st.materials > 1 ? 's' : ''}.`);
       } else {
         this.done = true;
         this.game.openBuildMode();
@@ -752,7 +752,7 @@ export class CafeScreen extends Screen {
         st.shopOpen = !st.shopOpen;
         st.touch('shopOpen');
         audio.sfx(st.shopOpen ? 'ui_ok' : 'ui_back');
-        this.flash(st.shopOpen ? 'Sign turned to OPEN.' : 'Sign turned to CLOSED.');
+        this.flash(st.shopOpen ? 'You turned the sign to OPEN.' : 'You turned the sign to CLOSED.');
       }
     } else if (this.tab === 0 && input.hit('use')) {
       // The cafe page is where people look for "change my cafe", so this is the
@@ -778,7 +778,7 @@ export class CafeScreen extends Screen {
           cat.groomed = Math.max(cat.groomed, 3);
           cat.happiness = clamp(cat.happiness + 0.08, 0, 1);
           audio.sfx('brush', { gain: 0.8 });
-          this.flash(`You brush ${cat.name}. Not a professional job, but nice.`);
+          this.flash(`You brush ${cat.name}. It's not a professional job, but it's nice.`);
         } else if (act === 'treat' && st.take('treats')) {
           cat.happiness = clamp(cat.happiness + 0.2, 0, 1);
           audio.sfx('eat', { gain: 0.8 });
@@ -799,8 +799,8 @@ export class CafeScreen extends Screen {
     if (st.employee) {
       const list = this.currentList();
       const row = list[this.index];
-      if (row && row.kind === 'wage') { this.flash('Left and right to change the wage.'); audio.sfx('ui_move', { gain: 0.4 }); }
-      else if (row && row.kind === 'duty') { st.employee.onDuty = !st.employee.onDuty; this.flash(st.employee.onDuty ? 'On the schedule.' : 'Off the schedule — no hours, no wages.'); audio.sfx('ui_ok'); }
+      if (row && row.kind === 'wage') { this.flash('Use left and right to change the wage.'); audio.sfx('ui_move', { gain: 0.4 }); }
+      else if (row && row.kind === 'duty') { st.employee.onDuty = !st.employee.onDuty; this.flash(st.employee.onDuty ? "They're on the schedule now." : "They're off the schedule, so no hours and no wages."); audio.sfx('ui_ok'); }
       else if (row && row.kind === 'fire') { this.flash(`${st.employee.name} packs up and goes.`); st.employee = null; audio.sfx('ui_back'); }
       st.touch('employee');
     } else {
@@ -959,17 +959,17 @@ export class CafeScreen extends Screen {
     const unplaced = Object.keys(st.inventory).some((k) => (ITEMS[baseId(k)] || {}).place && st.inventory[k] > 0);
     if (unplaced) return "You've got furniture in your bag. Press Space here to arrange it.";
     if (!sim.availableMenu().length) return 'Your menu board is empty. Buy coffee or cake from a shop.';
-    if (sim.seats().length < 3) return 'Only a seat or two. More chairs mean more customers at once — buy them at Velvet & Oak in Thistlewick.';
+    if (sim.seats().length < 3) return 'You only have a seat or two. More chairs mean more customers at once, and you can buy them at Velvet & Oak in Thistlewick.';
     if (!st.cats.length) return 'A cat cafe with no cats is just a cafe. Whisker & Paw is down the lane.';
     if (sim.freeSeats().length === 0) {
       return st.workers < 1
-        ? "You're turning people away. To add a room you need builders: Trowel & Sons, up in Hollowdown."
+        ? "You're turning people away. To add a room, you need builders from Trowel & Sons, up in Hollowdown."
         : "You're turning people away. Press Space here to build another room, then fill it with tables.";
     }
-    if (st.cats.some((c) => c.sick)) return "A cat's sick, and it spreads. The vet's in Saltmere.";
-    if (sim.furnitureAppeal() < 6) return 'The room is a bit bare. Plants, a rug, a painting — people stay longer. Velvet & Oak, in Thistlewick.';
-    if (!st.employee && st.money > 900) return 'You could hire someone. Then the cafe earns while you explore.';
-    if (st.cats.every((c) => c.groomed <= 0) && st.cats.length) return 'None of your cats have been groomed lately. Fluff & Tumble, up in Hollowdown.';
+    if (st.cats.some((c) => c.sick)) return 'One of your cats is sick, and it can spread. The vet is in Saltmere.';
+    if (sim.furnitureAppeal() < 6) return 'The room is a bit bare. People stay longer when there are plants, a rug, or a painting. You can find those at Velvet & Oak in Thistlewick.';
+    if (!st.employee && st.money > 900) return 'You could hire someone, and then the cafe would keep earning while you explore.';
+    if (st.cats.every((c) => c.groomed <= 0) && st.cats.length) return 'None of your cats have been groomed lately. Fluff & Tumble, up in Hollowdown, can groom them.';
     return 'Try a fancier menu item — the margin on cake is better than coffee.';
   }
 
@@ -1060,7 +1060,7 @@ export class CafeScreen extends Screen {
         [`On the schedule: ${e.onDuty ? 'yes' : 'no'}`,
           `They work your posted hours — ${fmtHour(st.shopHours[0])} to ${fmtHour(st.shopHours[1])}.`],
         [`Wage: < ${e.wage}/hour >`,
-          `A fair rate here is about ${e.fairWage} an hour. Under it and service suffers.`],
+          `A fair rate here is about ${e.fairWage} an hour. Pay less and service suffers.`],
         ['Let them go', 'No hard feelings.'],
       ];
       rows.forEach(([label, note], i) => {
@@ -1152,7 +1152,7 @@ export class JournalScreen extends ListScreen {
     panelTitle(ctx, x, y, w, 'Journal');
 
     if (!this.items.length) {
-      drawTextCentered(ctx, 'Nothing going on right now.', VIEW_W / 2, y + h / 2 - 10, { color: P.uiTextDim, shadow: P.uiShadow });
+      drawTextCentered(ctx, "You don't have anything going on right now.", VIEW_W / 2, y + h / 2 - 10, { color: P.uiTextDim, shadow: P.uiShadow });
       drawTextCentered(ctx, 'Talk to people. Somebody always wants something.', VIEW_W / 2, y + h / 2 + 4, { color: P.uiTextDim, shadow: P.uiShadow });
     }
 
@@ -1231,7 +1231,7 @@ export class BagScreen extends ListScreen {
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, 'Bag');
     if (!this.items.length) {
-      drawTextCentered(ctx, "Empty. You're traveling light.", VIEW_W / 2, y + h / 2 - 6, { color: P.uiTextDim, shadow: P.uiShadow });
+      drawTextCentered(ctx, "Your bag is empty. You're traveling light.", VIEW_W / 2, y + h / 2 - 6, { color: P.uiTextDim, shadow: P.uiShadow });
     }
     const listY = y + 26;
     for (let i = 0; i < Math.min(this.visible, this.items.length); i++) {
@@ -1858,8 +1858,8 @@ export class SoundScreen extends ListScreen {
       }
     });
     drawTextCentered(ctx, setting('lowFx')
-      ? 'Reduce animation.'
-      : 'All animations.',
+      ? 'Animations are reduced.'
+      : 'All animations are on.',
     x + w / 2, y + h - 16, { color: P.uiTextDim, shadow: P.uiShadow });
   }
 }

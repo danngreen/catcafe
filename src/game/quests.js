@@ -165,7 +165,7 @@ export function progressText(q, st) {
   const step = currentStep(q, st);
   const when = [...(step.progressWhen || []), ...(q.progressWhen || [])];
   for (const alt of when) if (alt.flag && st.flags && st.flags[alt.flag]) return alt.text;
-  return step.progress || q.progress || 'Still working on it?';
+  return step.progress || q.progress || 'Are you still working on it?';
 }
 
 /**

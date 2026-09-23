@@ -5,7 +5,7 @@ export const TOWNS = [
   {
     id: 'brambleford',
     name: 'Brambleford',
-    blurb: 'A muddle of thatch and crooked lanes around a duck pond.',
+    blurb: 'A muddle of thatched cottages and crooked lanes surrounds the duck pond.',
     x: 96, y: 168, w: 44, h: 34,
     style: { wall: '#efe2c8', roofs: ['#c86a4a', '#d0a659', '#5a6472'], timbered: true },
     music: 'town',
@@ -13,7 +13,7 @@ export const TOWNS = [
   {
     id: 'hollowdown',
     name: 'Hollowdown',
-    blurb: "Terraced into the chalk hills. Everything's up or down a few steps.",
+    blurb: "The town is terraced into the chalk hills, so everything's up or down a few steps.",
     x: 208, y: 68, w: 40, h: 32,
     style: { wall: '#e6dcc2', roofs: ['#5a6472', '#7d8794', '#c86a4a'], timbered: false },
     music: 'town',
@@ -21,7 +21,7 @@ export const TOWNS = [
   {
     id: 'saltmere',
     name: 'Saltmere',
-    blurb: 'Fishing cottages, tarred boats, and gulls with opinions.',
+    blurb: "It's all fishing cottages, tarred boats, and gulls with opinions.",
     x: 62, y: 234, w: 38, h: 26,
     style: { wall: '#dfe6e8', roofs: ['#4f6a72', '#7d8794', '#b2624b'], timbered: false },
     music: 'town',
@@ -29,7 +29,7 @@ export const TOWNS = [
   {
     id: 'thistlewick',
     name: 'Thistlewick',
-    blurb: 'Market town. If it exists, somebody here is selling it at a markup.',
+    blurb: 'This is a market town. If it exists, somebody here is selling it at a markup.',
     x: 266, y: 196, w: 46, h: 34,
     style: { wall: '#f0e4cc', roofs: ['#b2624b', '#c86a4a', '#d0a659'], timbered: true },
     music: 'town',
@@ -37,7 +37,7 @@ export const TOWNS = [
   {
     id: 'oakhollow',
     name: 'Oakhollow',
-    blurb: 'Six houses and a very large tree, deep in the woods.',
+    blurb: 'Deep in the woods, six houses cluster around a very large tree.',
     x: 292, y: 84, w: 26, h: 22,
     style: { wall: '#e8dcc2', roofs: ['#7d8794', '#d0a659', '#6b7d54'], timbered: true },
     music: 'field',
@@ -59,38 +59,38 @@ export const SHOPS = [
     id: 'grocer', town: 'brambleford', name: "Pips' Provisions", sign: 'grocer',
     kind: 'shop', stock: 'grocer', keeper: 'pip', tw: 4, roof: '#5a6472',
     hours: [7, 19], days: [1, 2, 3, 4, 5, 6],
-    greet: 'Morning! Fresh today, and only slightly squashed.',
+    greet: "Morning! Everything came in fresh today, and it's only slightly squashed.",
   },
   {
     id: 'bakery', town: 'brambleford', name: 'The Warm Loaf', sign: 'bakery',
     kind: 'shop', stock: 'bakery', keeper: 'dough', tw: 4, roof: '#d0a659', roofStyle: 'thatch', awning: '#e08b3f',
     hours: [6, 15], days: [0, 2, 3, 4, 5, 6],
-    greet: 'Everything you can smell is for sale. Including the smell.',
+    greet: 'Everything you can smell is for sale, including the smell.',
   },
   {
     id: 'petshop', town: 'brambleford', name: 'Whisker & Paw', sign: 'petshop',
     kind: 'cats', stock: 'petshop', keeper: 'marigold', tw: 5, roof: '#c86a4a',
     hours: [9, 18], days: [1, 2, 3, 4, 5, 6],
-    greet: 'Here to look, or here to take somebody home?',
+    greet: 'Are you here to look, or to take somebody home?',
   },
   {
     id: 'inn', town: 'brambleford', name: 'The Sleeping Hare', sign: 'inn',
     kind: 'inn', keeper: 'hollis', tw: 5, roof: '#b2624b', timbered: true,
     storeys: 2, wallH: 54, roofH: 26,
     hours: [0, 24], days: [0, 1, 2, 3, 4, 5, 6],
-    greet: 'Bed upstairs whenever you like. Watch the third stair.',
+    greet: "There's a bed upstairs whenever you want it. Watch the third stair, though. It creaks.",
   },
   {
     id: 'library', town: 'brambleford', name: 'The Reading Room', sign: 'book',
     kind: 'library', keeper: 'quire', tw: 5, roof: '#5a6472', roofStyle: 'gable', timbered: true,
     hours: [9, 21], days: [0, 1, 2, 3, 4, 5, 6],
-    greet: 'Everything on the shelves, nothing out of the building. Those are the rules.',
+    greet: 'You can read anything on the shelves, but nothing leaves the building. Those are the rules.',
   },
   {
     id: 'groomer', town: 'hollowdown', name: 'Fluff & Tumble', sign: 'groomer',
     kind: 'groomer', keeper: 'suds', tw: 4, roof: '#7d8794', awning: '#d472b0',
     hours: [9, 17], days: [2, 3, 4, 5, 6],
-    greet: 'Bring them in scruffy, take them out magnificent.',
+    greet: 'Bring them in scruffy and take them home magnificent.',
   },
   {
     id: 'builder', town: 'hollowdown', name: "Trowel & Sons", sign: 'builder',
@@ -102,43 +102,43 @@ export const SHOPS = [
     id: 'hardware', town: 'hollowdown', name: 'The Chalk Pit Store', sign: 'hardware',
     kind: 'shop', stock: 'hardware', keeper: 'flint', tw: 4, roof: '#7d8794',
     hours: [8, 17], days: [1, 2, 3, 4, 5, 6],
-    greet: 'Timber, tile, slate, nails. Not cats. People keep asking.',
+    greet: "We sell timber, tile, slate, and nails. We don't sell cats, no matter how often people ask.",
   },
   {
     id: 'vet', town: 'saltmere', name: 'Dr. Bramble, Vet', sign: 'vet',
     kind: 'vet', keeper: 'bramble', tw: 4, roof: '#4f6a72',
     hours: [8, 18], days: [1, 2, 3, 4, 5, 6],
-    greet: 'Sneezing? Sulking? Suspiciously quiet? Bring them here.',
+    greet: 'Is your cat sneezing, sulking, or suspiciously quiet? Bring them here.',
   },
   {
     id: 'fishmonger', town: 'saltmere', name: 'Coldwater Fish', sign: 'fish',
     kind: 'shop', stock: 'fish', keeper: 'kelp', tw: 4, roof: '#7d8794',
     hours: [5, 13], days: [2, 3, 4, 5, 6],
-    greet: 'Landed this morning. The cats can smell it from the hill.',
+    greet: 'Everything was landed this morning, and the cats can smell it from up the hill.',
   },
   {
     id: 'harbour', town: 'saltmere', name: 'Harbor Supplies', sign: 'harbour',
     kind: 'shop', stock: 'harbour', keeper: 'anchor', tw: 4, roof: '#b2624b',
     hours: [7, 17], days: [0, 1, 2, 3, 4, 5, 6],
-    greet: 'Rope, salt, tea, cookies. In that order of importance.',
+    greet: 'We sell rope, salt, tea, and cookies, in that order of importance.',
   },
   {
     id: 'furniture', town: 'thistlewick', name: 'Velvet & Oak', sign: 'furniture',
     kind: 'shop', stock: 'furniture', keeper: 'velvet', tw: 5, roof: '#b2624b', awning: '#8a72d6',
     hours: [10, 18], days: [1, 2, 3, 4, 5, 6],
-    greet: 'Sit on anything you like. Except the chaise. That one bites.',
+    greet: 'Sit on anything you like, except the chaise. That one bites.',
   },
   {
     id: 'flea', town: 'thistlewick', name: 'Thistlewick Flea Market', sign: 'flea',
     kind: 'flea', keeper: 'rummage', tw: 6, roof: '#d0a659', roofStyle: 'thatch',
     hours: [8, 15], days: [0, 6],
-    greet: 'Different junk every week. Some of it is even good.',
+    greet: "There's different junk every week, and some of it's even good.",
   },
   {
     id: 'teahouse', town: 'thistlewick', name: 'Steeped', sign: 'tea',
     kind: 'shop', stock: 'tea', keeper: 'oolong', tw: 4, roof: '#6b7d54', awning: '#6b9e8f',
     hours: [9, 19], days: [1, 2, 3, 4, 5, 6],
-    greet: "Forty-one varieties. I'll describe them all if you let me.",
+    greet: "We have forty-one varieties, and I'll describe them all if you let me.",
   },
   {
     id: 'exotic', town: 'thistlewick', name: 'Far Fields Cattery', sign: 'exotic',
@@ -178,21 +178,21 @@ export const PLAYER_NAMES = [
 
 /** Generic chatter mixed into conversations to keep repeat visits alive. */
 export const GOSSIP = [
-  "Did you hear? The postmaster's learning the fiddle. Badly.",
+  "Did you hear? The postmaster's learning the fiddle, and it's going badly.",
   "They say the flea market had a genuine antique last week. They say that every week.",
-  "Rain on the way. My whiskers know these things.",
+  "There's rain on the way. My whiskers know these things.",
   "Somebody left the gate open again and the sheep got into the churchyard.",
-  "The baker's started doing a thing with honey. Life-changing, apparently.",
+  "The baker's started doing something with honey. Apparently it's life-changing.",
   "There's a cat up at the old mill nobody can catch.",
-  "On weekends the whole valley comes out. Best day for business, worst day for peace.",
+  "On weekends the whole valley comes out. It's the best time for business and the worst time for peace and quiet.",
   "The folks up in the hills think we're soft down here. They're not wrong.",
-  "I heard the cattery had a cat with no fur at all. Imagine.",
+  "I heard the cattery had a cat with no fur at all. Can you imagine?",
   "Somebody's been leaving flowers at the standing stones.",
-  "Ferry's canceled again. It's always canceled.",
-  "Best tea in the valley isn't at the tea shop. Don't tell them I said so.",
+  "The ferry's canceled again. It's always canceled.",
+  "The best tea in the valley isn't at the tea shop. Don't tell them I said so.",
   "The vet says half her house calls are cats who were just sulking.",
   "Everyone's talking about that cafe with the cats. That's you, isn't it?",
-  "Warm night. The kind where nobody wants to go home.",
+  "It's a warm night, the kind where nobody wants to go home.",
 ];
 
 /**
@@ -204,8 +204,8 @@ export const BOOKS = [
   {
     id: 'town_history',
     title: 'A History of Brambleford & the Salt Coast',
-    text: 'A green book with gold letters, and a spine that has given up.\n\n'
-      + 'You skim. Floods. A dispute about a hedge that ran for sixty years. Then:\n\n'
+    text: 'It\'s a green book with gold lettering, and its spine has given up.\n\n'
+      + 'You skim through floods and a dispute about a hedge that went on for sixty years. Then you find this:\n\n'
       + '"At the opening of Saltsouth Pier in 1800, the ribbon was cut by Sir Woofers, '
       + 'a dog of great age and greater self-regard, who wore for the occasion his new '
       + 'golden collar. He was not seen to leave the pier that evening, and neither was '
@@ -217,17 +217,17 @@ export const BOOKS = [
   {
     id: 'stones_book',
     title: 'On the Standing Stones, and What Is Done There',
-    text: 'Thin, hand-bound, and slightly damp.\n\n'
+    text: 'The book is thin, hand-bound, and slightly damp.\n\n'
       + '"Seven stones. They are not aligned to the sun, nor the moon, nor anything '
       + 'else we have thought to measure. On certain nights they are warm."\n\n'
-      + 'The last page lists things people have left at the stones. Mostly flowers. '
-      + 'One entry just says: "a saucer of milk — returned empty."',
+      + 'The last page lists things people have left at the stones. Most of them are flowers, '
+      + 'but one entry just says: "a saucer of milk — returned empty."',
     flag: 'read_stones',
   },
   {
     id: 'cat_lore',
     title: 'The Domestic Cat: A Warning',
-    text: 'Beautifully illustrated. Deeply unhelpful.\n\n'
+    text: 'It\'s beautifully illustrated and deeply unhelpful.\n\n'
       + '"The cat cannot be trained, only negotiated with. The keeper of cats will '
       + 'find that a well-fed animal is a glossy one, and a glossy one draws a crowd, '
       + 'and a crowd is a business."\n\n'
@@ -248,9 +248,9 @@ export const BOOKS = [
 export const BOOK_BY_ID = Object.fromEntries(BOOKS.map((b) => [b.id, b]));
 
 export const LANDMARKS = [
-  { id: 'oldmill', name: 'The Old Mill', hint: 'A wheel that hasn\'t turned in thirty years.' },
-  { id: 'stones', name: 'The Standing Stones', hint: 'Older than the towns. Nobody argues with them.' },
-  { id: 'lighthouse', name: 'Gullrock Light', hint: "Still lit. Nobody's sure who lights it." },
+  { id: 'oldmill', name: 'The Old Mill', hint: 'Its wheel hasn\'t turned in thirty years.' },
+  { id: 'stones', name: 'The Standing Stones', hint: "They're older than the towns, and nobody argues with them." },
+  { id: 'lighthouse', name: 'Gullrock Light', hint: "It's still lit, but nobody's sure who lights it." },
   { id: 'bigoak', name: 'The Great Oak', hint: 'Oakhollow was built around it, not the other way around.' },
-  { id: 'pier', name: 'Saltmere Pier', hint: 'Opened in 1800 under a name nobody uses now.' },
+  { id: 'pier', name: 'Saltmere Pier', hint: 'It opened in 1800 under a name nobody uses anymore.' },
 ];

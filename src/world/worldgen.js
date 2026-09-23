@@ -773,7 +773,7 @@ function placeLandmarks(map, elev, reserved, inland, rng) {
       }
       const ex = x + dx * len, ey = y + dy * len;
       map.setInteract(x - dx, y - dy, { kind: 'sign', text: 'SALTMERE PIER\n\nA board at the landward '
-        + 'end, repainted many times. Under the newest coat you can just make out an older name, '
+        + 'end has been repainted many times. Under the newest coat you can just make out an older name, '
         + 'and the year 1800.' });
       // The far end, where you can lie flat and put an arm into the mud.
       for (const [ax, ay] of [[ex, ey], [ex + px, ey + py], [ex - px, ey - py], [ex - dx, ey - dy]]) {
@@ -798,7 +798,7 @@ function placeLandmarks(map, elev, reserved, inland, rng) {
     clear(fx, fy, 5, T.DIRT);
     const spr = buildingSprite({ tw: 4, wall: '#e8dcc2', roof: '#d0a659', roofStyle: 'thatch', timbered: true, wallH: 26, roofH: 22, v: 3 });
     map.addBuilding(spr, fx - 2, fy, 4, 2, {});
-    map.setInteract(fx, fy + 1, { kind: 'sign', text: 'A farmhouse. Boots by the door, and something excellent cooking inside.' });
+    map.setInteract(fx, fy + 1, { kind: 'sign', text: "It's a farmhouse. There are boots by the door, and something excellent is cooking inside." });
     map.addObject('haystack', fx + 4, fy + 2, { variant: 0 });
     map.addObject('fence', fx + 3, fy + 4);
     map.addObject('fence', fx + 4, fy + 4);
