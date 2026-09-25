@@ -5499,27 +5499,26 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         pip.x = home.x;
         if (labels.size !== 1 || !labels.has('Talk to Pip')) window.__errors.push(`prompt varied: ${[...labels].join(' | ')}`);
         g.player.dir = 'up';
-        // 1. Pip has a job to offer, so that comes first and the menu follows.
+        // 1. Pip has a job to offer, but the menu still comes first: somebody
+        //    who only wants to shop shouldn't have to sit through it.
         await pressKey('Space');
-        const offered = g.dialogue.active && !g.dialogue.choices;
-        for (let i = 0; i < 12 && g.dialogue.active && !g.dialogue.choices; i++) await pressKey('Space');
-        await until(() => g.dialogue.active && g.dialogue.choices && g.dialogue.pageComplete, 3000);
+        await until(() => g.dialogue.active && g.dialogue.pageComplete, 3000);
         const menu = g.dialogue.choices ? g.dialogue.choices.map((c) => c.label) : [];
-        if (!offered) window.__errors.push('the quest offer did not come first');
-        if (!st.quests.first_beans) window.__errors.push('the offered job was not taken on');
-        if (menu.length !== 3) window.__errors.push(`menu after the job: ${menu.join(' | ') || 'none'}`);
-        // 2. Just here to chat: Pip talks, no shop.
+        if (menu.length !== 3) window.__errors.push(`menu first: ${menu.join(' | ') || 'none'}`);
+        if (st.quests.first_beans) window.__errors.push('the job was started before choosing to chat');
+        // 2. Just here to chat: now Pip brings up the job.
         key('ArrowDown', true); await wait(230); key('ArrowDown', false);
         await pressKey('Space');
         const chatted = g.dialogue.active && !g.dialogue.choices && !g.screens.length;
         if (!chatted) window.__errors.push('chatting did not start a conversation');
         for (let i = 0; i < 12 && g.dialogue.active; i++) await pressKey('Space');
         await settle();
-        // 3. No business now, so the menu comes straight away; Never mind closes it.
+        if (!st.quests.first_beans) window.__errors.push('chatting did not bring up the job');
+        // 3. The menu again; Never mind closes it.
         await pressKey('Space');
         const direct = !!(g.dialogue.active && g.dialogue.choices);
         await until(() => g.dialogue.pageComplete, 3000);
-        if (!direct) window.__errors.push('with nothing to discuss, the menu did not come first');
+        if (!direct) window.__errors.push('the second visit did not open the menu');
         for (let i = 0; i < 2; i++) { key('ArrowDown', true); await wait(230); key('ArrowDown', false); await frames(2); }
         await pressKey('Space');
         await settle();

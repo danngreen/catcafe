@@ -1139,13 +1139,7 @@ class Game {
     if (!talking && !this.cutscene) {
       this.player.update(dt, this.input, map, !this.fader.busy);
       this.checkWarp();
-      // A keeper who had a job to talk about first: now that they've said
-      // their piece, the shop menu you walked up for.
-      if (this.pendingCounter) {
-        const id = this.pendingCounter;
-        this.pendingCounter = null;
-        if (st.mapId === `shop:${id}`) this.openShopCounter(id);
-      } else if (this.input.hit('use')) this.interact();
+      if (this.input.hit('use')) this.interact();
       if (this.input.hit('menu')) { this.push(new PauseScreen(this)); audio.sfx('ui_ok', { gain: 0.5 }); }
       if (this.input.hit('perf')) { this.perf.show = !this.perf.show; this.perf.clear(); }
       if (this.input.hit('cafe')) { this.push(new CafeScreen(this)); audio.sfx('ui_ok', { gain: 0.5 }); }
@@ -2005,36 +1999,14 @@ class Game {
   }
 
   /**
-   * Whether a villager has something to say about a job: a parcel you are
-   * carrying for them, a question you were sent to ask, a job to hand in or a
-   * new one to offer. The same order `talkTo` works through.
-   */
-  hasQuestBusiness(v) {
-    const st = this.state;
-    const id = v.def.id;
-    if (v.recipient) return true;
-    for (const q of QUESTS) {
-      if (st.quests[q.id] !== 'active') continue;
-      const o = currentStep(q, st).objective;
-      if (o.type === 'deliver' && o.to === id && st.has(o.item)) return true;
-      if (o.type === 'talk' && o.to === id) return true;
-    }
-    return (QUESTS_BY_GIVER[id] || []).some((q) => this.wantsToTalk(q, st));
-  }
-
-  /**
-   * Walking up to a shop counter. A keeper with a job for you says so first,
-   * and the shop menu follows once they're done; otherwise it's straight to the
-   * menu. A library has nothing to sell, so it's only ever a conversation.
+   * Walking up to a shop counter always asks first: shop, chat, or neither.
+   * Any job the keeper has for you comes up under chat, so somebody who only
+   * wants to buy flour isn't read three pages about a lost bell. A library has
+   * nothing to sell, so it's only ever a conversation.
    */
   useCounter(shop, keeper) {
     if (shop.kind === 'library') {
       if (keeper) this.talkTo(keeper);
-      return;
-    }
-    if (keeper && this.hasQuestBusiness(keeper)) {
-      this.pendingCounter = shop.id;
-      this.talkTo(keeper);
       return;
     }
     this.openShopCounter(shop.id);
