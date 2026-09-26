@@ -1,0 +1,49 @@
+# Caddy on the public games server.
+#
+# setup.sh writes this to /etc/caddy/Caddyfile with your own names in place of
+# catcafe.example.com and you@example.com. Caddy gets and renews the HTTPS
+# certificates itself; the email is only for Let's Encrypt to write to if one
+# is about to expire and can't be renewed.
+#
+# Every game sits behind the same wall: /login and /logout go to the sign-in
+# service, and everything else is let through only if that service says the
+# visitor has signed in. WebSockets go through the same check and then the
+# game's /ws is proxied as normal.
+
+{
+	email you@example.com
+}
+
+(gated) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	# Signing in, renewing and signing out are the only things reachable
+	# without the cookie.
+	handle /login* {
+		reverse_proxy 127.0.0.1:9000
+	}
+	handle /logout {
+		reverse_proxy 127.0.0.1:9000
+	}
+	handle {
+		forward_auth 127.0.0.1:9000 {
+			uri /check
+		}
+		reverse_proxy {args[0]}
+	}
+}
+
+catcafe.example.com {
+	import gated 127.0.0.1:8080
+}
+
+# The next game is one more block, on its own subdomain and its own port. Use
+# a subdomain rather than a path: the games ask for /ws, /games and so on from
+# the root of the site, and would miss under /othergame/.
+#
+# othergame.example.com {
+# 	import gated 127.0.0.1:8082
+# }

@@ -1,0 +1,49 @@
+[Unit]
+Description=Cat Cafe (public server)
+Documentation=https://github.com/danngreen/catcafe
+After=network.target
+# Keep trying rather than giving up after five quick failures — see the house
+# server's unit (deploy/catcafe.service) for the long version.
+StartLimitIntervalSec=0
+StartLimitBurst=0
+
+[Service]
+Type=simple
+User=games
+Group=games
+WorkingDirectory=/home/games/catcafe
+
+# Node comes from NodeSource's package on this box, so it is /usr/bin/node and
+# stays there across upgrades — unlike the nvm path the Pi needs.
+ExecStartPre=/usr/bin/node /home/games/catcafe/tools/preflight.cjs
+ExecStart=/usr/bin/node /home/games/catcafe/server.js
+
+Environment=PORT=8080
+# Loopback only: the way in from outside is through Caddy and the sign-in
+# check, never straight to this port.
+Environment=HOST=127.0.0.1
+# tools/rescue.js, over ssh, on 127.0.0.1 only.
+Environment=ADMIN_PORT=8081
+
+# deploy/push.sh restarts the game by signalling it as the games user; the
+# server saves and exits 0 and this brings it straight back on the new code.
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=20
+SyslogIdentifier=catcafe
+
+# Everything read-only except the valleys.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/games/catcafe/saves
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

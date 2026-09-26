@@ -12,6 +12,10 @@ import { Games } from './server/games.js';
 
 const ROOT = new URL('.', import.meta.url).pathname;
 const PORT = Number(process.env.PORT || 8080);
+// Which address to listen on. Unset, every interface, which is what the LAN
+// wants. Behind a proxy on a public box, 127.0.0.1, so the only way in is
+// through the proxy and whatever it checks first.
+const HOST = process.env.HOST || undefined;
 // Where the valleys are kept. SESSION_SAVE=0 plays without saving anything,
 // which is what the test harness wants; anything else names a directory.
 const SAVES = process.env.SESSION_SAVE === '0' ? null
@@ -196,9 +200,9 @@ function lanAddresses() {
   return out;
 }
 
-server.listen(PORT, () => {
-  console.log(`Cat Cafe — http://localhost:${PORT}`);
-  for (const addr of lanAddresses()) console.log(`  on this network: http://${addr}:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`Cat Cafe — http://${HOST || 'localhost'}:${PORT}`);
+  if (!HOST) for (const addr of lanAddresses()) console.log(`  on this network: http://${addr}:${PORT}`);
   if (moved) console.log(`  moved your old valley.json to ${moved}`);
   for (const g of games.list()) {
     console.log(`  game ${g.id}: ${g.started ? `${g.cafe || 'a cafe'}, day ${g.day}` : 'not started yet'}`);

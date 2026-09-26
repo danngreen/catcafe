@@ -568,6 +568,20 @@ in it; `--game 002` when more than one does. The server listens for this on
 `127.0.0.1:8081` only, so it can't be reached from the LAN — you have to be on
 the box. `ADMIN_PORT` moves it, and `ADMIN_PORT=0` turns it off.
 
+**On a public server.** To play from outside the house, put it on a small
+DigitalOcean droplet behind a password. Each device signs in once and stays
+signed in, and the LAN setup above doesn't change. The steps, including which
+DigitalOcean options to pick, are in
+[deploy/droplet/README.md](deploy/droplet/README.md). One command from this Mac
+sets it up:
+
+```bash
+deploy/droplet/setup.sh --ip 203.0.113.5 --domain catcafe.example.com --email you@example.com
+```
+
+`HOST=127.0.0.1` makes the server listen on loopback only, which is what it
+wants behind a proxy. Unset, as on the LAN, it listens on every interface.
+
 ## Testing
 
 There's a headless smoke test that drives the game through scenarios in a real
