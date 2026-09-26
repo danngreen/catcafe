@@ -9,14 +9,14 @@ StartLimitBurst=0
 
 [Service]
 Type=simple
-User=games
-Group=games
-WorkingDirectory=/home/games/catcafe
+User=gamehost
+Group=gamehost
+WorkingDirectory=/home/gamehost/catcafe
 
 # Node comes from NodeSource's package on this box, so it is /usr/bin/node and
 # stays there across upgrades — unlike the nvm path the Pi needs.
-ExecStartPre=/usr/bin/node /home/games/catcafe/tools/preflight.cjs
-ExecStart=/usr/bin/node /home/games/catcafe/server.js
+ExecStartPre=/usr/bin/node /home/gamehost/catcafe/tools/preflight.cjs
+ExecStart=/usr/bin/node /home/gamehost/catcafe/server.js
 
 Environment=PORT=8080
 # Loopback only: the way in from outside is through Caddy and the sign-in
@@ -25,7 +25,7 @@ Environment=HOST=127.0.0.1
 # tools/rescue.js, over ssh, on 127.0.0.1 only.
 Environment=ADMIN_PORT=8081
 
-# deploy/push.sh restarts the game by signalling it as the games user; the
+# deploy/push.sh restarts the game by signalling it as the gamehost user; the
 # server saves and exits 0 and this brings it straight back on the new code.
 Restart=always
 RestartSec=5
@@ -37,7 +37,7 @@ SyslogIdentifier=catcafe
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/home/games/catcafe/saves
+ReadWritePaths=/home/gamehost/catcafe/saves
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true

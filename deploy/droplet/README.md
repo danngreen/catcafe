@@ -73,7 +73,7 @@ This does the following:
 - Updates Ubuntu and turns on automatic security updates.
 - Makes SSH accept keys only and turns on the firewall.
 - Installs Node 24 and Caddy.
-- Creates a `games` user to deploy as, using the same SSH key as root.
+- Creates a `gamehost` user to deploy as, using the same SSH key as root.
 - Installs the sign-in service and asks you for the password. Use a short
   phrase; it's typed once per device. The password itself isn't stored, only a
   hash of it.
@@ -106,7 +106,7 @@ means for good if anybody plays at least once a year.
 ## Deploying updates
 
 ```bash
-CATCAFE_HOST=games@203.0.113.5 deploy/push.sh
+CATCAFE_HOST=gamehost@203.0.113.5 deploy/push.sh
 ```
 
 It's the same script the house server uses: it refuses a dirty tree, waits if
@@ -116,7 +116,7 @@ add this to `~/.ssh/config`:
 ```
 Host catcafe-public
   HostName 203.0.113.5
-  User games
+  User gamehost
 ```
 
 After that, `CATCAFE_HOST=catcafe-public deploy/push.sh` works.
@@ -158,7 +158,7 @@ Cafe asks for `/ws`, `/games` and `/poll` from the root of the site.
 
 ## Backups
 
-The valleys live in `/home/games/catcafe/saves`. To copy them to the Mac:
+The valleys live in `/home/gamehost/catcafe/saves`. To copy them to the Mac:
 
 ```bash
 rsync -a catcafe-public:catcafe/saves/ ~/catcafe-public-saves/

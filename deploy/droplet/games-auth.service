@@ -6,13 +6,13 @@ StartLimitBurst=0
 
 [Service]
 Type=simple
-User=games
-Group=games
+User=gamehost
+Group=gamehost
 # Its own copy, outside the game's directory, so a game deploy can never leave
 # the wall half-updated. setup.sh puts it here.
 ExecStart=/usr/bin/node /usr/local/lib/games-auth/auth.js
 # The secret, the password hash and the invite key. Root-only; systemd reads it
-# before dropping to the games user.
+# before dropping to the gamehost user.
 EnvironmentFile=/etc/games-auth.env
 
 Restart=always

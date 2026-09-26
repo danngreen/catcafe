@@ -2,7 +2,7 @@
 #
 # The droplet half of deploy/droplet/setup.sh. Runs as root on a fresh Ubuntu
 # 24.04 box and leaves it ready for the game: locked down, Caddy in front, the
-# sign-in check running, and a `games` user to deploy as.
+# sign-in check running, and a `gamehost` user to deploy as.
 #
 # Safe to run again. It keeps the existing secret, invite key and password
 # unless you ask for new ones, and just refreshes everything else.
@@ -105,16 +105,21 @@ ufw allow 443/tcp >/dev/null
 ufw allow 443/udp >/dev/null      # HTTP/3
 ufw --force enable >/dev/null
 
-# --- the games user -----------------------------------------------------------
+# --- the gamehost user --------------------------------------------------------
+#
+# Not "games": Ubuntu already has a system account by that name, with no home
+# and no shell, and deploying as it gets "Permission denied (publickey)".
 
-if ! id games >/dev/null 2>&1; then
-  say "Adding the games user …"
-  adduser --disabled-password --gecos '' games >/dev/null
+if ! id gamehost >/dev/null 2>&1; then
+  say "Adding the gamehost user …"
+  adduser --disabled-password --gecos '' gamehost >/dev/null
 fi
-# Whoever can ssh in as root can deploy as games: same keys.
-install -d -m 700 -o games -g games /home/games/.ssh
-install -m 600 -o games -g games /root/.ssh/authorized_keys /home/games/.ssh/authorized_keys
-install -d -o games -g games /home/games/catcafe /home/games/catcafe/saves
+[ "$(getent passwd gamehost | cut -d: -f6)" = /home/gamehost ] \
+  || die "The gamehost user exists but its home isn't /home/gamehost. Not touching it."
+# Whoever can ssh in as root can deploy as gamehost: same keys.
+install -d -m 700 -o gamehost -g gamehost /home/gamehost/.ssh
+install -m 600 -o gamehost -g gamehost /root/.ssh/authorized_keys /home/gamehost/.ssh/authorized_keys
+install -d -o gamehost -g gamehost /home/gamehost/catcafe /home/gamehost/catcafe/saves
 
 # --- sign-in service ----------------------------------------------------------
 
@@ -160,7 +165,7 @@ install -m 644 "$HERE/catcafe.service" /etc/systemd/system/catcafe.service
 systemctl daemon-reload
 systemctl enable games-auth catcafe >/dev/null 2>&1
 systemctl restart games-auth
-if [ -f /home/games/catcafe/server.js ]; then
+if [ -f /home/gamehost/catcafe/server.js ]; then
   systemctl restart catcafe
 else
   say "  The game isn't here yet; setup.sh copies it next."

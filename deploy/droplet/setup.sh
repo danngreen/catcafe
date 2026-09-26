@@ -55,7 +55,7 @@ say "Setting up the droplet …"
 "${SSH[@]}" -t "root@$IP" bash /root/games-setup/server-setup.sh "${PASS[@]}"
 
 say "Deploying the game …"
-CATCAFE_HOST="games@$IP" deploy/push.sh --no-restart $FORCE
+CATCAFE_HOST="gamehost@$IP" deploy/push.sh --no-restart $FORCE
 
 say "Starting it …"
 "${SSH[@]}" "root@$IP" 'systemctl restart catcafe && for i in $(seq 1 20); do curl -sf -m 2 http://127.0.0.1:8080/games >/dev/null && exit 0; sleep 1; done; exit 1' \
@@ -73,4 +73,4 @@ esac
 
 say ""
 say "From now on, deploy with:"
-say "  CATCAFE_HOST=games@$IP deploy/push.sh"
+say "  CATCAFE_HOST=gamehost@$IP deploy/push.sh"
