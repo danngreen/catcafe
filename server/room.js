@@ -4,6 +4,7 @@
 
 import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { applyOp, applyRescue, WorldClock } from './world.js';
+import { currentHoliday } from './holiday.js';
 
 const TICK_HZ = 15;
 // We ping each socket ourselves and the browser answers without involving the
@@ -128,6 +129,7 @@ export class Room {
       world: this.world,
       clock: this.clock.save(),
       owner: this.owner,
+      holiday: currentHoliday(),
     });
     this.announcePresence();
   }

@@ -1,5 +1,6 @@
 import { ITEMS } from './items.js';
 import { QUESTS } from './questdata.js';
+import { inHoliday } from '../holidays/index.js';
 
 export { QUESTS };
 
@@ -14,6 +15,18 @@ export const QUESTS_BY_GIVER = QUESTS.reduce((m, q) => {
   m[q.giver].push(q);
   return m;
 }, {});
+
+// A holiday's quests (`holiday: 'halloween'`) exist only while it's on. Out of
+// season they aren't offered, don't show in the journal, and can't be advanced;
+// the next time the holiday comes round they start again from scratch (see
+// Game.startHolidayYear). Everything the game does with quests goes through
+// these two; QUESTS itself stays whole for the editor and the tests.
+
+/** Every quest that can be played right now. */
+export const liveQuests = () => QUESTS.filter(inHoliday);
+
+/** The live quests one villager hands out. */
+export const liveQuestsFrom = (giver) => (QUESTS_BY_GIVER[giver] || []).filter(inHoliday);
 
 // ---------------------------------------------------------------------------
 // Steps

@@ -794,6 +794,150 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         paint();
         window.__pass = `signs=${keys.length}`;
         await settle();
+      } else if (SCRIPT === 'hwcostumes') {
+        // Halloween costumes: every one on a spread of awkward heads (tall
+        // ears, antlers, horns, wool, a beak, a tiny mouse, a broad bear) in
+        // all four directions, at twice size, for the eye. Half the costumes
+        // fit on a screen: `?cossheet=2` is the other half, and `walk1` and
+        // `walk2` swap the species for every frame of the walk in every
+        // direction, since a costume that's fine standing still can still come
+        // apart mid-stride. Use --url to pass them.
+        const C = await import('../src/art/chars.js');
+        const H = await import('../src/holidays/index.js');
+        const HC = await import('../src/holidays/content.js');
+        const E = await import('../src/game/entities.js');
+        const { costumeFor } = await import('../src/holidays/halloween/costumes.js');
+        const sheet = new URLSearchParams(location.search).get('cossheet') || '1';
+        const walkSheet = sheet.startsWith('walk');
+        const half = Math.ceil(C.COSTUME_LIST.length / 2);
+        const secondHalf = sheet.endsWith('2');
+        const species = walkSheet ? ['cat'] : ['cat', 'rabbit', 'fox', 'deer', 'goat', 'sheep', 'owl', 'bear', 'mouse', 'frog'];
+        const coats = ['ginger', 'white', 'fox', 'brown', 'cream', 'cream', 'owl', 'bear', 'grey', 'green'];
+        const cloths = ['#5b8fd6', '#d95f5f', '#7fbe57', '#eec453', '#4fa8a0', '#d472b0', '#a0714f', '#8a72d6', '#e08b3f', '#c9c2b0'];
+        const dirs = ['down', 'left', 'up', 'right'];
+        const rows = [null, ...(secondHalf ? C.COSTUME_LIST.slice(half) : C.COSTUME_LIST.slice(0, half))];
+
+        const c = document.createElement('canvas');
+        c.width = 740; c.height = 358;
+        c.style.cssText = 'position:fixed;left:0;top:0;width:1480px;height:716px;'
+          + 'image-rendering:pixelated;z-index:9999;background:#86b264';
+        document.body.appendChild(c);
+        const ctx = c.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = '#86b264'; ctx.fillRect(0, 0, c.width, c.height);
+        const rowH = 33, colW = 17, left = 46;
+        rows.forEach((cos, r) => {
+          const y = 2 + r * rowH;
+          ctx.fillStyle = '#2b2333'; ctx.font = '9px monospace';
+          ctx.fillText(cos || 'none', 2, y + 20);
+          let x = left;
+          if (walkSheet) {
+            for (const d of dirs) {
+              for (let f = 0; f < 4; f++) {
+                const spr = C.charSprite('cat', 'ginger', '#5b8fd6', d, f, cos);
+                ctx.drawImage(spr, x, y + 31 - spr.height);
+                x += colW;
+              }
+              x += 6;
+            }
+            // And the same walk on a rabbit, the tallest ears there are.
+            for (const d of dirs) {
+              for (let f = 0; f < 4; f++) {
+                const spr = C.charSprite('rabbit', 'white', '#d95f5f', d, f, cos);
+                ctx.drawImage(spr, x, y + 31 - spr.height);
+                x += colW;
+              }
+              x += 6;
+            }
+            return;
+          }
+          species.forEach((sp, i) => {
+            for (const d of dirs) {
+              const spr = C.charSprite(sp, coats[i], cloths[i], d, 0, cos);
+              ctx.drawImage(spr, x, y + 31 - spr.height);
+              x += colW - 1;
+            }
+            x += 4;
+          });
+        });
+
+        // (b) The costume is in the cache key: dressed and undressed are two
+        // different canvases, the undressed one is still the one it always
+        // was, and a costume is as tall as it says, feet in the same place.
+        const plain = C.charSprite('cat', 'ginger', '#5b8fd6', 'down', 0);
+        if (plain !== C.charSprite('cat', 'ginger', '#5b8fd6', 'down', 0)) window.__errors.push('the plain sprite is no longer cached');
+        if (plain.height !== C.CHAR_H) window.__errors.push(`a plain sprite is ${plain.height} tall`);
+        const pixelsOf = (cv) => {
+          const t = document.createElement('canvas');
+          t.width = cv.width; t.height = cv.height;
+          t.getContext('2d').drawImage(cv, 0, 0);
+          return t.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+        };
+        const plainPx = pixelsOf(plain);
+        let same = [];
+        for (const cos of C.COSTUME_LIST) {
+          for (const d of dirs) {
+            const dressed = C.charSprite('cat', 'ginger', '#5b8fd6', d, 0, cos);
+            const bare = C.charSprite('cat', 'ginger', '#5b8fd6', d, 0);
+            if (dressed === bare) window.__errors.push(`${cos} ${d} is the plain sprite from the cache`);
+            if (dressed !== C.charSprite('cat', 'ginger', '#5b8fd6', d, 0, cos)) window.__errors.push(`${cos} ${d} was not cached`);
+            if (dressed.height !== C.CHAR_H + C.costumeTop(cos)) window.__errors.push(`${cos} is ${dressed.height} tall`);
+          }
+          // It actually changed something: the bottom CHAR_H rows differ.
+          const px = pixelsOf(C.charSprite('cat', 'ginger', '#5b8fd6', 'down', 0, cos));
+          const off = C.costumeTop(cos) * C.CHAR_W * 4;
+          let diff = 0;
+          for (let i = 0; i < plainPx.length; i++) if (plainPx[i] !== px[i + off]) diff++;
+          if (!diff) same.push(cos);
+        }
+        if (same.length) window.__errors.push(`these costumes paint nothing: ${same.join(',')}`);
+
+        // (c) Each villager keeps one costume all season, for any id at all,
+        // in roughly the shares intended.
+        const ids = [];
+        for (let i = 0; i < 2000; i++) ids.push(i % 2 ? `resident:house:brambleford:${i}:1` : `villager-${i}`);
+        const tally = { none: 0, mask: 0, full: 0 };
+        for (const id of ids) {
+          const k = costumeFor(id);
+          if (k !== costumeFor(id)) { window.__errors.push(`${id} changed costume`); break; }
+          if (k !== null && !C.COSTUMES[k]) { window.__errors.push(`${id} got ${k}, which isn't a costume`); break; }
+          tally[k ? C.COSTUMES[k].kind : 'none']++;
+        }
+        const share = (n) => n / ids.length;
+        if (share(tally.none) < 0.1 || share(tally.none) > 0.2) window.__errors.push(`no costume: ${tally.none}/2000`);
+        if (share(tally.mask) < 0.28 || share(tally.mask) > 0.42) window.__errors.push(`masks: ${tally.mask}/2000`);
+        if (share(tally.full) < 0.43 || share(tally.full) > 0.57) window.__errors.push(`outfits: ${tally.full}/2000`);
+        if (costumeFor(undefined) !== null || costumeFor('') !== null) window.__errors.push('no id should mean no costume');
+
+        // The valley's own villagers are dressed, the way costumeFor says.
+        const vs = (g.villagers || []).filter((v) => v.def && v.def.id);
+        const dressed = vs.filter((v) => v.costume);
+        const wrong = vs.filter((v) => v.costume !== costumeFor(v.def.id));
+        if (!dressed.length) window.__errors.push(`nobody in the valley is dressed up (${vs.length} villagers)`);
+        if (wrong.length) window.__errors.push(`${wrong.length} villagers aren't wearing their costume`);
+        const hatted = dressed.find((v) => C.costumeTop(v.costume));
+        if (hatted && hatted.emoteTop() !== hatted.y - C.CHAR_H - C.costumeTop(hatted.costume)) window.__errors.push('a hat is in the way of the speech bubble');
+
+        // And out of season, nobody is.
+        const before = H.holiday();
+        // Sir Woofers, who always goes as the pumpkin, so "on" can't pass by
+        // rolling no costume at all.
+        const def = { id: 'woofers', name: 'Test', species: 'dog', lines: ['hi'] };
+        let offCostume, onCostume;
+        try {
+          H.setHoliday(null);
+          offCostume = new E.Villager(def, 0, 0).costume;
+          if (Object.keys(HC.holidayContent()).length) window.__errors.push('holiday content with no holiday on');
+        } finally {
+          H.setHoliday(before);
+        }
+        onCostume = new E.Villager(def, 0, 0).costume;
+        if (offCostume !== null) window.__errors.push(`with the holiday off a villager wears ${offCostume}`);
+        if (onCostume !== 'pumpkin') window.__errors.push(`with it on, Woofers wears ${onCostume}, not the pumpkin`);
+
+        window.__cos = `costumes=${C.COSTUME_LIST.length} tally=${JSON.stringify(tally)}`
+          + ` valley=${dressed.length}/${vs.length} off=${offCostume} on=${onCostume}`;
+        await settle();
       } else if (SCRIPT === 'signkeys') {
         // Two shops that sell different things must not hang the same board.
         // The old valley had six pairs sharing one, which is how you end up
@@ -1541,6 +1685,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const gettable = new Set();
         for (const list of Object.values(STOCK)) for (const id of list) gettable.add(id);
         for (const id of FLEA_POOL) gettable.add(id);
+        // A holiday source: every cottage gives a strawberry at Halloween, and
+        // nothing else in the valley does. Counted whether or not the holiday
+        // is on for this run, because QUESTS here is every quest, in season or
+        // not. Read from the code that hands it out, so the two can't drift.
+        gettable.add((await import('../src/holidays/halloween/houses.js')).TREAT_ITEM);
         for (const q of QUESTS) {
           for (const [id] of q.reward?.items || []) gettable.add(id);
           for (const step of questSteps(q)) {
@@ -5465,6 +5614,569 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.openShopCounter('grocer');
         await settle();
         await pressKey('Space');
+      } else if (SCRIPT === 'hwworld') {
+        // Halloween out in the valley: the trees turned, the doors and roofs
+        // dressed, the harvest put out, and a cat-shaped corn maze by the
+        // farm. All of it laid over the ordinary valley afterwards, from
+        // random numbers of its own — so the valley underneath has to be the
+        // same one, tile for tile and tree for tree.
+        const WG = await import('../src/world/worldgen.js');
+        const T2 = await import('../src/art/tiles.js');
+        const HW = await import('../src/holidays/halloween/world.js');
+        const H = await import('../src/holidays/index.js');
+        const O = await import('../src/art/objects.js');
+        const PX = await import('../src/engine/pixel.js');
+        const st = g.state;
+        const map = g.overworld;
+        const seed = g.worldSeed;
+        const fail = (m) => window.__errors.push(m);
+        const T = T2.T;
+        const ROADS = new Set([T.DIRT, T.COBBLE, T.GRAVEL, T.BRIDGE, T.DECK]);
+        const SCATTER = new Set(['oak', 'pine', 'birch', 'apple', 'willow', 'bush', 'berrybush', 'stump', 'reeds', 'mushroom', 'rock', 'boulder']);
+        const ours = (o) => !!(o.data && o.data.holiday === 'halloween');
+        const keyOf = (o) => `${o.type}|${o.tx}|${o.ty}|${o.variant}|${o.id || ''}`;
+        const tally = (list) => { const m = new Map(); for (const k of list) m.set(k, (m.get(k) || 0) + 1); return m; };
+        const walk = (m, from, to, extraSolid) => {
+          const W = m.w, seen = new Uint8Array(W * m.h), q = [from.y * W + from.x];
+          seen[q[0]] = 1;
+          for (let h = 0; h < q.length; h++) {
+            const c = q[h];
+            if (c === to.y * W + to.x) return true;
+            const cx = c % W, cy = (c / W) | 0;
+            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+              const nx = cx + dx, ny = cy + dy;
+              if (!m.inBounds(nx, ny) || m.solid(nx, ny) || (extraSolid && extraSolid(nx, ny))) continue;
+              const ni = ny * W + nx;
+              if (!seen[ni]) { seen[ni] = 1; q.push(ni); }
+            }
+          }
+          return false;
+        };
+        const sameValley = (a, b, label) => {
+          let tiles = 0;
+          for (let i = 0; i < a.map.ground.length; i++) if (a.map.ground[i] !== b.map.ground[i]) tiles++;
+          const ka = a.map.objects.map(keyOf).join(';'), kb = b.map.objects.map(keyOf).join(';');
+          const ba = JSON.stringify(a.barriers.map((o) => [o.id, o.x != null ? o.x : o.tx, o.y != null ? o.y : o.ty]));
+          const bb = JSON.stringify(b.barriers.map((o) => [o.id, o.x != null ? o.x : o.tx, o.y != null ? o.y : o.ty]));
+          const ia = JSON.stringify([...a.map.interacts]), ib = JSON.stringify([...b.map.interacts]);
+          if (tiles || ka !== kb || ba !== bb || ia !== ib || a.map.lights.length !== b.map.lights.length) {
+            fail(`${label}: tiles=${tiles} objects=${ka === kb} barriers=${ba === bb} interacts=${ia === ib} lights=${a.map.lights.length}/${b.map.lights.length}`);
+          }
+        };
+
+        // 1. Dressing a valley leaves nothing behind in the generator: a plain
+        //    valley made after one was decorated is the same as one made before.
+        const plain = WG.generateWorld(seed);
+        const dressed = WG.generateWorld(seed);
+        HW.decorateWorld(dressed, seed);
+        const again = WG.generateWorld(seed);
+        sameValley(plain, again, 'the generator changed after decorating');
+
+        /**
+         * Everything we can say about one dressed valley, against the plain
+         * one from the same seed. Returns a short summary for the report.
+         */
+        const audit = (d, p, who) => {
+          const m = d.map, pm = p.map;
+          const maze = m.meta.halloweenMaze;
+          if (!maze) { fail(`${who}: no corn maze`); return `${who}: no maze`; }
+          const inReach = (x, y) => x >= maze.reach.x && x < maze.reach.x + maze.reach.w
+            && y >= maze.reach.y && y < maze.reach.y + maze.reach.h;
+          // Tiles: only the maze's own, and only corn and straw.
+          let changed = 0, stray = 0;
+          for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
+            const i = y * m.w + x;
+            if (m.ground[i] === pm.ground[i]) continue;
+            changed++;
+            if (!inReach(x, y) || ![T.CORN, T.CORN_PURPLE, T.STRAW].includes(m.ground[i])) stray++;
+          }
+          if (stray) fail(`${who}: ${stray} tiles changed outside the maze or to something else`);
+          // Objects: every ordinary one still there, bar wild things cleared
+          // for the maze; nothing else new that isn't ours.
+          const have = tally(m.objects.filter((o) => !ours(o)).map(keyOf));
+          const had = tally(pm.objects.map(keyOf));
+          let lost = [], gained = [];
+          for (const [k, n] of had) {
+            const left = n - (have.get(k) || 0);
+            if (left <= 0) continue;
+            const [type, tx, ty] = k.split('|');
+            if (!(SCATTER.has(type) && inReach(Number(tx), Number(ty)))) lost.push(k);
+          }
+          for (const [k, n] of have) if (n > (had.get(k) || 0)) gained.push(k);
+          if (lost.length) fail(`${who}: ordinary objects went missing: ${lost.slice(0, 5).join(' ')}`);
+          if (gained.length) fail(`${who}: untagged objects appeared: ${gained.slice(0, 5).join(' ')}`);
+          const b1 = JSON.stringify(d.barriers.map((o) => o.id)), b2 = JSON.stringify(p.barriers.map((o) => o.id));
+          if (b1 !== b2) fail(`${who}: barriers differ ${b1} vs ${b2}`);
+          // Nothing of ours on a door, a sign, a warp or a road, and nothing
+          // solid on the step in front of a door.
+          const bad = [];
+          const mine = m.objects.filter(ours);
+          for (const o of mine) {
+            const w = o.type === 'dressing' ? 1 : (o.tw || 1);
+            for (let i = 0; i < w; i++) {
+              const x = o.tx + i, y = o.ty;
+              // A building may stand on paving; what's dressing it isn't on the road.
+              const road = ROADS.has(pm.get(x, y)) && !pm.blockedAt(x, y);
+              if (pm.interactAt(x, y) || pm.warpAt(x, y) || road) bad.push(`${o.type}@${x},${y}`);
+            }
+          }
+          for (const [k, it] of pm.interacts) {
+            const [x, y] = k.split(',').map(Number);
+            // Only what we've blocked: the hedge at Lane End sits on one step already.
+            if (it.kind !== 'door') continue;
+            if ((m.solid(x, y) && !pm.solid(x, y)) || (m.solid(x, y + 1) && !pm.solid(x, y + 1))) bad.push(`door blocked@${x},${y}`);
+          }
+          if (bad.length) fail(`${who}: decorations in the way: ${bad.slice(0, 6).join(' ')}`);
+          // The maze: a way in, a way to the middle, and the prize there.
+          const prize = m.interactAt(maze.prize.x, maze.prize.y);
+          if (!prize || prize.kind !== 'maze_prize' || !prize.prompt) fail(`${who}: no prize in the middle`);
+          const sign = [...m.interacts].find(([, it]) => it.kind === 'sign' && /corn maze/i.test(it.text || ''));
+          if (!sign) fail(`${who}: no sign at the maze`);
+          if (!walk(m, maze.entrance, maze.prize)) fail(`${who}: the maze can't be solved`);
+          // Solved only through its way in: the corn really is a wall.
+          const gate = { x: maze.entrance.x, y: maze.entrance.y - 1 };
+          if (walk(m, maze.entrance, maze.prize, (x, y) => x === gate.x && y === gate.y)) fail(`${who}: there's a way into the maze round the side`);
+          const home = d.towns.brambleford.hub;
+          if (!walk(m, home, maze.entrance)) fail(`${who}: can't walk from Brambleford to the maze`);
+          // And the maze fills a cat, not a sliver: plenty of corn and path.
+          let corn = 0, straw = 0;
+          for (let y = maze.y; y < maze.y + maze.h; y++) for (let x = maze.x; x < maze.x + maze.w; x++) {
+            const gnd = m.get(x, y);
+            if (gnd === T.CORN || gnd === T.CORN_PURPLE) corn++; else if (gnd === T.STRAW) straw++;
+          }
+          if (corn < 200 || straw < 150) fail(`${who}: a thin maze, corn=${corn} straw=${straw}`);
+          const by = {};
+          for (const o of mine) by[o.data.what] = (by[o.data.what] || 0) + 1;
+          const lights = m.lights.length - pm.lights.length;
+          if ((by.lantern || 0) < 12 || (by.dressing || 0) < 6 || (by.town || 0) + (by.farm || 0) < 10 || !by['bare tree']) {
+            fail(`${who}: not much decorating: ${JSON.stringify(by)}`);
+          }
+          if (lights < 12 || lights > 80) fail(`${who}: ${lights} new lights`);
+          return `${who}[maze@${maze.x},${maze.y} corn=${corn} straw=${straw} cleared=${maze.cleared} tiles=${changed} lights=+${lights} ${Object.entries(by).map(([k, v]) => `${k}=${v}`).join(',')}]`;
+        };
+
+        // 2. The valley the game is actually playing, and a sweep of others,
+        //    since every valley is a different seed.
+        const lines = [audit({ map, towns: g.towns, barriers: g.barriers }, plain, 'game')];
+        // The last two are crowded round the farm, and fall back to planting
+        // over hedge stubs and to looking further afield.
+        for (const s of [1, 77, 4242, 90210, 123457, 2718281, 110879, 293016]) {
+          await settle();
+          const p = WG.generateWorld(s);
+          const d = WG.generateWorld(s);
+          HW.decorateWorld(d, s);
+          lines.push(audit(d, p, `seed ${s}`));
+        }
+
+        // 3. The trees turn, and a turned tree is never served on an ordinary
+        //    day, because the sprite remembers which day it was baked for.
+        const h = H.holiday();
+        const warm = (paint, w, hh) => {
+          const b = new PX.PixBuf(w, hh);
+          paint(b, 0);
+          // Only the leaves: everything above where the trunk begins, since
+          // bark is brown whatever the month.
+          let n = 0;
+          for (let i = 0; i < w * 22; i++) {
+            const p = b.data[i];
+            const r = p & 255, gr = (p >> 8) & 255, a = p >>> 24;
+            if (a === 255 && r > gr + 25) n++;
+          }
+          return n;
+        };
+        const onOak = warm(O.OBJECTS.oak.paint, 48, 56), onPine = warm(O.OBJECTS.pine.paint, 40, 60);
+        const onSprite = O.objSprite('oak', 0);
+        H.setHoliday(null);
+        const offOak = warm(O.OBJECTS.oak.paint, 48, 56);
+        const offSprite = O.objSprite('oak', 0);
+        H.setHoliday(h);
+        if (onOak < 300 || offOak > 20) fail(`the oaks didn't turn: warm pixels ${onOak} on, ${offOak} off`);
+        if (onPine > 20) fail(`the pines turned (${onPine} warm pixels)`);
+        if (onSprite === offSprite) fail('one oak sprite is shared by Halloween and an ordinary day');
+
+        // 4. The prize: once a year, then a friendly word.
+        const maze = map.meta.halloweenMaze;
+        const it = maze && map.interactAt(maze.prize.x, maze.prize.y);
+        let prizeNote = 'none';
+        if (it) {
+          delete st.flags.halloween_maze;
+          const money = st.money, nip = st.inventory.catnip || 0;
+          g.handleInteract(it, maze.prize);
+          await settle();
+          const got = [st.money - money, (st.inventory.catnip || 0) - nip, !!st.flags.halloween_maze, g.dialogue.speaker];
+          for (let k = 0; k < 12 && g.dialogue.active; k++) { await until(() => g.dialogue.pageComplete, 3000); await pressKey('Space'); }
+          const money2 = st.money;
+          g.handleInteract(it, maze.prize);
+          await settle();
+          const again2 = [st.money - money2, g.dialogue.active];
+          for (let k = 0; k < 12 && g.dialogue.active; k++) { await until(() => g.dialogue.pageComplete, 3000); await pressKey('Space'); }
+          prizeNote = `first=${got.join('/')} again=${again2.join('/')}`;
+          if (got[0] !== 60 || got[1] !== 2 || !got[2]) fail(`the maze prize paid ${prizeNote}`);
+          if (again2[0] !== 0 || !again2[1]) fail(`the maze prize paid twice, or said nothing: ${prizeNote}`);
+        }
+
+        // 5. What the lights cost after dark, standing at the cafe door.
+        st.clock.t = 21 * (1200 / 24);
+        g.player.x = g.homeDoor.x * 16 + 8; g.player.y = (g.homeDoor.y + 2) * 16 - 2;
+        g.cam.follow(map, g.player.x, g.player.y, true);
+        await settle();
+        const onScreen = map.lights.filter((L) => {
+          const x = L.x - g.cam.ox, y = L.y - g.cam.oy;
+          return x > -140 && y > -140 && x < 480 + 140 && y < 270 + 140;
+        }).length;
+        g.perf.clear();
+        await wait(1500);
+        const r = g.perf.report();
+        if (onScreen > 40) fail(`${onScreen} lights to draw at the cafe door`);
+        window.__hw = `${lines.join(' ')} prize[${prizeNote}] oak warm=${onOak}/${offOak} night[lights=${onScreen} ms=${r.ms} ms95=${r.ms95}]`;
+      } else if (SCRIPT.startsWith('hwshot')) {
+        // A look at Halloween, drawn a whole area at a time rather than one
+        // screen: `hwshot:town` is Brambleford at dusk, `hwshot:maze` the corn
+        // maze by day, `hwshot:mazenight` after dark, `hwshot:cafe` close up.
+        const what = SCRIPT.split(':')[1] || 'town';
+        const st = g.state;
+        const map = g.overworld;
+        const maze = map.meta.halloweenMaze;
+        const town = g.towns.brambleford;
+        const cafe = g.homeDoor;
+        const farmSign = [...map.interacts].find(([, it]) => it.kind === 'sign' && /farmhouse/i.test(it.text || ''));
+        const farm = farmSign ? farmSign[0].split(',').map(Number) : [cafe.x, cafe.y];
+        const bare = map.objects.find((o) => o.type === 'bareTree') || { tx: cafe.x, ty: cafe.y };
+        const views = {
+          farm: { x: farm[0] - 15, y: farm[1] - 10, w: 30, h: 20, hour: 12, scale: 2 },
+          bare: { x: bare.tx - 8, y: bare.ty - 6, w: 16, h: 9, hour: 12, scale: 4 },
+          town: { x: town.rect.x - 4, y: town.rect.y - 3, w: town.rect.w + 8, h: town.rect.h + 6, hour: 19, scale: 1 },
+          maze: maze && { x: maze.reach.x - 2, y: maze.reach.y - 2, w: maze.reach.w + 4, h: maze.reach.h + 4, hour: 12, scale: 1 },
+          mazenight: maze && { x: maze.reach.x - 2, y: maze.reach.y - 2, w: maze.reach.w + 4, h: maze.reach.h + 4, hour: 21, scale: 1 },
+          middle: maze && { x: maze.middle.x - 10, y: maze.middle.y - 7, w: 21, h: 13, hour: 12, scale: 3 },
+          cafe: { x: cafe.x - 15, y: cafe.y - 9, w: 30, h: 17, hour: 19, scale: 2 },
+          cafeday: { x: cafe.x - 15, y: cafe.y - 9, w: 30, h: 17, hour: 12, scale: 2 },
+          close: { x: cafe.x - 8, y: cafe.y - 5, w: 16, h: 8, hour: 12, scale: 4 },
+          closenight: { x: cafe.x - 8, y: cafe.y - 5, w: 16, h: 8, hour: 21, scale: 4 },
+          south: { x: town.rect.x - 2, y: town.rect.y + 14, w: 30, h: 17, hour: 12, scale: 2 },
+          woods: { x: town.rect.x + town.rect.w - 4, y: town.rect.y - 16, w: 30, h: 17, hour: 12, scale: 2 },
+        };
+        if (what === 'sheet') {
+          // Every Halloween piece in every look, on a patch of grass, at 3x.
+          const O = await import('../src/art/objects.js');
+          const types = ['jackOLantern', 'pumpkinPile', 'cornShock', 'hayBale', 'bareTree', 'scarecrowCat', 'treatBasket', 'mazeSign', 'oak', 'birch', 'apple', 'willow', 'bush', 'pine'];
+          const sheet = document.createElement('canvas');
+          sheet.width = 480; sheet.height = 270;
+          const sg = sheet.getContext('2d');
+          sg.fillStyle = '#5da845'; sg.fillRect(0, 0, 480, 270);
+          let x = 6, y = 6, rowH = 0;
+          for (const t of types) {
+            for (let k = 0; k < O.OBJECTS[t].variants; k++) {
+              const spr = O.objSprite(t, k);
+              if (x + spr.width > 474) { x = 6; y += rowH + 6; rowH = 0; }
+              sg.drawImage(spr, x, y);
+              x += spr.width + 6; rowH = Math.max(rowH, spr.height);
+            }
+          }
+          // The holiday menu's icons, beside the everyday ones they replace.
+          const IC = await import('../src/art/icons.js');
+          x = 6; y += rowH + 8;
+          for (const name of ['latte', 'pumpkin_latte', 'lemonade', 'pumpkin_smoothie', 'berry', 'strawberry']) {
+            sg.fillStyle = '#2a2438'; sg.fillRect(x - 2, y - 2, 20, 20);
+            sg.drawImage(IC.iconSprite(name), x, y);
+            x += 26;
+          }
+          rowH = 16;
+          sheet.style.cssText = 'position:fixed;left:0;top:0;z-index:100;image-rendering:pixelated;width:1440px;height:810px';
+          document.body.appendChild(sheet);
+          document.getElementById('frame').style.visibility = 'hidden';
+          window.__hw = `view=sheet rows to y=${y + rowH}`;
+          report(window.__errors);
+          return;
+        }
+        const v = views[what];
+        if (!v) { window.__errors.push(`no such view: ${what}`); report(window.__errors); return; }
+        st.clock.t = v.hour * (1200 / 24);
+        const lit = st.clock.lighting();
+        const light = lit.night > 0.02 ? { night: lit.night, tint: lit.tint, lights: st.clock.isDark ? map.lights : [] } : null;
+        const big = document.createElement('canvas');
+        big.width = v.w * 16; big.height = v.h * 16;
+        const bg = big.getContext('2d');
+        bg.imageSmoothingEnabled = false;
+        const tmp = document.createElement('canvas');
+        tmp.width = 480; tmp.height = 270;
+        const tg = tmp.getContext('2d');
+        tg.imageSmoothingEnabled = false;
+        for (let py = 0; py < big.height; py += 270) {
+          for (let px = 0; px < big.width; px += 480) {
+            g.renderer.draw(tg, map, { ox: v.x * 16 + px, oy: v.y * 16 + py }, [], light);
+            bg.drawImage(tmp, px, py);
+          }
+        }
+        big.style.cssText = `position:fixed;left:0;top:0;z-index:100;image-rendering:pixelated;width:${big.width * v.scale}px;height:${big.height * v.scale}px;background:#000`;
+        document.body.appendChild(big);
+        // Stop the game drawing over the top of it while the picture is taken.
+        document.getElementById('frame').style.visibility = 'hidden';
+        window.__hw = `view=${what} at ${v.x},${v.y} ${v.w}x${v.h} maze=${maze ? `${maze.x},${maze.y}` : 'none'}`;
+      } else if (SCRIPT === 'hwcore' || SCRIPT === 'holidayoff') {
+        // The holiday switch itself: decided from the address bar, and with it
+        // the shops, the menu, the quests and the once-a-year reset.
+        const H = await import('../src/holidays/index.js');
+        const I = await import('../src/game/items.js');
+        const Q = await import('../src/game/quests.js');
+        const st = g.state;
+        const on = SCRIPT === 'hwcore';
+        const h = H.holiday();
+        if (on !== !!(h && h.id === 'halloween')) window.__errors.push(`holiday is ${JSON.stringify(h)}`);
+        const grocer = I.stockFor('grocer');
+        if (on !== grocer.includes('pumpkin_latte')) window.__errors.push(`grocer: ${grocer.join(',')}`);
+        // Enough customers that a special nobody can ask for would show up.
+        let asked = 0;
+        for (let i = 0; i < 300; i++) if (st.cafeSim.buildWishlist().some((id) => I.ITEMS[id].holiday)) asked++;
+        if (on && asked < 30) window.__errors.push(`only ${asked}/300 customers wanted a holiday special`);
+        if (!on && asked) window.__errors.push(`${asked} customers wanted a holiday special out of season`);
+        const seasonal = Q.QUESTS.filter((q) => q.holiday);
+        const live = Q.liveQuests();
+        if (seasonal.some((q) => on !== live.includes(q))) window.__errors.push('holiday quests live out of season, or not in it');
+        if (on) {
+          // The reset: last year's quest progress goes, this year's flag is set.
+          const year = h.year;
+          if (st.flags.holiday_halloween !== year) window.__errors.push(`year flag ${st.flags.holiday_halloween}`);
+          st.flags.holiday_halloween = year - 1;
+          st.flags.halloween_treat_test = true;
+          if (seasonal[0]) { st.quests[seasonal[0].id] = 'done'; st.questStep[seasonal[0].id] = 2; }
+          g.startHolidayYear();
+          if (st.flags.halloween_treat_test) window.__errors.push('last year\'s treat flag survived');
+          if (seasonal[0] && st.quests[seasonal[0].id]) window.__errors.push('last year\'s quest survived');
+          if (st.flags.holiday_halloween !== year) window.__errors.push('year flag not reset');
+        } else if ('holiday_halloween' in st.flags) window.__errors.push('year flag set with no holiday');
+        window.__cont = `holiday=${h ? h.id : 'none'} grocer=${grocer.length} asked=${asked}/300 seasonalQuests=${seasonal.length}`;
+      } else if (SCRIPT === 'hwhouses' || SCRIPT === 'housefolk') {
+        // Who's home in a cottage. For Halloween, a family of one to four, the
+        // first of whom hands over the house's strawberry, once. The rest of
+        // the year, nobody but whoever is waiting on an order, exactly as
+        // before. `housefolk` runs whichever way the sweep was asked for, so
+        // it checks both sides; `hwhouses` is always Halloween.
+        const H = await import('../src/holidays/index.js');
+        const HW = await import('../src/holidays/halloween/houses.js');
+        const R = await import('../src/world/residents.js');
+        const D = await import('../src/game/deliveries.js');
+        const st = g.state;
+        const on = H.isHoliday('halloween');
+        if (SCRIPT === 'hwhouses' && !on) window.__errors.push('hwhouses ran without Halloween on');
+        st.deliveries = [];
+        const berries = () => st.cafeSim.stockCount(HW.TREAT_ITEM);
+        const drain = async () => {
+          for (let i = 0; i < 30 && g.dialogue.active; i++) await pressKey('Space');
+          await settle();
+        };
+        const enter = async (h) => {
+          if (st.mapId !== 'overworld') { g.enterOverworld(); await settle(); }
+          const it = g.overworld.interactAt(h.x, h.y);
+          g.player.x = h.x * 16 + 8;
+          g.player.y = (h.y + 1) * 16;
+          g.openDoor(it, { x: h.x, y: h.y });
+          await settle();
+          return g.currentMap;
+        };
+        const talk = async (v) => {
+          g.player.x = v.x + 10; g.player.y = v.y;
+          g.talkTo(v);
+          await frames(2);
+          await drain();
+          return v.talking;       // left talking means the conversation never finished
+        };
+        const folk = (map) => (map.villagers || []).filter((v) => v.def.resident && !v.recipient);
+        const onDoor = (map) => {
+          const d = map.meta.door;
+          return (map.villagers || []).filter((v) => v.tx === d.x && (v.ty === d.y || v.ty === d.y - 1)).length;
+        };
+        const out = [];
+
+        // 1. A cottage with no order due.
+        // A big family, so there's somebody to talk to after the treat.
+        const house = g.houses.find((h) => HW.family(h.id).length >= 3) || g.houses[0];
+        const fam = HW.family(house.id);
+        let map = await enter(house);
+        const inside = st.mapId === `house:${house.id}`;
+        if (!inside) window.__errors.push(`never got inside ${house.id}`);
+        const first = folk(map);
+        const ids = first.map((v) => v.def.id);
+        out.push(`${house.id}: family=${fam.length} home=${first.length} total=${(map.villagers || []).length}`);
+        if (on) {
+          if (first.length < 1 || first.length > 4) window.__errors.push(`a family of ${first.length}`);
+          if (first.length !== fam.length) window.__errors.push(`${first.length} home of a family of ${fam.length}`);
+          if (new Set(ids).size !== ids.length) window.__errors.push(`two residents share an id: ${ids}`);
+          if (ids.some((id) => !id.startsWith(`resident:${house.id}:`))) window.__errors.push(`odd ids: ${ids}`);
+          const head = R.householder(house.id).name;
+          if (first.filter((v) => v.def.name === head).length !== 1) window.__errors.push(`the householder ${head} is not home exactly once`);
+          if (first.some((v) => map.solid(v.tx, v.ty))) window.__errors.push('somebody is standing in the furniture');
+        } else if ((map.villagers || []).length) {
+          window.__errors.push(`out of season, ${map.villagers.length} people in an empty cottage`);
+        }
+        // Give them a few seconds to potter about, then look at the door again.
+        const doorNow = onDoor(map);
+        await wait(3000);
+        const doorLater = onDoor(map);
+        if (doorNow || doorLater) window.__errors.push(`somebody on the door or its step: ${doorNow}, then ${doorLater}`);
+
+        // 2. Knocking: one strawberry, the first time only.
+        const flag = HW.treatFlag(house.id);
+        delete st.flags[flag];
+        const b0 = berries();
+        if (on && first.length) {
+          const stuck1 = await talk(first[0]);
+          const got1 = berries() - b0;
+          const stuck2 = await talk(first[0]);
+          const other = first[1] || first[0];
+          const stuck3 = await talk(other);
+          const got = berries() - b0;
+          out.push(`treat first=${got1} after3=${got} flag=${!!st.flags[flag]}`);
+          if (got1 !== 1) window.__errors.push(`the first knock gave ${got1} strawberries`);
+          if (got !== 1) window.__errors.push(`three conversations gave ${got} strawberries`);
+          if (!st.flags[flag]) window.__errors.push(`${flag} was not set`);
+          if (stuck1 || stuck2 || stuck3) window.__errors.push('a resident was left mid-conversation');
+        } else if (!on && berries() !== b0) window.__errors.push('a strawberry out of season');
+
+        // 3. Back out and in again: the same people, not a second family.
+        map = await enter(house);
+        const again = folk(map).map((v) => v.def.id).sort();
+        out.push(`reentered=${again.length}`);
+        if (again.join() !== ids.slice().sort().join()) window.__errors.push(`walking back in changed who's home: ${ids} -> ${again}`);
+        map = await enter(house);
+        if (folk(map).length !== ids.length) window.__errors.push(`third visit: ${folk(map).length} home`);
+
+        // 4. An order due at another cottage: whoever takes it is the householder,
+        // not an extra face.
+        const house2 = g.houses.find((h) => h.id !== house.id && HW.family(h.id).length >= 2)
+          || g.houses.find((h) => h.id !== house.id);
+        const fam2 = HW.family(house2.id);
+        const d = D.makeDelivery(
+          { x: house2.x, y: house2.y, name: house2.name, town: house2.town, house: house2.id },
+          g.homeDoor, st.clock.absolute, () => 0.5,
+        );
+        st.addDelivery(d);
+        map = await enter(house2);
+        const who = (map.villagers || []).filter((v) => v.recipient);
+        const all2 = map.villagers || [];
+        const head2 = R.householder(house2.id).name;
+        const named2 = all2.filter((v) => v.def.name === head2).length;
+        out.push(`${house2.id}: family=${fam2.length} inRoom=${all2.length} recipients=${who.length} named${head2}=${named2}`);
+        if (who.length !== 1) window.__errors.push(`${who.length} people waiting on one order`);
+        if (named2 !== 1) window.__errors.push(`${named2} people called ${head2} in the room`);
+        if (all2.length !== (on ? fam2.length : 1)) window.__errors.push(`${all2.length} in the room, expected ${on ? fam2.length : 1}`);
+        // Talking to them is the delivery, whatever the day. Everything in stock.
+        for (const id of d.items) st.cafeSim.addStock(id, 2, st.clock.day);
+        const flag2 = HW.treatFlag(house2.id);
+        delete st.flags[flag2];
+        const moneyBefore = st.money, bBefore = berries();
+        if (who[0]) await talk(who[0]);
+        const paid = st.money - moneyBefore;
+        const delivered = !st.deliveries.some((x) => x.id === d.id);
+        out.push(`delivered=${delivered} paid=${paid}`);
+        if (!delivered || paid <= 0) window.__errors.push('the order was not handed over');
+        if (berries() !== bBefore || st.flags[flag2]) window.__errors.push('the delivery handed out a strawberry');
+        if (on) {
+          // And the rest of the family still has the strawberry.
+          const rest = folk(map);
+          if (rest.length) {
+            await talk(rest[0]);
+            if (berries() - bBefore !== 1) window.__errors.push('the family behind the delivery had no strawberry');
+          }
+          // Next time in, the householder is back with everyone else.
+          map = await enter(house2);
+          if (folk(map).length !== fam2.length || (map.villagers || []).some((v) => v.recipient)) {
+            window.__errors.push(`after the delivery: ${folk(map).length} home of ${fam2.length}`);
+          }
+        } else if ((map.villagers || []).length) {
+          window.__errors.push('somebody stayed in the cottage after the delivery, out of season');
+        }
+        st.deliveries = [];
+        g.enterOverworld();
+        await settle();
+        window.__cont = `holiday=${on ? 'halloween' : 'off'} ${out.join(' | ')}`;
+      } else if (SCRIPT === 'hwquests') {
+        // Every Halloween job, from the offer to the reward, through the same
+        // conversations a player has: talk to whoever gives it, do the thing,
+        // talk to whoever it says. The giver and everybody else are stood in
+        // front of you rather than walked to, which is questwalk's job.
+        const Q = await import('../src/game/quests.js');
+        const H = await import('../src/holidays/index.js');
+        const { VILLAGERS } = await import('../src/world/places.js');
+        const { Villager } = await import('../src/game/entities.js');
+        const st = g.state;
+        const hw = Q.QUESTS.filter((q) => q.holiday === 'halloween');
+        const live = Q.liveQuests();
+        if (!H.isHoliday('halloween')) window.__errors.push('hwquests ran without Halloween on');
+        if (hw.length < 4) window.__errors.push(`only ${hw.length} Halloween quests`);
+        if (hw.some((q) => !live.includes(q))) window.__errors.push('a Halloween quest is not live at Halloween');
+        const drain = async () => {
+          for (let i = 0; i < 40 && g.dialogue.active; i++) await pressKey('Space');
+          await settle();
+        };
+        const speak = async (id) => {
+          const def = VILLAGERS.find((v) => v.id === id);
+          if (!def) { window.__errors.push(`nobody called ${id}`); return; }
+          const v = new Villager(def, g.player.x + 12, g.player.y);
+          g.talkTo(v);
+          await frames(2);
+          await drain();
+        };
+        const hour = (h) => { st.clock.t = h * (1200 / 24); };
+        const report = [];
+        for (const q of hw) {
+          // Everything else finished, so the giver has only this to offer.
+          st.quests = Object.fromEntries(Q.QUESTS.filter((x) => x.id !== q.id).map((x) => [x.id, 'done']));
+          st.questStep = {};
+          st.inventory = {};
+          st.stock = {};
+          for (const k of ['quests', 'questStep']) st.touch(k);
+          hour(q.night ? 22 : 12);
+          await settle();
+          if (q.night) {
+            // Not by day: the giver isn't out, and the job isn't handed out.
+            hour(12);
+            if (g.questAvailable(q)) window.__errors.push(`${q.id} is offered by day`);
+            hour(22);
+          }
+          if (!g.questAvailable(q)) { window.__errors.push(`${q.id} is not available`); continue; }
+          const money0 = st.money;
+          await speak(q.giver);
+          if (st.quests[q.id] !== 'active') { window.__errors.push(`${q.id} was not taken on (${st.quests[q.id]})`); continue; }
+          const steps = Q.questSteps(q);
+          for (let i = 0; i < steps.length && st.quests[q.id] === 'active'; i++) {
+            const o = steps[i].objective;
+            if ((st.questStep[q.id] || 0) !== i) { window.__errors.push(`${q.id} is on step ${st.questStep[q.id]}, not ${i}`); break; }
+            switch (o.type) {
+              case 'talk': await speak(o.to); break;
+              case 'deliver':
+                // Anything that isn't handed over by an earlier step, the player
+                // has gone and got: bought it, or knocked on a door for it.
+                if (!st.has(o.item)) st.give(o.item, 1);
+                await speak(o.to);
+                break;
+              case 'flag': st.flags[o.flag] = true; st.touch('flags'); await speak(q.giver); break;
+              case 'stock': for (const id of o.any) st.cafeSim.addStock(id, o.count + 2, st.clock.day); await speak(q.giver); break;
+              case 'item': st.give(o.item, o.count || 1); await speak(q.giver); break;
+              default: window.__errors.push(`${q.id}: no way to do a ${o.type} step here`);
+            }
+          }
+          const paid = st.money - money0;
+          const want = (q.reward && q.reward.money) || 0;
+          report.push(`${q.id}=${st.quests[q.id]}+${paid}`);
+          if (st.quests[q.id] !== 'done') window.__errors.push(`${q.id} never finished (step ${st.questStep[q.id]})`);
+          else if (paid !== want) window.__errors.push(`${q.id} paid ${paid}, not ${want}`);
+          // Handed over means handed over: nothing a step asked you to take
+          // somewhere is still in the bag afterwards.
+          for (const s of steps) {
+            const o = s.objective;
+            if (o.type === 'deliver' && (st.inventory[o.item] || 0)) {
+              window.__errors.push(`${q.id}: still holding ${o.item} after handing it over`);
+            }
+          }
+          // The family's rule: strawberries come from knocking on doors.
+          const gives = [...((q.reward && q.reward.items) || []), ...steps.flatMap((s) => s.gives || [])];
+          if (gives.some(([id]) => id === 'strawberry')) {
+            window.__errors.push(`${q.id} hands out a strawberry, which only comes from the houses`);
+          }
+        }
+        hour(12);
+        window.__cont = `halloweenQuests=${hw.length} ${report.join(' ')}`;
       } else if (SCRIPT === 'counter') {
         // A keeper and their counter are one thing: the same prompt from
         // anywhere in front of it, however the keeper wanders, and a press
@@ -7243,6 +7955,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__fire ? ` ${window.__fire}` : '')
         + (window.__cbox ? ` ${window.__cbox}` : '')
         + (window.__legs ? ` ${window.__legs}` : '')
+        + (window.__cos ? ` ${window.__cos}` : '')
         + (window.__cots ? ` ${window.__cots}` : '')
         + (window.__content ? ` ${window.__content}` : '')
         + (window.__extras ? ` ${window.__extras}` : '')
@@ -7310,6 +8023,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         + (window.__names ? ` ${window.__names}` : '')
         + (window.__namerow ? ` ${window.__namerow}` : '')
         + (window.__bookshot ? ` ${window.__bookshot}` : '')
+        + (window.__hw ? ` ${window.__hw}` : '')
         + (window.__bubbles !== undefined ? ` orderBubbles=${window.__bubbles}` : '');
       if (window.__terrain) { out.textContent = window.__terrain; document.title = 'OK'; window.__done = true; return; }
       const info = g ? `mode=${g.mode} map=${g.state.mapId} objs=${g.currentMap ? g.currentMap.objects.length : '?'} villagers=${g.villagers ? g.villagers.length : '?'} money=${g.state.money} cats=${g.state.cats.length} seats=${g.state.cafeSim.seats().length}${extra}` : 'no game';

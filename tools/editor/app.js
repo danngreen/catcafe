@@ -10,6 +10,7 @@
 
 import { charSprite, villagerLook } from '/src/art/chars.js';
 import { iconSprite } from '/src/art/icons.js';
+import { HOLIDAYS } from '/src/holidays/index.js';
 
 const $ = (sel) => document.querySelector(sel);
 let content = null;      // { quests, villagers, items, options }
@@ -342,6 +343,9 @@ function questForm(box) {
   flags.className = 'row';
   flags.append(
     field('After dark only', toggle(q.night, 'giver only appears at night', (v) => { q.night = v; })),
+    field('Holiday', choose(q.holiday || '', HOLIDAYS.map((h) => [h.id, h.name]),
+      (v) => { q.holiday = v || undefined; }, { blank: 'All year' }),
+      'A holiday quest is only offered while that holiday is on, and starts over each year.'),
     field('Only offered once this flag is set', flagBox(q.requires, (v) => { q.requires = v || undefined; }),
       'Typically the flag is from a hint (see Cast > Name > What they know > Saying it sets'),
   );

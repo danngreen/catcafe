@@ -84,6 +84,30 @@ export const ICONS = {
   milk: (b) => { b.rect(4, 3, 8, 11, rgb('#f8f4ea')); b.rect(4, 3, 8, 3, rgb('#5b8fd6')); b.rect(6, 7, 4, 4, rgb('#dfeaf6')); b.set(7, 8, rgb('#5b8fd6')); },
   water: (b) => glass(b, '#9fd6ee'),
   cider: (b) => glass(b, '#e0894a'),
+  // Halloween's two. Pumpkin-spice orange under a swirl of cream, so they
+  // read as the autumn ones next to the everyday latte and lemonade.
+  pumpkin_latte: (b) => {
+    mug(b, '#cf8646', '#f0e2c6', false);
+    b.ellipse(7, 6.4, 3.4, 1.6, rgb('#fbf6ea'));
+    b.ellipse(7, 5, 2.2, 1.2, rgb('#ffffff'));
+    b.set(7, 3, rgb('#ffffff'));
+    for (const [x, y] of [[5, 6], [8, 5], [9, 7]]) b.set(x, y, rgb('#a0582a'));
+    // A little pumpkin painted on the side of the mug.
+    b.ellipse(7, 11, 2, 1.5, rgb('#e8842c'));
+    b.set(6, 10, rgb('#f6a74c'));
+    b.set(7, 9, rgb('#5c8a3a'));
+  },
+  pumpkin_smoothie: (b) => {
+    glass(b, '#f0923a');
+    b.rect(5, 9, 6, 1, rgb('#f6b060'));
+    b.ellipse(8, 4.4, 3.6, 1.6, rgb('#fbf6ea'));
+    b.set(7, 3, rgb('#ffffff'));
+    // A purple straw, jaunty.
+    b.line(10, 5, 13, 1, rgb('#9a78c8'));
+    b.set(11, 4, rgb('#e2d0f4'));
+    b.set(13, 1, rgb('#e2d0f4'));
+    b.set(6, 4, rgb('#a0582a'));
+  },
 
   // ---- food ----
   cake: (b) => plateWith(b, () => {
@@ -332,6 +356,17 @@ export const ICONS = {
   honey: (b) => { b.rect(4, 5, 8, 9, rgb('#f0b03a')); b.rect(4, 5, 8, 2, rgb(P.wood)); b.rect(5, 8, 6, 5, rgb('#f5c451')); b.ellipse(8, 10, 1.6, 1.4, rgb('#c9863f')); },
   wool: (b) => { b.ellipse(8, 9, 5.4, 4.6, rgb('#f0ece0')); for (let i = 0; i < 8; i++) { const a = i * 0.79; b.ellipse(8 + Math.cos(a) * 4, 9 + Math.sin(a) * 3.4, 1.8, 1.6, rgb('#fdfbf0')); } },
   fish: (b) => { b.ellipse(7, 9, 5, 3, rgb('#7fb8d6')); b.ellipse(7, 8, 4, 1.8, rgb('#a8d6ee')); b.line(12, 5, 12, 13, rgb('#5b8fd6')); b.line(15, 5, 12, 9, rgb('#5b8fd6')); b.line(15, 13, 12, 9, rgb('#5b8fd6')); b.set(4, 8, rgb('#2f2a3d')); },
+  // One big strawberry: a rounded heart of red with seeds on it and a green
+  // star of leaves on top. `berry` is a bunch of little round ones, which is
+  // a bramble and not the thing every house is giving away.
+  strawberry: (b) => {
+    b.ellipse(8, 9, 5, 4, rgb(P.strawberry));
+    for (let i = 0; i < 4; i++) b.hline(4 + i, 12 + i, 9 - i * 2, rgb(P.strawberry));
+    b.ellipse(6, 8, 1.6, 1.2, rgb('#ff8a96'));
+    for (const [x, y] of [[5, 10], [8, 9], [10, 11], [7, 12], [10, 8], [6, 13], [9, 13]]) b.set(x, y, rgb('#ffe07a'));
+    for (const [x, y] of [[4, 5], [5, 4], [6, 5], [7, 4], [9, 4], [10, 5], [11, 4], [12, 5], [8, 5], [7, 6], [9, 6]]) b.set(x, y, rgb('#5ca84a'));
+    b.set(8, 3, rgb('#3f7a34')); b.set(8, 2, rgb('#3f7a34'));
+  },
   berry: (b) => { for (const [x, y] of [[6, 9], [10, 9], [8, 12]]) { b.ellipse(x, y, 2.4, 2.4, rgb(P.berry)); b.set(x - 1, y - 1, rgb('#f07a8f')); } b.line(8, 7, 8, 4, rgb('#5c9c4a')); b.ellipse(6, 4, 2, 1.2, rgb('#5c9c4a')); },
   acorn: (b) => { b.ellipse(8, 10, 4, 4.4, rgb('#c9863f')); b.ellipse(8, 6, 4.6, 2.6, rgb('#7d5430')); b.rect(7, 2, 2, 3, rgb('#7d5430')); b.ellipse(6.5, 9, 1.2, 1.4, rgb('#e0a45c')); },
   feather: (b) => { b.line(4, 14, 12, 3, rgb('#c9c2b0')); for (let i = 0; i < 8; i++) { const t = i / 8; b.line(Math.round(5 + t * 6), Math.round(13 - t * 9), Math.round(5 + t * 6) + 3, Math.round(13 - t * 9) - 1, rgb(i % 2 ? '#e6e0cf' : '#c9c2b0')); } },

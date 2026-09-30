@@ -7,6 +7,7 @@ import { PixBuf, SpriteCache, shade } from '../engine/pixel.js';
 import { P } from './palette.js';
 import { hash2, clamp } from '../engine/util.js';
 import { TILE } from './tiles.js';
+import { holiday, isHoliday } from '../holidays/index.js';
 
 const rgb = (hex, a = 255) => PixBuf.rgba(hex, a);
 const n = (x, y, s) => hash2(x * 37 + s * 101, y * 53 - s * 17, 0x0b7e);
@@ -63,12 +64,61 @@ function trunk(buf, cx, top, bottom, w, col) {
   buf.hline(Math.round(cx - w / 2 - 2), bottom - 1, w + 4, rgb(dk));
 }
 
+// ---------------------------------------------------------------------------
+// Autumn
+// ---------------------------------------------------------------------------
+
+// While Halloween is on the broadleaf trees turn. Which colour a tree goes is
+// decided by its variant, so a wood comes out a patchwork of orange, red,
+// yellow and brown rather than one colour, and the same tree is the same colour
+// every time it's baked. Each gets a second colour flecked through it as well,
+// because a tree in October is turning rather than dyed. Pines keep their
+// needles. The sprite cache key carries the holiday (see objSprite), so none
+// of these is ever mistaken for its summer self.
+const FALL = {
+  orange: '#d9822e', red: '#c44a30', yellow: '#e2b43a', brown: '#9a6034',
+  amber: '#e89c34', rust: '#b35a2c', gold: '#ecc64a',
+};
+const autumn = () => isHoliday('halloween');
+
+/** Flecks of a second colour through a canopy that's already been painted. */
+function turning(buf, cx, cy, rx, ry, col, v, count) {
+  const c = rgb(col), lt = rgb(shade(col, 0.22));
+  for (let i = 0; i < count; i++) {
+    const a = n(i, v, 31) * Math.PI * 2, d = Math.sqrt(n(i, v, 33));
+    const px = Math.round(cx + Math.cos(a) * rx * d), py = Math.round(cy + Math.sin(a) * ry * d);
+    // Only onto leaves, never out into the air or onto the outline.
+    if (!(buf.get(px, py) >>> 24) || !(buf.get(px + 1, py) >>> 24)) continue;
+    buf.set(px, py, c);
+    buf.set(px + 1, py, n(i, v, 35) > 0.5 ? lt : c);
+  }
+}
+
+/**
+ * A few fallen leaves on the ground round the trunk. Put down after the
+ * outline, and only where there's nothing solid already, so they lie flat on
+ * the grass instead of each growing a dark ring of its own.
+ */
+function fallenLeaves(buf, cx, base, rx, cols, v) {
+  for (let i = 0; i < 16; i++) {
+    const px = Math.round(cx + (n(i, v, 41) - 0.5) * rx * 2);
+    const py = Math.round(base - 3 + n(i, v, 43) * 4);
+    const here = buf.get(px, py);
+    if ((here >>> 24) === 255) continue;
+    buf.set(px, py, rgb(cols[i % cols.length]));
+  }
+}
+
 function paintOak(buf, v) {
-  const green = [P.forest, '#3f8a3c', '#4a9440', '#2f6f31'][v % 4];
+  const fall = autumn();
+  const green = fall ? [FALL.orange, FALL.red, FALL.yellow, FALL.rust][v % 4]
+    : [P.forest, '#3f8a3c', '#4a9440', '#2f6f31'][v % 4];
   groundShadow(buf, buf.w / 2, buf.h - 3, 11, 4);
   trunk(buf, buf.w / 2, 24, buf.h - 2, 7, P.wood);
   canopy(buf, buf.w / 2, 20, 17, 15, green, v, { lobes: 6 });
+  if (fall) turning(buf, buf.w / 2, 20, 16, 14, [FALL.gold, FALL.amber, FALL.brown, FALL.orange][v % 4], v, 34);
   outline(buf);
+  if (fall) fallenLeaves(buf, buf.w / 2, buf.h - 2, 13, [green, FALL.amber, FALL.brown], v);
 }
 
 function paintPine(buf, v) {
@@ -95,7 +145,9 @@ function paintPine(buf, v) {
 }
 
 function paintBirch(buf, v) {
-  const green = ['#6aad4a', '#79b954', '#5fa244'][v % 3];
+  // Birches go butter yellow, all of them, which is most of their charm.
+  const fall = autumn();
+  const green = fall ? [FALL.gold, '#f0d056', FALL.yellow][v % 3] : ['#6aad4a', '#79b954', '#5fa244'][v % 3];
   groundShadow(buf, buf.w / 2, buf.h - 3, 8, 3);
   const cx = buf.w / 2;
   buf.rect(cx - 2, 22, 5, buf.h - 24, rgb('#e8e4d6'));
@@ -105,14 +157,18 @@ function paintBirch(buf, v) {
     buf.hline(cx - 2, y, 2 + Math.floor(n(i, v, 5) * 3), rgb('#4a4a48'));
   }
   canopy(buf, cx, 17, 13, 13, green, v, { lobes: 5 });
+  if (fall) turning(buf, cx, 17, 12, 12, FALL.amber, v, 16);
   outline(buf);
+  if (fall) fallenLeaves(buf, cx, buf.h - 2, 10, [green, FALL.amber], v);
 }
 
 function paintApple(buf, v) {
-  const green = '#4e9c40';
+  const fall = autumn();
+  const green = fall ? [FALL.amber, FALL.yellow, FALL.orange][v % 3] : '#4e9c40';
   groundShadow(buf, buf.w / 2, buf.h - 3, 10, 3.6);
   trunk(buf, buf.w / 2, 24, buf.h - 2, 6, P.wood);
   canopy(buf, buf.w / 2, 19, 15, 14, green, v, { lobes: 6 });
+  if (fall) turning(buf, buf.w / 2, 19, 14, 13, FALL.gold, v, 20);
   // Fruit peeking out of the leaves.
   for (let i = 0; i < 5; i++) {
     const a = n(i, v, 21) * Math.PI * 2, d = 0.4 + n(i, v, 23) * 0.5;
@@ -121,10 +177,12 @@ function paintApple(buf, v) {
     buf.set(px - 1, py - 1, rgb('#ff9a8f'));
   }
   outline(buf);
+  if (fall) fallenLeaves(buf, buf.w / 2, buf.h - 2, 12, [green, FALL.brown, P.flowerR], v);
 }
 
 function paintWillow(buf, v) {
-  const green = '#8fbe58';
+  const fall = autumn();
+  const green = fall ? ['#d8b24c', '#c9a040'][v % 2] : '#8fbe58';
   groundShadow(buf, buf.w / 2, buf.h - 3, 12, 4);
   trunk(buf, buf.w / 2, 26, buf.h - 2, 8, P.woodDk);
   canopy(buf, buf.w / 2, 18, 18, 12, green, v, { lobes: 6 });
@@ -136,13 +194,18 @@ function paintWillow(buf, v) {
       buf.set(x + (k > len * 0.6 ? 1 : 0), 26 + k, rgb(k % 3 === 0 ? shade(green, -0.2) : green));
     }
   }
+  if (fall) turning(buf, buf.w / 2, 18, 17, 11, FALL.amber, v, 18);
   outline(buf);
 }
 
 function paintBush(buf, v, berries) {
-  const green = ['#3f8a3c', '#478f42', '#37793a'][v % 3];
+  // Brambles stay green: they're the thicket over the mill bridge, and a
+  // barrier ought to look like itself in every season.
+  const fall = autumn() && !berries;
+  const green = fall ? [FALL.red, FALL.orange, FALL.rust][v % 3] : ['#3f8a3c', '#478f42', '#37793a'][v % 3];
   groundShadow(buf, buf.w / 2, buf.h - 2, 8, 3);
   canopy(buf, buf.w / 2, buf.h - 9, 9, 7.5, green, v, { lobes: 4 });
+  if (fall) turning(buf, buf.w / 2, buf.h - 9, 8, 7, [FALL.amber, FALL.red, FALL.gold][v % 3], v, 10);
   if (berries) {
     for (let i = 0; i < 6; i++) {
       const px = Math.round(buf.w / 2 + (n(i, v, 3) - 0.5) * 14);
@@ -1492,6 +1555,405 @@ function paintMenuBoard(buf, v) {
 }
 
 // ---------------------------------------------------------------------------
+// Halloween
+// ---------------------------------------------------------------------------
+//
+// Everything the valley puts out for Halloween. Cute rather than scary: the
+// lanterns grin, the spiders wave, and the palette stays in the pumpkin-patch
+// browns, oranges and purples. Placed by src/holidays/halloween/world.js.
+
+const HW = {
+  pumpkin: '#e8842c', pumpkinDk: '#b85e1f', pumpkinLt: '#f6a74c', rib: '#cf6e22',
+  deep: '#d0662a', gold: '#eea640', cream: '#efe3c8', creamDk: '#cdbf9f',
+  glow: '#ffd24a', glowHi: '#fff2a8', stem: '#6e5a2a', leaf: '#78a843',
+  purple: '#7a55a8', purpleLt: '#9a78c8', purpleDk: '#553a7c',
+  bark: '#6e4c38', barkDk: '#4b3226', barkLt: '#8e6a4e',
+  straw: '#d8b25a', strawLt: '#f0d890', strawDk: '#a8843c', twine: '#7a4a2a',
+};
+
+/** One pumpkin: ribbed body, a shine on the upper left, and a stubby stem. */
+function pumpkin(buf, cx, cy, rx, ry, col) {
+  const dk = shade(col, -0.22), lt = shade(col, 0.24);
+  buf.ellipse(cx, cy, rx, ry, rgb(col));
+  // Ribs, bowed to follow the curve so it reads as round rather than striped.
+  for (const k of [-0.5, 0, 0.5]) {
+    const x = Math.round(cx + k * rx);
+    for (let y = Math.round(cy - ry * 0.7); y <= Math.round(cy + ry * 0.7); y++) {
+      const bow = Math.round(k * (1 - Math.abs(y - cy) / ry) * 1.2);
+      if (buf.get(x + bow, y) >>> 24) buf.set(x + bow, y, rgb(dk));
+    }
+  }
+  buf.ellipse(cx - rx * 0.45, cy - ry * 0.4, Math.max(1, rx * 0.25), Math.max(0.8, ry * 0.22), rgb(lt));
+  buf.rect(Math.round(cx) - 1, Math.round(cy - ry) - 2, 2, 3, rgb(HW.stem));
+  buf.set(Math.round(cx), Math.round(cy - ry) - 2, rgb(shade(HW.stem, 0.3)));
+}
+
+/**
+ * A carved jack-o'-lantern with a candle in it. The faces are friendly on
+ * purpose — a grin, a cat, a sweet one and a wink — and lit from inside, so
+ * they read as lanterns in daylight and glow properly after dark (the glow
+ * itself is a light the placement pushes onto the map).
+ */
+function paintJackOLantern(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 6, 1.6);
+  const g = rgb(HW.glow), hi = rgb(HW.glowHi);
+  if (v === 1) {
+    // Cat ears, carved out of the top of a pumpkin that was nearly the right shape.
+    for (let i = 0; i < 3; i++) {
+      buf.hline(3, 3 + i, i + 1, rgb(HW.pumpkin));
+      buf.hline(13 - i, 3 + i, i + 1, rgb(HW.pumpkin));
+    }
+  }
+  pumpkin(buf, 8, 10, 6.6, 5, HW.pumpkin);
+  buf.set(10, 3, rgb(HW.leaf)); buf.set(11, 4, rgb(HW.leaf)); buf.set(10, 4, rgb(shade(HW.leaf, -0.2)));
+  const px = (pts, c) => { for (const [x, y] of pts) buf.set(x, y, c); };
+  if (v === 0) {
+    px([[5, 8], [4, 9], [5, 9], [6, 9], [11, 8], [10, 9], [11, 9], [12, 9]], g);
+    px([[5, 8], [11, 8]], hi);
+    px([[4, 11], [12, 11], [5, 12], [6, 12], [7, 12], [8, 12], [9, 12], [10, 12], [11, 12], [6, 13], [7, 13], [9, 13], [10, 13]], g);
+    px([[8, 13]], hi);
+  } else if (v === 1) {
+    px([[4, 9], [5, 8], [6, 9], [10, 9], [11, 8], [12, 9]], g);
+    px([[7, 10], [8, 10], [9, 10], [8, 11]], hi);
+    px([[6, 12], [7, 13], [8, 12], [9, 13], [10, 12]], g);
+  } else if (v === 2) {
+    px([[4, 8], [5, 8], [4, 9], [5, 9], [11, 8], [12, 8], [11, 9], [12, 9]], g);
+    px([[4, 8], [11, 8]], hi);
+    px([[6, 12], [7, 13], [8, 13], [9, 13], [10, 12]], g);
+  } else {
+    px([[4, 9], [5, 8], [6, 9], [11, 8], [12, 8], [11, 9], [12, 9]], g);
+    px([[11, 8]], hi);
+    px([[4, 11], [12, 11], [5, 12], [6, 12], [7, 12], [8, 12], [9, 12], [10, 12], [11, 12], [7, 13], [8, 13], [9, 13]], g);
+    px([[8, 12]], hi);
+  }
+  outline(buf);
+}
+
+/** A little heap of pumpkins and gourds, back to front. */
+function paintPumpkinPile(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 3, 11, 2.6);
+  if (v === 0) {
+    pumpkin(buf, 13, 9, 6, 4.5, HW.pumpkin);
+    pumpkin(buf, 7, 13, 4.5, 3.4, HW.deep);
+    pumpkin(buf, 19, 13.5, 4, 3, HW.cream);
+  } else if (v === 1) {
+    pumpkin(buf, 9, 9, 5, 4, HW.gold);
+    pumpkin(buf, 17, 10, 5.5, 4.2, HW.pumpkin);
+    // A green-striped gourd in front, because somebody always buys one.
+    buf.ellipse(12, 14, 3.4, 2.4, rgb('#8aa84a'));
+    for (const x of [10, 12, 14]) buf.vline(x, 13, 3, rgb('#e6dfb0'));
+    buf.set(12, 11, rgb(HW.stem));
+  } else {
+    pumpkin(buf, 8, 10, 5.5, 4.2, HW.pumpkin);
+    pumpkin(buf, 17, 11, 5, 4, HW.deep);
+    pumpkin(buf, 12, 14, 3.2, 2.4, HW.cream);
+  }
+  outline(buf);
+}
+
+/**
+ * A corn shock: a bundle of dry stalks stood up like a little tent and tied
+ * round the middle, with the tassels splayed out on top.
+ */
+function paintCornShock(buf, v) {
+  const cx = buf.w / 2, tie = 13, base = buf.h - 3;
+  groundShadow(buf, cx, base + 1, 8, 2.2);
+  // The skirt, widening from the tie to the ground.
+  for (let y = tie; y <= base; y++) {
+    const hw = 1.5 + (y - tie) * 0.45;
+    buf.hline(Math.round(cx - hw), y, Math.round(hw * 2) + 1, rgb(HW.straw));
+  }
+  for (let i = 0; i < 9; i++) {
+    const bx = Math.round(cx - 8 + i * 2 + (n(i, v, 3) - 0.5));
+    buf.line(Math.round(cx + (bx - cx) * 0.15), tie, bx, base, rgb(i % 2 ? HW.strawDk : HW.strawLt));
+  }
+  // The tops, fanning out above the tie.
+  for (let i = 0; i < 7; i++) {
+    const tx = Math.round(cx - 6 + i * 2);
+    const ty = 2 + Math.round(n(i, v, 5) * 3);
+    buf.line(cx, tie, tx, ty, rgb(i % 2 ? HW.strawLt : HW.straw));
+    buf.set(tx, ty - 1, rgb('#f6e6a8'));
+  }
+  // A couple of long leaves hanging off it.
+  buf.line(cx - 2, tie + 3, cx - 7, tie + 8, rgb('#b9a24a'));
+  buf.line(cx + 2, tie + 5, cx + 7, tie + 10, rgb('#c9ae52'));
+  // Tied with twine, or a purple ribbon with a bow on the festive one.
+  const band = v === 1 ? HW.purple : HW.twine;
+  buf.rect(Math.round(cx - 3), tie, 7, 2, rgb(band));
+  if (v === 1) {
+    buf.set(cx - 4, tie - 1, rgb(HW.purpleLt)); buf.set(cx - 5, tie, rgb(HW.purple));
+    buf.set(cx + 4, tie - 1, rgb(HW.purpleLt)); buf.set(cx + 5, tie, rgb(HW.purple));
+    pumpkin(buf, cx - 4, base - 2, 3.4, 2.6, HW.pumpkin);
+  }
+  outline(buf);
+}
+
+/** A square bale of hay, tied twice, sometimes with a pumpkin sat on top. */
+function paintHayBale(buf, v) {
+  const x0 = 1, w = buf.w - 2, top = buf.h - 14, front = buf.h - 10;
+  groundShadow(buf, buf.w / 2, buf.h - 2, 10, 2.2);
+  buf.rect(x0, top, w, 4, rgb(HW.strawLt));
+  buf.rect(x0, front, w, 8, rgb(HW.straw));
+  buf.hline(x0, buf.h - 3, w, rgb(HW.strawDk));
+  for (let i = 0; i < 26; i++) {
+    const px = x0 + Math.floor(n(i, v, 3) * w);
+    const py = front + Math.floor(n(v, i, 5) * 7);
+    buf.vline(px, py, 2, rgb(n(i, v, 7) > 0.5 ? HW.strawDk : HW.strawLt));
+  }
+  for (let i = 0; i < 8; i++) buf.set(x0 + Math.floor(n(i, v, 9) * w), top + 1 + (i % 3), rgb('#fbeab0'));
+  for (const tx of [x0 + 5, x0 + w - 6]) buf.vline(tx, top, buf.h - 3 - top, rgb(HW.twine));
+  if (v === 1) pumpkin(buf, buf.w / 2 + 2, top - 3, 4.2, 3.2, HW.pumpkin);
+  outline(buf);
+}
+
+/**
+ * One branch reaching out from the trunk and ending in a curl, like a fern
+ * tip. Returns where it got to half way, for a twig to grow from.
+ */
+function curlyBranch(buf, x, y, ang, len, curl, col, thick) {
+  let mid = null;
+  for (let s = 0; s < len + 5; s++) {
+    const tip = s >= len;
+    x += Math.cos(ang);
+    y += Math.sin(ang);
+    ang += tip ? curl * 5 : curl;
+    buf.set(x, y, rgb(col));
+    if (thick && s < len * 0.6) { buf.set(x, y + 1, rgb(col)); buf.set(x + 1, y, rgb(col)); }
+    if (s === Math.floor(len / 2)) mid = [x, y, ang];
+  }
+  return mid;
+}
+
+/**
+ * A crooked old tree with its leaves all gone. The Halloween one, but a
+ * friendly sort: its branches spread wide and end in curls rather than claws,
+ * and something nice lives in each — an owl in the knothole, a few stubborn
+ * leaves, or a lantern somebody hung from it.
+ */
+function paintBareTree(buf, v) {
+  const cx = buf.w / 2, base = buf.h - 3, top = 22;
+  groundShadow(buf, cx, base, 10, 3);
+  const lean = [2.4, -2.2, 1.8][v % 3];
+  const xAt = (y) => cx + Math.sin(((base - y) / (base - top)) * 2.4) * lean;
+  for (let y = base; y >= top; y--) {
+    const t = (base - y) / (base - top);
+    const w = Math.round(7 - t * 3.5);
+    const x0 = Math.round(xAt(y) - w / 2);
+    buf.hline(x0, y, w, rgb(HW.bark));
+    buf.set(x0, y, rgb(HW.barkLt));
+    buf.set(x0 + w - 1, y, rgb(HW.barkDk));
+    if ((y + v) % 7 === 0) buf.set(x0 + 2, y, rgb(HW.barkDk));      // a knot or two
+  }
+  // Roots.
+  buf.hline(Math.round(cx - 6), base, 12, rgb(HW.barkDk));
+  buf.hline(Math.round(cx - 5), base - 1, 10, rgb(HW.bark));
+  const tx = Math.round(xAt(top));
+  const flip = v % 3 === 1 ? -1 : 1;
+  const arms = [
+    // x, y, angle, length, curl, thick: two big limbs out to the sides, one up
+    // the middle, and two little ones lower down.
+    [tx - 1, top + 6, -2.7, flip > 0 ? 13 : 11, 0.04, true],
+    [tx + 1, top + 4, -0.45, flip > 0 ? 11 : 13, -0.04, true],
+    [tx, top, -1.75, 9, 0.05, false],
+    [tx - 1, top + 14, -3.0, 6, 0.1, false],
+    [tx + 1, top + 12, -0.15, 7, -0.1, false],
+  ];
+  arms.forEach(([x, y, a, len, curl, thick], i) => {
+    const mid = curlyBranch(buf, x, y, a, len, curl, i % 2 ? HW.barkDk : HW.bark, thick);
+    // A twig off each big limb, turned up towards the sky.
+    if (thick && mid) curlyBranch(buf, mid[0], mid[1], -1.57 + (mid[2] + 1.57) * 0.4, 4, curl * 2, HW.bark, false);
+  });
+  if (v === 0) {
+    // An owl, peeking out of the knothole.
+    const hy = base - 18, hx = Math.round(xAt(hy));
+    buf.ellipse(hx, hy, 3, 3.4, rgb('#2b1f1a'));
+    buf.rect(hx - 2, hy - 1, 2, 2, rgb('#fff6d8'));
+    buf.rect(hx + 1, hy - 1, 2, 2, rgb('#fff6d8'));
+    buf.set(hx - 1, hy, rgb('#2b2333'));
+    buf.set(hx + 1, hy, rgb('#2b2333'));
+    buf.set(hx, hy + 1, rgb('#f0a040'));
+  }
+  outline(buf);
+  if (v === 1) {
+    // The last few leaves, holding on.
+    const cols = [FALL.orange, FALL.red, FALL.gold];
+    for (let i = 0; i < 10; i++) {
+      const px = Math.round(cx + (n(i, v, 3) - 0.5) * 30), py = Math.round(8 + n(i, v, 5) * 18);
+      if (!(buf.get(px, py + 1) >>> 24) && !(buf.get(px - 1, py) >>> 24)) continue;   // only on a branch
+      buf.rect(px, py, 2, 2, rgb(cols[i % 3]));
+    }
+  }
+  if (v === 2) {
+    // A little lantern hung from a limb on a string.
+    const lx = Math.round(tx + 9), ly = top + 9;
+    buf.vline(lx, ly - 6, 6, rgb('#3a2c30'));
+    buf.ellipse(lx, ly + 2, 3, 2.4, rgb(HW.pumpkin));
+    buf.set(lx - 1, ly + 1, rgb(HW.glow)); buf.set(lx + 1, ly + 1, rgb(HW.glow));
+    buf.hline(lx - 1, ly + 3, 3, rgb(HW.glow));
+  }
+}
+
+/**
+ * A scarecrow made to look like a cat, standing in the middle of the corn
+ * maze: a stuffed sack head with ears and a stitched-on smile, straw coming
+ * out of its sleeves, and a patch on its purple shirt.
+ */
+function paintScarecrowCat(buf, v) {
+  const cx = Math.floor(buf.w / 2);
+  groundShadow(buf, cx, buf.h - 2, 7, 2);
+  buf.rect(cx - 1, 20, 3, buf.h - 22, rgb(P.wood));
+  buf.vline(cx + 1, 20, buf.h - 22, rgb(P.woodDk));
+  // Straw poking out of the cuffs and the hem.
+  for (let i = 0; i < 6; i++) {
+    buf.line(5, 22 + i, 1 + (i % 3), 21 + i * 1.3, rgb(i % 2 ? HW.strawLt : HW.straw));
+    buf.line(buf.w - 6, 22 + i, buf.w - 2 - (i % 3), 21 + i * 1.3, rgb(i % 2 ? HW.strawLt : HW.straw));
+  }
+  for (let i = 0; i < 8; i++) buf.vline(cx - 4 + i, 33, 2 + (i % 3), rgb(i % 2 ? HW.strawDk : HW.straw));
+  // Shirt, arms out.
+  buf.rect(5, 21, buf.w - 10, 5, rgb(HW.purple));
+  buf.hline(5, 21, buf.w - 10, rgb(HW.purpleLt));
+  buf.rect(cx - 5, 21, 11, 12, rgb(HW.purple));
+  buf.vline(cx - 5, 26, 7, rgb(HW.purpleDk));
+  buf.rect(cx + 1, 26, 3, 3, rgb(HW.pumpkin));
+  buf.set(cx + 2, 27, rgb(HW.pumpkinDk));
+  buf.hline(cx - 5, 32, 11, rgb(HW.straw));
+  // An orange neckerchief.
+  buf.rect(cx - 3, 19, 7, 2, rgb(HW.pumpkin));
+  buf.set(cx, 21, rgb(HW.pumpkin));
+  // The head: a sack with cat ears.
+  const hy = 12;
+  for (let i = 0; i < 6; i++) {
+    buf.hline(cx - 7 + Math.floor(i / 2), 3 + i, 6 - i, rgb('#d8b479'));
+    buf.hline(cx + 2 + Math.ceil(i / 2), 3 + i, 6 - i, rgb('#d8b479'));
+  }
+  buf.set(cx - 5, 6, rgb('#e8a0a8')); buf.set(cx + 5, 6, rgb('#e8a0a8'));
+  buf.ellipse(cx, hy, 7, 6.5, rgb('#d8b479'));
+  for (let i = 0; i < 18; i++) {
+    const px = Math.round(cx + (n(i, v, 3) - 0.5) * 12), py = Math.round(hy + (n(v, i, 5) - 0.5) * 11);
+    if (buf.get(px, py) >>> 24) buf.set(px, py, rgb('#c49f64'));
+  }
+  const ink = rgb('#4a3024');
+  for (const [x, y] of [[cx - 4, hy], [cx - 3, hy - 1], [cx - 2, hy], [cx + 2, hy], [cx + 3, hy - 1], [cx + 4, hy]]) buf.set(x, y, ink);
+  for (const [x, y] of [[cx - 1, hy + 2], [cx, hy + 2], [cx + 1, hy + 2], [cx, hy + 3]]) buf.set(x, y, rgb('#e87c96'));
+  for (const [x, y] of [[cx - 2, hy + 4], [cx - 1, hy + 5], [cx, hy + 4], [cx + 1, hy + 5], [cx + 2, hy + 4]]) buf.set(x, y, ink);
+  // Stitched whiskers.
+  for (const sgn of [-1, 1]) {
+    buf.line(cx + sgn * 5, hy + 2, cx + sgn * 8, hy + 1, rgb('#8a6a48'));
+    buf.line(cx + sgn * 5, hy + 3, cx + sgn * 8, hy + 4, rgb('#8a6a48'));
+  }
+  outline(buf);
+}
+
+/** The prize at the heart of the maze: a basket of wrapped treats. */
+function paintTreatBasket(buf, v) {
+  groundShadow(buf, buf.w / 2, buf.h - 2, 6, 1.8);
+  const cx = buf.w / 2;
+  // Handle first, so the treats sit in front of it.
+  for (let a = 0; a <= 16; a++) {
+    const t = Math.PI * (a / 16);
+    buf.set(Math.round(cx - Math.cos(t) * 5), Math.round(8 - Math.sin(t) * 6), rgb(P.woodDk));
+  }
+  const cols = [HW.pumpkin, HW.purpleLt, '#8fce5a', '#f08ab0', HW.glow];
+  for (let i = 0; i < 6; i++) buf.ellipse(cx - 4 + i * 1.6, 7 + (i % 2), 1.4, 1.2, rgb(cols[i % cols.length]));
+  buf.rect(cx - 6, 8, 12, 5, rgb('#b07a40'));
+  buf.hline(cx - 6, 8, 12, rgb('#cf9a5a'));
+  for (let x = cx - 5; x < cx + 6; x += 2) buf.vline(x, 9, 4, rgb('#8e5e2e'));
+  buf.hline(cx - 5, buf.h - 3, 10, rgb('#8e5e2e'));
+  outline(buf);
+}
+
+/** The maze's own sign: a board with cat ears, on a post. */
+function paintMazeSign(buf, v) {
+  const cx = buf.w / 2;
+  groundShadow(buf, cx, buf.h - 2, 5, 2);
+  buf.rect(cx - 1, 14, 3, buf.h - 16, rgb(P.woodDk));
+  for (let i = 0; i < 4; i++) {
+    buf.hline(3, 4 - i + 1, i + 1, rgb(P.wood));
+    buf.hline(buf.w - 4 - i, 4 - i + 1, i + 1, rgb(P.wood));
+  }
+  buf.rect(2, 5, buf.w - 4, 11, rgb(P.wood));
+  buf.frame(2, 5, buf.w - 4, 11, rgb(P.woodDeep));
+  buf.rect(3, 6, buf.w - 6, 2, rgb(P.woodLt));
+  for (let i = 0; i < 2; i++) buf.hline(6, 10 + i * 2, buf.w - 16 + i * 3, rgb(P.woodDeep));
+  // A little ear of corn painted in the corner.
+  buf.rect(buf.w - 8, 9, 2, 4, rgb('#f2c94c'));
+  buf.set(buf.w - 6, 11, rgb('#7fae4a'));
+  outline(buf);
+}
+
+/**
+ * What a cottage wears for Halloween, drawn over its sprite and exactly the
+ * same size, so everything lines up with the roof and walls it's for: orange
+ * and purple lights all the way round the roofline, and a cobweb or two in
+ * the corners with a small spider who seems pleased to see you.
+ *
+ * `opts.lights`: 0 none, 1 orange and purple, 2 orange, purple and gold.
+ * `opts.webs`: 1 left corner, 2 right, 3 both.
+ */
+function paintDressing(buf, cfg, opts) {
+  const tw = cfg.tw || 4, wallH = cfg.wallH || 26;
+  const W = tw * TILE;
+  const ox = Math.round((buf.w - W) / 2);
+  const wallTop = buf.h - 4 - wallH;
+  if (opts.lights) {
+    // Trace the roof's own outline — up one slope, along the ridge, down the
+    // other — exactly as paintBuilding() shapes each roof, and hang a bulb
+    // every few pixels just outside it, where it shows against the sky.
+    const roofH = cfg.roofH || 22, style = cfg.roofStyle || 'tile';
+    const rW = W + 8, roofTop = wallTop - roofH;
+    const widthAt = (i) => {
+      const t = i / roofH;
+      return Math.round(rW * (style === 'gable' ? t : style === 'thatch' ? 0.25 + 0.75 * t : 0.42 + 0.58 * t));
+    };
+    const pts = [];
+    for (let i = roofH - 1; i >= 0; i--) pts.push([Math.round(buf.w / 2 - widthAt(i) / 2) - 1, roofTop + i]);
+    const l0 = Math.round(buf.w / 2 - widthAt(0) / 2), w0 = widthAt(0);
+    for (let x = l0; x < l0 + w0; x++) pts.push([x, roofTop - 1]);
+    for (let i = 0; i < roofH; i++) pts.push([Math.round(buf.w / 2 - widthAt(i) / 2) + widthAt(i), roofTop + i]);
+    const cols = opts.lights === 2 ? ['#ffa23a', '#b56ef0', '#ffd24a'] : ['#ffa23a', '#b56ef0'];
+    let bulb = 0, run = 0, last = null;
+    for (const [x, y] of pts) {
+      if (last) run += Math.hypot(x - last[0], y - last[1]);
+      last = [x, y];
+      if (run < 5) continue;
+      run = 0;
+      // A round bulb, lit from inside, with its brightest pixel up top.
+      const c = cols[bulb++ % cols.length];
+      // Hung outward: left of the left slope, right of the right one.
+      const bx = x > buf.w / 2 + w0 / 2 ? x : x - 1;
+      const by = y === roofTop - 1 ? y - 1 : y;
+      buf.set(bx, by, rgb(shade(c, 0.55)));
+      buf.set(bx + 1, by, rgb(c));
+      buf.set(bx, by + 1, rgb(c));
+      buf.set(bx + 1, by + 1, rgb(shade(c, -0.25)));
+    }
+  }
+  const web = (ax, dir, spider) => {
+    const thread = rgb('#fbf8ff', 230), faint = rgb('#fbf8ff', 150);
+    const ay = wallTop;
+    const spokes = [[8, 0], [7, 4], [4, 7], [0, 8]];
+    for (const [dx, dy] of spokes) buf.line(ax, ay, ax + dx * dir, ay + dy, thread);
+    for (const r of [0.4, 0.75]) {
+      for (let i = 0; i < spokes.length - 1; i++) {
+        const [x0, y0] = spokes[i], [x1, y1] = spokes[i + 1];
+        buf.line(ax + Math.round(x0 * r) * dir, ay + Math.round(y0 * r), ax + Math.round(x1 * r) * dir, ay + Math.round(y1 * r), faint);
+      }
+    }
+    if (spider) {
+      const sx = ax + 5 * dir, sy = ay + 5;
+      buf.vline(sx, sy, 5, rgb('#fbf8ff', 180));
+      buf.rect(sx - 1, sy + 5, 3, 2, rgb('#4a3560'));
+      buf.set(sx - 1, sy + 5, rgb('#ffffff'));
+      buf.set(sx + 1, sy + 5, rgb('#ffffff'));
+      buf.set(sx - 2, sy + 6, rgb('#4a3560'));
+      buf.set(sx + 2, sy + 6, rgb('#4a3560'));
+    }
+  };
+  if (opts.webs & 1) web(ox, 1, true);
+  if (opts.webs & 2) web(ox + W - 1, -1, !(opts.webs & 1));
+}
+
+// ---------------------------------------------------------------------------
 // Object registry
 // ---------------------------------------------------------------------------
 
@@ -1580,6 +2042,24 @@ export const OBJECTS = {
 
   rug:        { w: 32, h: 32, tw: 2, th: 2, solid: false, flat: true, variants: 3, paint: paintRugMat },
   menuBoard:  { w: 22, h: 28, tw: 1, th: 1, solid: true, variants: 1, paint: paintMenuBoard },
+
+  // Halloween. None of these carries `light`: a lantern's glow is a small
+  // orange light the placement pushes itself, rather than the lamppost's big
+  // cream one.
+  jackOLantern: { w: 16, h: 16, tw: 1, th: 1, solid: true, variants: 4, paint: paintJackOLantern },
+  pumpkinPile: { w: 26, h: 20, tw: 1, th: 1, solid: true, variants: 3, paint: paintPumpkinPile },
+  cornShock:  { w: 20, h: 32, tw: 1, th: 1, solid: true, variants: 2, paint: paintCornShock },
+  hayBale:    { w: 22, h: 24, tw: 1, th: 1, solid: true, variants: 2, paint: paintHayBale },
+  bareTree:   { w: 40, h: 54, tw: 1, th: 1, solid: true, variants: 3, paint: paintBareTree },
+  scarecrowCat: { w: 30, h: 44, tw: 1, th: 1, solid: true, variants: 1, paint: paintScarecrowCat },
+  treatBasket: { w: 16, h: 16, tw: 1, th: 1, solid: false, variants: 1, paint: paintTreatBasket },
+  mazeSign:   { w: 26, h: 30, tw: 1, th: 1, solid: true, variants: 1, paint: paintMazeSign },
+  // One tile's worth of a whisker on the corn cat, flat on the grass. Its
+  // sprite comes from whiskerSprite(), since each tile holds a different slice.
+  whisker:    { w: 16, h: 16, tw: 1, th: 1, solid: false, flat: true, variants: 1, paint: () => {} },
+  // Lights and cobwebs over a building. Its sprite comes from dressingSprite()
+  // and is set on the object, because it has to match that building exactly.
+  dressing:   { w: 16, h: 16, tw: 1, th: 1, solid: false, variants: 1, paint: () => {} },
 };
 
 /**
@@ -1642,7 +2122,11 @@ export function objSprite(type, variant = 0, frame = 0) {
   if (!def) return null;
   const v = variant % (def.variants || 1);
   const f = def.frames ? ((frame % def.frames) + def.frames) % def.frames : 0;
-  return cache.get(`o|${type}|${v}|${f}`, () => {
+  // A holiday can repaint things (the trees turn for Halloween), so it's part
+  // of the key — and only when one is on, so an ordinary day's keys are the
+  // same as they always were.
+  const h = holiday();
+  return cache.get(`o|${type}|${v}|${f}${h ? `|${h.id}` : ''}`, () => {
     const buf = new PixBuf(def.w, def.h);
     def.paint(buf, v, null, f);
     return buf.toCanvas();
@@ -1670,6 +2154,45 @@ export function buildingSprite(cfg) {
       ...cfg,
       sign: cfg.signKey ? { icon: SIGN_ICONS[cfg.signKey], bg: signBg, side: cfg.signSide || 0 } : null,
     });
+    return buf.toCanvas();
+  });
+}
+
+/**
+ * A building's Halloween dressing, the same size as its sprite so the lights
+ * hang from its own eaves. Cached by the shape of the building and what's on
+ * it, the way buildingSprite() is.
+ */
+export function dressingSprite(cfg, opts) {
+  const key = `d|${cfg.tw}|${cfg.wallH}|${cfg.roofH}|${cfg.roofStyle || 'tile'}|${opts.lights || 0}|${opts.webs || 0}`;
+  return cache.get(key, () => {
+    const w = cfg.tw * TILE + 16;
+    const h = (cfg.wallH || 26) + (cfg.roofH || 22) + 16;
+    const buf = new PixBuf(w, h);
+    paintDressing(buf, cfg, opts);
+    return buf.toCanvas();
+  });
+}
+
+/**
+ * The part of a whisker that crosses one tile. The whisker is a straight line
+ * of laid straw from (ax, ay) to (bx, by), in pixels from this tile's top-left
+ * corner; whatever of it falls inside the tile is drawn, three pixels thick,
+ * lit on top and shaded underneath. Whiskers are long and cross chunk edges,
+ * which a single wide decal would be cut off at, so each tile gets a slice.
+ */
+export function whiskerSprite(ax, ay, bx, by) {
+  const key = `w|${ax}|${ay}|${bx}|${by}`;
+  return cache.get(key, () => {
+    const buf = new PixBuf(TILE, TILE);
+    const len = Math.max(Math.abs(bx - ax), Math.abs(by - ay), 1);
+    for (let i = 0; i <= len; i++) {
+      const x = Math.round(ax + ((bx - ax) * i) / len), y = Math.round(ay + ((by - ay) * i) / len);
+      buf.blend(x, y + 2, rgb('#1f2a14', 60));
+      buf.set(x, y - 1, rgb('#f6e6a8'));
+      buf.set(x, y, rgb('#e2c070'));
+      buf.set(x, y + 1, rgb('#b8904a'));
+    }
     return buf.toCanvas();
   });
 }

@@ -14,7 +14,7 @@
 const ORDER = [
   'id', 'name', 'title', 'giver', 'town', 'species', 'coat', 'cloth', 'role',
   'note', 'desc', 'cat', 'icon', 'glyph', 'colour',
-  'when', 'night', 'regular', 'visitChance', 'seat', 'spot', 'ghost', 'sells',
+  'holiday', 'when', 'night', 'regular', 'visitChance', 'seat', 'spot', 'ghost', 'sells',
   'tellsFirst', 'requires', 'secret', 'arrives',
   'objective', 'steps', 'progress', 'progressWhen', 'reward',
   'offer', 'complete', 'done', 'lines', 'hint', 'sold',

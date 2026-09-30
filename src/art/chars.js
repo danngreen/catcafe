@@ -31,7 +31,10 @@ function outline(buf, color = OUTLINE) {
     for (let x = 0; x < buf.w; x++) {
       if (at(x, y) >>> 24) continue;
       if ((at(x - 1, y) >>> 24) || (at(x + 1, y) >>> 24) || (at(x, y - 1) >>> 24) || (at(x, y + 1) >>> 24)) {
-        buf.set(x, y, c);
+        // Straight into the pixels rather than through set(): a costumed
+        // villager is painted through a lowered view of its buffer (see
+        // `lowered`), and this walks the real rows, not the view's.
+        buf.data[y * buf.w + x] = c;
       }
     }
   }
@@ -138,8 +141,9 @@ export function makePalette(coatKey, clothHex, accentHex) {
  * Paint one frame of a villager.
  * dir: 'down' | 'up' | 'side'   (right is drawn by mirroring 'side')
  * frame: 0..3 walk cycle (0 and 2 are the neutral pose)
+ * costume: a COSTUMES key, or nothing for everyday clothes
  */
-function paintChar(buf, speciesKey, c, dir, frame) {
+function paintChar(buf, speciesKey, c, dir, frame, costume) {
   const sp = SPECIES[speciesKey] || SPECIES.cat;
   const step = frame === 1 ? 1 : frame === 3 ? -1 : 0;   // which leg leads
   const bob = frame % 2 === 1 ? -1 : 0;                  // gentle up/down
@@ -148,9 +152,24 @@ function paintChar(buf, speciesKey, c, dir, frame) {
   const headRx = sp.broad ? 6 : sp.small ? 4.6 : 5.4;
   const headRy = sp.broad ? 5.8 : sp.small ? 4.8 : 5.4;
   const bodyTop = 12 + bob;
+  const legY = 19 + bob;
+  const torsoW = dir === 'side' ? 7 : sp.broad ? 10 : 8;
+  const torsoX = Math.round((CHAR_W - torsoW) / 2);
+  const hx = CHAR_W / 2 - (dir === 'side' ? 1 : 0);
+
+  // A costume is painted in layers around the villager: a cape behind them,
+  // a suit over their clothes, a hat or mask on top. Some bring their own
+  // clothes colour, which is simplest to swap in before anything is painted.
+  const cos = costume && COSTUMES[costume] ? COSTUMES[costume] : null;
+  if (cos && cos.cloth) c = dressedIn(c, cos.cloth);
+  const g = cos && {
+    key: costume, sp, c, dir, step, bob, frame, hx, cy: headCy, rx: headRx, ry: headRy,
+    bodyTop, legY, torsoX, torsoW,
+    eyeY: Math.round(headCy - (sp.eyesTop ? 2.4 : 0.4)),
+  };
+  if (g) wearCostume(buf, g, 'under');
 
   // ---- legs (drawn first so the body overlaps them) ----
-  const legY = 19 + bob;
   const legH = CHAR_H - legY - 1;
   const footC = rgb(c.accent);
   if (dir === 'side') {
@@ -166,9 +185,17 @@ function paintChar(buf, speciesKey, c, dir, frame) {
     buf.rect(9, CHAR_H - 2 - (step < 0 ? 1 : 0), 3, 2, footC);
   }
 
+  // A sheet ghost is a sheet with feet: nobody's arms, clothes or ears, which
+  // is the whole joke, and far easier than hiding twenty species' worth.
+  if (g && costume === 'ghost') {
+    if (buf.lift) buf.top = -buf.lift;      // the ear bumps go up into the headroom
+    paintSheet(buf, g);
+    outline(buf);
+    buf.ellipseBlend(CHAR_W / 2, CHAR_H - 1, 5, 1.6, rgb('#000000', 60));
+    return;
+  }
+
   // ---- torso ----
-  const torsoW = dir === 'side' ? 7 : sp.broad ? 10 : 8;
-  const torsoX = Math.round((CHAR_W - torsoW) / 2);
   buf.rect(torsoX, bodyTop, torsoW, legY - bodyTop + 1, rgb(c.cloth));
   buf.rect(torsoX, bodyTop, torsoW, 2, rgb(c.clothLt));
   buf.rect(torsoX, legY - 1, torsoW, 2, rgb(c.clothDk));
@@ -222,8 +249,9 @@ function paintChar(buf, speciesKey, c, dir, frame) {
     }
   }
 
+  if (g) wearCostume(buf, g, 'over');
+
   // ---- head ----
-  const hx = CHAR_W / 2 - (dir === 'side' ? 1 : 0);
   paintEars(buf, sp, c, dir, hx, headCy, headRx, headRy, 'back');
   buf.ellipse(hx, headCy, headRx, headRy, rgb(c.fur));
   // Top-lit shading.
@@ -269,6 +297,8 @@ function paintChar(buf, speciesKey, c, dir, frame) {
   // ---- face (skipped when facing away) ----
   if (dir !== 'up') paintFace(buf, sp, c, dir, hx, headCy, headRx, headRy);
   else if (sp.fluff) buf.ellipse(hx, headCy - 3, headRx - 1, 2, rgb(c.furLt));
+
+  if (g) wearCostume(buf, g, 'head');
 
   outline(buf);
 
@@ -382,7 +412,6 @@ function paintEars(buf, sp, c, dir, hx, cy, rx, ry, pass) {
 }
 
 function paintFace(buf, sp, c, dir, hx, cy, rx, ry) {
-  const E = rgb(c.eye), W = rgb(c.eyeLt);
   const side = dir === 'side';
   const eyeY = Math.round(cy - (sp.eyesTop ? 2.4 : 0.4));
 
@@ -412,16 +441,7 @@ function paintFace(buf, sp, c, dir, hx, cy, rx, ry) {
     }
   }
 
-  const drawEye = (ex) => {
-    if (sp.bigEyes) {
-      buf.ellipse(ex, eyeY, 2.4, 2.4, W);
-      buf.ellipse(ex, eyeY, 1.4, 1.5, E);
-      buf.set(Math.round(ex - 0.5), eyeY - 1, W);
-    } else {
-      buf.rect(Math.round(ex - 1), eyeY - 1, 2, 3, E);
-      buf.set(Math.round(ex - 1), eyeY - 1, W);
-    }
-  };
+  const drawEye = (ex) => paintEye(buf, sp, c, ex, eyeY);
 
   if (side) drawEye(hx - rx + 2.6);
   else { drawEye(hx - 2.6); drawEye(hx + 2.6); }
@@ -441,6 +461,571 @@ function paintFace(buf, sp, c, dir, hx, cy, rx, ry) {
       buf.hline(hx - 7, cy + 3, 3, wc);
       buf.hline(hx + 5, cy + 3, 3, wc);
     }
+  }
+}
+
+/** One eye. Masks paint over the face and put the eyes back with this. */
+function paintEye(buf, sp, c, ex, eyeY) {
+  const E = rgb(c.eye), W = rgb(c.eyeLt);
+  if (sp.bigEyes) {
+    buf.ellipse(ex, eyeY, 2.4, 2.4, W);
+    buf.ellipse(ex, eyeY, 1.4, 1.5, E);
+    buf.set(Math.round(ex - 0.5), eyeY - 1, W);
+  } else {
+    buf.rect(Math.round(ex - 1), eyeY - 1, 2, 3, E);
+    buf.set(Math.round(ex - 1), eyeY - 1, W);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Costumes
+// ---------------------------------------------------------------------------
+//
+// Halloween dress-up, for the villagers. Each one is a few layers painted in
+// and around the ordinary villager rather than a sprite of its own, so every
+// species, coat and walk frame gets it for free: a cape or wings behind them,
+// a suit over their clothes, a hat or a mask on top.
+//
+// Nothing here is meant to frighten anybody. A sheet ghost with its eyes cut
+// out, a pumpkin with a grin, a bat that's mostly ears: the valley's idea of
+// spooky is a small child in a bin bag.
+//
+// `top` is how many rows a costume reaches above the ordinary sprite. The
+// head fills the frame to its top edge, so a witch's hat has nowhere to go;
+// a costumed sprite is that much taller instead, feet in the same place, and
+// whoever draws it anchors it by its feet (see Villager.draw).
+
+export const COSTUMES = {
+  // Masks: over the eyes, tied at the back.
+  domino:  { kind: 'mask' },
+  catmask: { kind: 'mask' },
+  foxmask: { kind: 'mask' },
+  owlmask: { kind: 'mask' },
+  // The whole outfit.
+  witch:   { kind: 'full', top: 6 },
+  wizard:  { kind: 'full', top: 7, cloth: '#5b4bb0' },
+  ghost:   { kind: 'full', top: 2 },               // room for the ears under the sheet
+  pumpkin: { kind: 'full', top: 3 },
+  bat:     { kind: 'full', top: 3, cloth: '#6a4a9e' },
+  bee:     { kind: 'full', top: 4, cloth: '#f0c13c' },
+  pirate:  { kind: 'full', top: 3, cloth: '#efe6d2' },
+  royal:   { kind: 'full', top: 3 },
+};
+
+export const COSTUME_LIST = Object.keys(COSTUMES);
+
+/** How much taller than CHAR_H a sprite in this costume is. */
+export function costumeTop(key) {
+  return (key && COSTUMES[key] && COSTUMES[key].top) || 0;
+}
+
+// The dressing-up box. Brown, orange, purple and black, mostly, plus whatever
+// a bee or a king can't do without.
+const K = {
+  ink: '#3d3549', inkLt: '#5a4f6c',
+  purple: '#7d52b3', purpleDk: '#5b3a8a', purpleLt: '#a37ad6',
+  orange: '#ee8a2c', orangeDk: '#c2641c', orangeLt: '#f8b25a',
+  brown: '#8f5d35', brownDk: '#6a4322',
+  gold: '#f4ca4a', goldDk: '#c4952a',
+  sheet: '#f7f4ee', sheetDk: '#d9d3cb',
+  cream: '#f5e8cc', leaf: '#6f9a3c', leafLt: '#93bd57',
+  plum: '#96386c',
+  wing: '#e4f1fa', blush: '#f4a3b0',
+};
+
+/** The villager's palette with a costume's clothes swapped in. */
+function dressedIn(c, cloth) {
+  const out = Object.assign({}, c);
+  out.cloth = cloth;
+  out.clothLt = shade(cloth, 0.18);
+  out.clothDk = shade(cloth, -0.26);
+  return out;
+}
+
+/**
+ * `buf`, seen `dy` rows lower down: painting at row y lands on row y + dy.
+ * paintChar works in the ordinary 16x24 frame's numbers, and this is how a
+ * taller costumed sprite reuses every one of them. Rows above `top` are
+ * refused, so ears that the top of an ordinary sprite cuts off are cut off in
+ * the same place here; only the hat, which raises `top`, reaches higher.
+ */
+function lowered(buf, dy) {
+  const v = Object.create(buf);
+  v.top = 0;
+  v.lift = dy;
+  v.set = (x, y, p) => { if (Math.floor(y) >= v.top) buf.set(x, Math.floor(y) + dy, p); };
+  v.blend = (x, y, p) => { if (Math.floor(y) >= v.top) buf.blend(x, Math.floor(y) + dy, p); };
+  v.get = (x, y) => buf.get(x, Math.floor(y) + dy);
+  return v;
+}
+
+/**
+ * One layer of a costume. `layer` is 'under' (before the legs: behind them
+ * when they face you), 'over' (after the arms, before the head: their clothes,
+ * and anything on their back when they face away) or 'head' (after the face).
+ */
+function wearCostume(buf, g, layer) {
+  if (layer === 'head' && buf.lift) buf.top = -buf.lift;
+  switch (g.key) {
+    case 'domino': if (layer === 'head') mask(buf, g, K.purple, K.purpleDk, 'domino'); break;
+    case 'catmask': if (layer === 'head') mask(buf, g, K.ink, K.inkLt, 'cat'); break;
+    case 'foxmask': if (layer === 'head') mask(buf, g, K.orange, K.orangeDk, 'fox'); break;
+    case 'owlmask': if (layer === 'head') mask(buf, g, K.brown, K.brownDk, 'owl'); break;
+    case 'witch':
+      cape(buf, g, layer, K.purple, false);
+      if (layer === 'head') pointyHat(buf, g, K.ink, K.inkLt, K.orange, [7, 7, 5, 5, 3, 2, 1], 13);
+      break;
+    case 'wizard':
+      if (layer === 'over') robe(buf, g);
+      if (layer === 'head') pointyHat(buf, g, K.purple, K.purpleLt, K.gold, [7, 5, 5, 3, 3, 3, 1, 1], 11);
+      break;
+    case 'pumpkin':
+      if (layer === 'over') pumpkinSuit(buf, g);
+      if (layer === 'head') stemCap(buf, g);
+      break;
+    case 'bat':
+      batWings(buf, g, layer);
+      if (layer === 'head') batEars(buf, g);
+      break;
+    case 'bee':
+      if (layer === 'over') {
+        stripes(buf, g, K.ink, [2, 3, 5, 6]);
+        // And a sting. A small, friendly one.
+        if (g.dir === 'side') buf.set(g.torsoX + g.torsoW, g.legY - 1, rgb(K.ink));
+      }
+      beeWings(buf, g, layer);
+      if (layer === 'head') antennae(buf, g);
+      break;
+    case 'pirate':
+      if (layer === 'over') stripes(buf, g, '#b4503c', [2, 4, 6]);
+      if (layer === 'head') { eyepatch(buf, g); pirateHat(buf, g); }
+      break;
+    case 'royal':
+      cape(buf, g, layer, K.plum, true);
+      if (layer === 'head') crown(buf, g);
+      break;
+    default: break;
+  }
+}
+
+/** Where the eyes are, as paintFace puts them. */
+function eyeXs(g) {
+  return g.dir === 'side' ? [g.hx - g.rx + 2.6] : [g.hx - 2.6, g.hx + 2.6];
+}
+
+/** The top of the head, in whole rows. Hats sit on this. */
+const crownOf = (g) => Math.round(g.cy - g.ry);
+
+/**
+ * A mask over the eyes. From behind, all there is to see is the ribbon it's
+ * tied on with. `style` adds the bits that say which animal it is.
+ */
+function mask(buf, g, col, dk, style) {
+  const M = rgb(col), D = rgb(dk);
+  const { hx, rx, eyeY, dir } = g;
+  const tall = style === 'owl' ? 1 : 0;           // the owl's goes down over the cheeks
+
+  if (dir === 'up') {
+    // The ribbon round the back of the head, and the bow.
+    buf.hline(Math.round(hx - rx + 0.6), eyeY - 1, Math.round(rx * 2 - 1), D);
+    buf.rect(hx - 1, eyeY - 2, 2, 2, M);
+    buf.set(hx - 2, eyeY, D);
+    buf.set(hx + 1, eyeY, D);
+    return;
+  }
+
+  const side = dir === 'side';
+  // The band itself: across the whole face from the front, the front half of
+  // it in profile with the ribbon going back to a knot.
+  const x0 = Math.round(hx - rx + (side ? 0.4 : 0.6));
+  const x1 = side ? hx + 1 : Math.round(hx + rx - 0.6);
+  const topRow = eyeY - (style === 'domino' ? 1 : 2);
+  const lowRow = eyeY + 1 + tall;
+  for (let y = topRow; y <= lowRow; y++) {
+    if (y === lowRow && !side) {
+      // A notch over the nose, so it sits on a face rather than across it.
+      buf.hline(x0, y, hx - 1 - x0, M);
+      buf.hline(hx + 1, y, x1 - hx, M);
+    } else buf.hline(x0, y, x1 - x0 + 1, M);
+  }
+  if (side) {
+    buf.hline(x1 + 1, eyeY - 1, Math.round(hx + rx - 1) - x1, D);
+    buf.rect(Math.round(hx + rx - 1.4), eyeY - 1, 2, 2, M);
+    buf.set(Math.round(hx + rx - 0.4), eyeY + 1, D);
+  }
+
+  // The two outer top corners, or the front one in profile.
+  const corners = side ? [[x0, 1]] : [[x0, 1], [x1, -1]];
+  for (const [cx, s] of corners) {
+    if (style === 'domino') buf.set(cx, topRow - 1, M);                  // swept up at the tips
+    if (style === 'cat' || style === 'fox') {                           // pointed ears
+      buf.hline(s > 0 ? cx : cx - 1, topRow - 1, 2, M);
+      buf.set(cx, topRow - 2, style === 'fox' ? rgb(K.ink) : M);         // a fox's are black-tipped
+    }
+    if (style === 'owl') {                                              // feather tufts
+      buf.set(cx, topRow - 1, M);
+      buf.set(cx - s, topRow - 1, D);
+      buf.set(cx, topRow - 2, D);
+    }
+  }
+  // A proper fox is white under the eyes.
+  if (style === 'fox') {
+    const cream = rgb(K.cream);
+    if (side) buf.hline(x0, eyeY + 1, 2, cream);
+    else { buf.hline(x0, eyeY + 1, 2, cream); buf.hline(x1 - 1, eyeY + 1, 2, cream); }
+  }
+
+  // Eyes back on top, through the holes. Rims in a lighter colour on the dark
+  // masks, or the eyes vanish into them.
+  for (const ex of eyeXs(g)) {
+    if (style === 'owl') buf.ellipse(ex, eyeY, 2.2, 2.2, rgb(K.cream));
+    else if (style === 'cat') buf.rect(Math.round(ex - 2), eyeY - 1, 4, 3, rgb(K.gold));
+    paintEye(buf, g.sp, g.c, ex, eyeY);
+  }
+  if (style === 'owl') {
+    // And a little beak, between the eyes and pointing down: two pixels wide
+    // from the front, where the eyes are an even number of columns apart.
+    const bx = side ? Math.round(hx - rx + 0.4) : hx - 1;
+    buf.hline(bx, eyeY + 1, side ? 1 : 2, rgb(K.orange));
+    buf.set(bx, eyeY + 2, rgb(K.orangeDk));
+  }
+}
+
+/**
+ * A pointed hat: a brim, a band and a cone, drawn row by row from `widths`
+ * (bottom up). The last two rows lean back, which is what makes it a witch's
+ * hat and not a traffic cone.
+ */
+function pointyHat(buf, g, col, lt, band, widths, brim) {
+  const C = rgb(col), L = rgb(lt), B = rgb(band);
+  const cx = Math.round(g.hx);
+  const by = crownOf(g) + 2;
+  // Away from the face in profile, which is to the right; so to the left seen
+  // from behind, and the right again from the front, for the look of the thing.
+  const lean = g.dir === 'up' ? -1 : 1;
+  buf.hline(cx - (brim >> 1), by, brim, C);
+  buf.hline(cx - (brim >> 1) + 1, by + 1, brim - 2, rgb(shade(col, -0.3)));
+  widths.forEach((w, i) => {
+    const y = by - 1 - i;
+    const off = i >= widths.length - 2 ? lean * (i - widths.length + 3) : 0;
+    const x = cx - (w >> 1) + off;
+    buf.hline(x, y, w, i === 0 ? B : C);
+    if (i > 0 && w > 2) buf.set(x, y, L);                  // lit on the left
+  });
+  if (band === K.gold) {
+    // The wizard's stars.
+    buf.set(cx + 1, by - 3, B);
+    buf.set(cx - 1, by - 5, B);
+  }
+}
+
+/**
+ * A cape: a sliver either side and round the ankles from the front, all of it
+ * from behind. A royal one has an ermine collar.
+ */
+function cape(buf, g, layer, col, royal) {
+  const C = rgb(col), D = rgb(shade(col, -0.25)), L = rgb(shade(col, 0.2)), In = rgb(K.cream);
+  const { dir, bodyTop, legY, torsoX, torsoW, frame } = g;
+  const hem = legY + 2;
+  if (dir === 'down') {
+    if (layer === 'under') {
+      // In the shade of the villager in front of it, so a touch darker.
+      for (let y = bodyTop + 1; y <= hem; y++) {
+        const wide = 3 + (y - bodyTop >= 6 ? 1 : 0);
+        buf.hline(torsoX - wide, y, torsoW + wide * 2, y - bodyTop < 3 ? C : D);
+      }
+    } else if (layer === 'over') {
+      // Over the shoulders, and the clasp at the throat.
+      buf.hline(torsoX - 2, bodyTop, torsoW + 4, royal ? In : C);
+      buf.set(torsoX - 2, bodyTop + 1, royal ? In : C);
+      buf.set(torsoX + torsoW + 1, bodyTop + 1, royal ? In : C);
+      if (royal) for (let x = torsoX - 1; x < torsoX + torsoW + 1; x += 3) buf.set(x, bodyTop, rgb(K.ink));
+      buf.rect(CHAR_W / 2 - 1, bodyTop, 2, 1, rgb(K.gold));
+    }
+  } else if (dir === 'up' && layer === 'over') {
+    // From behind, the whole back of it.
+    for (let y = bodyTop; y <= hem; y++) {
+      const wide = 1 + (y - bodyTop >= 6 ? 1 : 0);
+      buf.hline(torsoX - wide, y, torsoW + wide * 2, y === bodyTop ? L : C);
+    }
+    // Two folds, and a hem that swings with the walk.
+    buf.vline(torsoX + 2, bodyTop + 3, hem - bodyTop - 3, D);
+    buf.vline(torsoX + torsoW - 3, bodyTop + 3, hem - bodyTop - 3, D);
+    if (frame % 2) buf.hline(torsoX - 2, hem, torsoW + 4, D);
+    if (royal) buf.hline(torsoX - 1, bodyTop, torsoW + 2, In);
+  } else if (dir === 'side' && layer === 'over') {
+    // In profile it hangs off the back and trails behind as they walk.
+    const back = torsoX + torsoW - 1;
+    const trail = frame % 2 ? 1 : 0;
+    for (let y = bodyTop; y <= hem; y++) {
+      const w = 2 + Math.min(3, Math.floor((y - bodyTop) / 2)) + (y > bodyTop + 4 ? trail : 0);
+      buf.hline(back - 1, y, w, C);
+      buf.set(back - 1, y, y - bodyTop < 2 ? L : D);
+    }
+    buf.hline(torsoX + 1, bodyTop, torsoW - 1, royal ? In : C);
+  }
+}
+
+/** A long robe over the legs, stars and all. The feet still peep out. */
+function robe(buf, g) {
+  const { c, dir, legY, torsoX, torsoW } = g;
+  const C = rgb(c.cloth), D = rgb(c.clothDk);
+  const bottom = CHAR_H - 3;
+  for (let y = legY - 1; y <= bottom; y++) {
+    const f = y - legY > 1 ? 1 : 0;
+    const x = dir === 'side' ? torsoX : torsoX - f;
+    buf.hline(x, y, torsoW + (dir === 'side' ? f + 1 : f * 2), y === bottom ? D : C);
+  }
+  const star = rgb(K.gold);
+  if (dir !== 'up') { buf.set(torsoX + 1, legY, star); buf.set(torsoX + torsoW - 2, legY + 2, star); }
+  else buf.set(torsoX + 3, legY + 1, star);
+  buf.set(torsoX + 2, g.bodyTop + 3, star);
+}
+
+/** Stripes across the clothes, sleeves and all. `rows` count down from the collar. */
+function stripes(buf, g, col, rows) {
+  const S = rgb(col);
+  const { dir, bodyTop, legY, torsoX, torsoW, step } = g;
+  for (const r of rows) {
+    const y = bodyTop + r;
+    if (y >= legY) continue;
+    buf.hline(torsoX, y, torsoW, S);
+    // Sleeves too, riding up and down with the arm swing. Past row 6 of the
+    // arm it's paw, which stays paw.
+    if (r > 6) continue;
+    if (dir === 'side') buf.hline(7, y + Math.max(0, -step), 3, S);
+    else {
+      buf.hline(torsoX - 2, y - step, 2, S);
+      buf.hline(torsoX + torsoW, y + step, 2, S);
+    }
+  }
+}
+
+/** A round pumpkin suit, with a grin on the front and paws out of the sides. */
+function pumpkinSuit(buf, g) {
+  const { c, dir, bodyTop, torsoX, torsoW, step } = g;
+  const O = rgb(K.orange), D = rgb(K.orangeDk), F = rgb(c.fur);
+  const side = dir === 'side';
+  const cx = side ? torsoX + torsoW / 2 - 0.5 : (CHAR_W - 1) / 2;
+  const cy = bodyTop + 4.5;
+  const rx = side ? 4.6 : torsoW / 2 + 1.6;
+  buf.ellipse(cx, cy, rx, 4.4, O);
+  buf.ellipseBlend(cx - 1.5, cy - 2, rx - 2.4, 1.6, rgb(K.orangeLt, 200));
+  // Ridges.
+  const ridges = side ? [Math.round(cx)] : [Math.round(cx - 2.5), Math.round(cx + 2.5)];
+  for (const x of ridges) buf.vline(x, Math.round(cy - 3), 7, D);
+  if (dir === 'down') {
+    // A jack-o'-lantern grin: the friendly kind.
+    const face = rgb(K.brownDk);
+    buf.set(Math.round(cx - 1.5), bodyTop + 2, face);
+    buf.set(Math.round(cx + 1.5), bodyTop + 2, face);
+    buf.hline(Math.round(cx - 1.5), bodyTop + 5, 4, face);
+    buf.set(Math.round(cx - 2.5), bodyTop + 4, face);
+    buf.set(Math.round(cx + 2.5), bodyTop + 4, face);
+  } else if (side) {
+    buf.set(Math.round(cx - 3), bodyTop + 2, rgb(K.brownDk));
+    buf.hline(Math.round(cx - 4), bodyTop + 5, 2, rgb(K.brownDk));
+  }
+  // Paws out of the armholes.
+  const armY = bodyTop + 1, armH = 6;
+  if (side) buf.rect(6, armY + armH + Math.max(0, -step) - 1, 2, 2, F);
+  else {
+    buf.rect(torsoX - 2, armY + armH - step - 1, 2, 2, F);
+    buf.rect(torsoX + torsoW, armY + armH + step - 1, 2, 2, F);
+  }
+}
+
+/** The pumpkin's lid: a green cap with a stalk on top. */
+function stemCap(buf, g) {
+  const cx = Math.round(g.hx);
+  const top = crownOf(g);
+  buf.ellipse(cx, top + 1.5, 3.4, 1.8, rgb(K.leaf));
+  buf.hline(cx - 2, top, 3, rgb(K.leafLt));
+  buf.rect(cx, top - 2, 1, 2, rgb(K.brown));
+  buf.set(cx + 1, top - 2, rgb(K.leafLt));
+  buf.set(cx + 2, top - 3, rgb(K.leaf));
+}
+
+/**
+ * Bat wings, scalloped, flapping a pixel with each step. Behind the villager
+ * when they face you, on their back when they don't.
+ */
+function batWings(buf, g, layer) {
+  const { dir, bodyTop, torsoX, torsoW, frame } = g;
+  const W = rgb(K.ink), R = rgb(K.inkLt);
+  const flap = frame % 2 ? -1 : 0;
+  if (dir === 'side') {
+    if (layer !== 'over') return;
+    // Folded, with the tip up past the shoulder.
+    const x0 = torsoX + torsoW - 2;
+    for (let i = 0; i < 7; i++) {
+      const y = bodyTop - 2 + i + flap;
+      const w = i < 2 ? i + 2 : i === 6 ? 2 : 4;
+      buf.hline(x0 + (i < 2 ? 2 - i : 0), y, w, W);
+    }
+    buf.line(x0, bodyTop + flap, x0 + 3, bodyTop - 2 + flap, R);
+    return;
+  }
+  if ((dir === 'down') !== (layer === 'under')) return;
+  for (const s of [-1, 1]) {
+    // Rows outward from the shoulder: rising to a point, then the scallops.
+    const inner = s < 0 ? torsoX + 1 : torsoX + torsoW - 2;
+    const outer = s < 0 ? 0 : CHAR_W - 1;
+    const span = Math.abs(outer - inner);
+    for (let k = 0; k <= span; k++) {
+      const x = inner + s * k;
+      const t = k / span;
+      const yTop = Math.round(bodyTop + 1 - t * 5) + flap;
+      // Scallops along the bottom edge: two dips across the wing.
+      const dip = Math.round(Math.abs(Math.sin(t * Math.PI * 2)) * 2);
+      const yBot = bodyTop + 7 - dip - Math.round(t * 3) + flap;
+      buf.vline(x, yTop, yBot - yTop + 1, W);
+    }
+    // A rib from the shoulder to the tip.
+    buf.line(inner, bodyTop + 1 + flap, outer, bodyTop - 4 + flap, R);
+  }
+}
+
+/** Bat ears on a headband. */
+function batEars(buf, g) {
+  const cx = Math.round(g.hx);
+  const top = crownOf(g);
+  const W = rgb(K.ink), P = rgb(K.blush);
+  const ears = g.dir === 'side' ? [cx + 1] : [cx - 3, cx + 3];
+  buf.hline(cx - 4, top + 1, 9, W);
+  for (const ex of ears) {
+    buf.hline(ex - 1, top, 3, W);
+    buf.hline(ex - 1, top - 1, 2, W);
+    buf.set(ex - 1, top - 2, W);
+    if (g.dir !== 'up') buf.set(ex, top, P);
+  }
+}
+
+/** Little see-through wings, too small to fly on, which is fine. */
+function beeWings(buf, g, layer) {
+  const { dir, bodyTop, torsoX, torsoW, frame } = g;
+  const Wn = rgb(K.wing), Wd = rgb('#b9d3e6');
+  const flap = frame % 2 ? -1 : 0;
+  if (dir === 'side') {
+    if (layer !== 'over') return;
+    buf.ellipse(torsoX + torsoW, bodyTop + flap, 1.8, 2.6, Wn);
+    buf.set(torsoX + torsoW, bodyTop + 1 + flap, Wd);
+    return;
+  }
+  if ((dir === 'down') !== (layer === 'under')) return;
+  for (const s of [-1, 1]) {
+    const x = s < 0 ? torsoX - 3 : torsoX + torsoW + 2;
+    buf.ellipse(x, bodyTop + flap, 1.8, 2.4, Wn);
+    buf.set(x, bodyTop + 1 + flap, Wd);
+  }
+}
+
+/** Two bobbly antennae on a band. */
+function antennae(buf, g) {
+  const cx = Math.round(g.hx);
+  const top = crownOf(g);
+  const A = rgb(K.ink);
+  const tips = g.dir === 'side' ? [[cx - 1, -2], [cx + 2, 1]] : [[cx - 2, -2], [cx + 2, 2]];
+  for (const [x, dx] of tips) {
+    buf.line(x, top + 1, x + (dx > 0 ? 1 : -1), top - 1, A);
+    buf.rect(x + dx - (dx > 0 ? 0 : 1), top - 3, 2, 2, A);
+  }
+}
+
+/** A patch over one eye, on a string. */
+function eyepatch(buf, g) {
+  const { hx, rx, eyeY, dir } = g;
+  const P = rgb(K.ink);
+  const top = crownOf(g) + 3;
+  if (dir === 'up') {
+    buf.line(Math.round(hx - rx + 1), eyeY, Math.round(hx + rx - 1), top, P);
+    return;
+  }
+  const ex = eyeXs(g)[dir === 'side' ? 0 : 1];
+  buf.rect(Math.round(ex - 1.5), eyeY - 1, 3, 3, P);
+  if (dir === 'side') buf.hline(Math.round(ex + 1.5), eyeY - 1, Math.round(hx + rx - ex - 2), P);
+  else buf.line(Math.round(ex - 1.5), eyeY - 1, Math.round(hx - rx + 1), top, P);
+}
+
+/** A pirate's hat, turned up at both ends, with a white badge. */
+function pirateHat(buf, g) {
+  const cx = Math.round(g.hx);
+  const by = crownOf(g) + 2;
+  const H = rgb(K.ink), T = rgb(K.gold);
+  buf.hline(cx - 6, by, 13, H);
+  buf.set(cx - 6, by - 1, H);
+  buf.set(cx + 6, by - 1, H);
+  buf.hline(cx - 4, by - 1, 9, H);
+  buf.hline(cx - 3, by - 2, 7, H);
+  buf.hline(cx - 2, by - 3, 5, H);
+  buf.hline(cx - 5, by, 11, T);
+  if (g.dir !== 'up') {
+    buf.set(cx, by - 2, rgb('#ffffff'));
+    buf.set(cx - 1, by - 1, rgb('#ffffff'));
+    buf.set(cx + 1, by - 1, rgb('#ffffff'));
+  }
+}
+
+/** A gold crown with a purple jewel in it. */
+function crown(buf, g) {
+  const cx = Math.round(g.hx);
+  const top = crownOf(g);
+  const G = rgb(K.gold), D = rgb(K.goldDk);
+  buf.hline(cx - 3, top + 1, 7, G);
+  buf.hline(cx - 3, top + 2, 7, D);
+  for (const x of [cx - 3, cx, cx + 3]) buf.set(x, top, G);
+  buf.set(cx, top - 1, G);
+  buf.set(cx - 3, top - 1, G);
+  buf.set(cx + 3, top - 1, G);
+  buf.set(cx, top - 2, rgb(K.purpleLt));
+  if (g.dir !== 'up') buf.set(cx, top + 1, rgb(K.purple));
+}
+
+/**
+ * The sheet ghost: a dome with two holes cut in it and a hem that ripples as
+ * they walk, feet showing underneath. Whoever's inside pushes up little bumps
+ * where their ears are, so you can still tell the rabbit from the frog.
+ */
+function paintSheet(buf, g) {
+  const { hx, cy, rx, ry, dir, frame, legY, sp, eyeY } = g;
+  const S = rgb(K.sheet), D = rgb(K.sheetDk);
+  const side = dir === 'side';
+  const r = Math.max(rx, 5) + 0.4;
+  const pokes = ['point', 'bigpoint', 'perk', 'long', 'tuft'].includes(sp.ears) || sp.horns || sp.antlers;
+  if (pokes) {
+    const tall = sp.ears === 'long' ? 1 : 0;       // a rabbit makes a proper tent of it
+    const at = side ? [hx + 1.5] : [hx - 3, hx + 3];
+    for (const x of at) buf.ellipse(x, cy - ry - 0.4 - tall, 1.4, 1.8 + tall, S);
+  }
+  buf.ellipse(hx, cy, r, ry + 0.2, S);
+  const hem = legY + 2;
+  const back = side ? 1 : 0;                        // in profile it trails behind
+  for (let y = Math.round(cy); y <= hem; y++) {
+    const t = (y - cy) / (hem - cy);
+    const half = r + t * 1.4;
+    const x0 = Math.round(hx - half + t * back), x1 = Math.round(hx + half + t * back * 2);
+    buf.hline(x0, y, x1 - x0 + 1, S);
+    buf.set(x1, y, D);                              // shade down the right-hand side
+  }
+  // A ripple along the hem, moving as they go.
+  const x0 = Math.round(hx - r - 1.4), x1 = Math.round(hx + r + 1.4 + back * 2);
+  for (let x = x0; x <= x1; x++) {
+    const k = (x + frame) % 4;
+    if (k === 0 || k === 1) buf.set(x, hem + 1, k ? D : S);
+  }
+  // A fold or two, so it reads as cloth.
+  buf.vline(Math.round(hx - 2 + back), g.bodyTop + 2, hem - g.bodyTop - 3, D);
+  if (!side) buf.vline(Math.round(hx + 3), g.bodyTop + 3, hem - g.bodyTop - 4, D);
+
+  if (dir === 'up') return;
+  // Eye holes, and a touch of blush, because it's a nice ghost.
+  const hole = rgb(K.ink);
+  for (const ex of eyeXs(g)) buf.rect(Math.round(ex - 1), eyeY - 1, 2, 2, hole);
+  const pink = rgb(K.blush, 170);
+  if (side) buf.ellipseBlend(hx - r + 2, eyeY + 2, 1.2, 0.8, pink);
+  else {
+    buf.ellipseBlend(hx - 3.8, eyeY + 2, 1.2, 0.8, pink);
+    buf.ellipseBlend(hx + 3.8, eyeY + 2, 1.2, 0.8, pink);
   }
 }
 
@@ -646,17 +1231,25 @@ const cache = new SpriteCache();
  * canvas. The home-screen icon is built from this: it runs in node, where there
  * is no canvas, and drawing the cat twice would mean two cats to keep in step.
  */
-export function charBuf(speciesKey, coatKey, clothHex, dir, frame) {
+export function charBuf(speciesKey, coatKey, clothHex, dir, frame, costume) {
   const c = makePalette(coatKey, clothHex);
   const base = dir === 'right' || dir === 'left' ? 'side' : dir;
-  const buf = new PixBuf(CHAR_W, CHAR_H);
-  paintChar(buf, speciesKey, c, base, frame);
+  // A hat needs rows above the head, so a sprite in one is taller than
+  // CHAR_H by `top`; the villager is painted that far down it, as usual.
+  const top = costumeTop(costume);
+  const buf = new PixBuf(CHAR_W, CHAR_H + top);
+  paintChar(top ? lowered(buf, top) : buf, speciesKey, c, base, frame, costume);
   return dir === 'right' ? mirror(buf) : buf;
 }
 
-export function charSprite(speciesKey, coatKey, clothHex, dir, frame) {
-  const key = `c|${speciesKey}|${coatKey}|${clothHex}|${dir}|${frame}`;
-  return cache.get(key, () => charBuf(speciesKey, coatKey, clothHex, dir, frame).toCanvas());
+/**
+ * Villager sprite. `costume` is optional, a COSTUMES key; a costumed sprite
+ * may be taller than CHAR_H (costumeTop), so draw it by its feet.
+ */
+export function charSprite(speciesKey, coatKey, clothHex, dir, frame, costume) {
+  // Everyday clothes keep the key they always had.
+  const key = `c|${speciesKey}|${coatKey}|${clothHex}|${dir}|${frame}${costume ? '|' + costume : ''}`;
+  return cache.get(key, () => charBuf(speciesKey, coatKey, clothHex, dir, frame, costume).toCanvas());
 }
 
 /** Cat sprite. pose defaults to 'walk'. */

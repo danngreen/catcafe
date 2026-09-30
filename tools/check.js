@@ -4,6 +4,7 @@
 //   node tools/check.js [scenario...] [--shot path.png] [--ms 6000]
 //   node tools/check.js quests            # a named group, see GROUPS
 //   node tools/check.js all               # everything that runs unattended
+//   node tools/check.js all --holiday halloween   # the same, with Halloween on
 //
 // Scenarios live in harness.html. Each one signals `window.__done` when it has
 // finished, and the runner moves on the moment it sees that — the times in
@@ -27,7 +28,7 @@ let BASE = process.env.BASE || null;
 const HERE = new URL('.', import.meta.url).pathname;
 
 const args = process.argv.slice(2);
-const flagsWithValue = new Set(['--shot', '--ms', '--url', '--eval', '--shotdir', '--mobile', '--hold', '--game']);
+const flagsWithValue = new Set(['--shot', '--ms', '--url', '--eval', '--shotdir', '--mobile', '--hold', '--game', '--holiday']);
 const named = args.filter((a, i) => !a.startsWith('--') && !flagsWithValue.has(args[i - 1]));
 if (!named.length) named.push('walk');
 const shotIdx = args.indexOf('--shot');
@@ -43,6 +44,11 @@ const sharedValley = args.includes('--shared-valley');
 // now that a run ends the moment it is done, it otherwise wouldn't be.
 const holdIdx = args.indexOf('--hold');
 const holdMs = holdIdx >= 0 ? Number(args[holdIdx + 1]) : 0;
+// Which holiday the page plays. Off unless asked, so a sweep run in the middle
+// of October tests the same valley as one run in June; `--holiday halloween`
+// runs everything dressed up, and a scenario named hw... always is.
+const holidayIdx = args.indexOf('--holiday');
+const holidayArg = holidayIdx >= 0 ? args[holidayIdx + 1] : null;
 
 // How long each scenario may take before we give up on it. Only the slow ones
 // need saying: anything absent gets DEFAULT_MS. These are generous — a ceiling
@@ -132,6 +138,8 @@ const BUDGET = {
   paintingshot: 14000,
   friends: 20000,
   friendshot: 9000,
+  // Builds and dresses seven valleys, and waits for a night's frame times.
+  hwworld: 30000,
   confirm: 20000,
   catvoices: 14000,
   delivery: 26000,
@@ -156,6 +164,9 @@ const BUDGET = {
   confirmbox: 15000,
   bearlegs: 15000,
   cottages: 25000,
+  hwhouses: 30000,
+  housefolk: 30000,
+  hwquests: 40000,
   content: 20000,
   questextras: 20000,
   slidepad: 20000,
@@ -187,7 +198,10 @@ const BUDGET = {
 // have broken without running everything. `all` is what to run before a commit.
 const GROUPS = {
   quests: ['questready', 'ghostquest', 'deliverquest', 'journalstep', 'questrepair', 'ghoststuck',
-    'barriers', 'nightfolk', 'nightplaces', 'questchain', 'logbook', 'hedgestuck', 'freshstones', 'questwalk', 'piercheck', 'hedgewalk', 'shellchain', 'spotcheck', 'coatgoal', 'ghosthidden', 'shellwalk', 'hintheard', 'bear', 'deliverspots', 'rugs', 'taxitime', 'snowday', 'firelight', 'confirmbox', 'bearlegs', 'cottages', 'content', 'questextras', 'regular', 'barstool'],
+    'barriers', 'nightfolk', 'nightplaces', 'questchain', 'logbook', 'hedgestuck', 'freshstones', 'questwalk', 'piercheck', 'hedgewalk', 'shellchain', 'spotcheck', 'coatgoal', 'ghosthidden', 'shellwalk', 'hintheard', 'bear', 'deliverspots', 'rugs', 'taxitime', 'snowday', 'firelight', 'confirmbox', 'bearlegs', 'cottages', 'content', 'questextras', 'regular', 'barstool',
+    // Halloween at home and its jobs. housefolk runs either way round, so the
+    // plain sweep checks the cottages are as they were without the holiday.
+    'hwhouses', 'housefolk', 'hwquests'],
   cafe: ['cafe', 'takeover', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers', 'employee',
     'weathercafe', 'hourly'],
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',
@@ -197,7 +211,7 @@ const GROUPS = {
   // read slower without anything being wrong, so they assert on what the code
   // does — how much work it asks for — rather than on how long it took.
   perf: ['waterperf'],
-  ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'counter', 'exterior',
+  ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'counter', 'hwcore', 'hwcostumes', 'hwworld', 'holidayoff', 'exterior',
     'summarylines', 'journalstep', 'titleme', 'signkeys', 'menukeys', 'oldsafari', 'patio', 'deaditems', 'booktabs', 'bigpieces', 'painting', 'friends', 'confirm', 'catvoices', 'delivery', 'deliverhouse', 'clearnight', 'wagekeys', 'patiorain'],
   cutscene: ['taxi', 'sleep', 'door'],
   mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile', 'pickupmobile', 'slidepad', 'bookmobile', 'staffmobile', 'hoursmobile'],
@@ -433,6 +447,9 @@ async function main() {
     // A scenario named ...poll... runs over the HTTP transport instead of a
     // socket, which is what a machine behind a content filter ends up using.
     if (sc.includes('poll')) params.push('poll');
+    // holidayoff is about a valley with no holiday, and the hw... scenarios about
+    // Halloween, whatever else is asked for.
+    params.push(`holiday=${sc === 'holidayoff' ? 'off' : sc.startsWith('hw') ? 'halloween' : holidayArg || 'off'}`);
     // --game names one valley, for the scenarios about having several.
     const gameIdx = args.indexOf('--game');
     let valley = null;

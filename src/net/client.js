@@ -159,6 +159,9 @@ export class NetClient {
       // The host may have locked the lobby for a party. Remembered here rather
       // than returned, so every existing caller is unchanged.
       NetClient.locked = !!data.locked;
+      // Which holiday the server says it is. Left undefined by an older server
+      // that doesn't know, so the game falls back to its own calendar.
+      if ('holiday' in data) NetClient.holiday = data.holiday || null;
       return Array.isArray(data.games) ? data.games : null;
     } catch { return null; }
   }
@@ -360,6 +363,7 @@ export class NetClient {
         this.noteBase(this.world);
         this.clock = msg.clock || null;
         this.owner = msg.owner || null;
+        if ('holiday' in msg) this.holiday = msg.holiday || null;
         this.connected = true;
         this.everConnected = true;
         this.startKeepalive();
@@ -387,6 +391,10 @@ export class NetClient {
         break;
       case 'newday':
         this.emit('newday', msg);
+        break;
+      case 'holiday':
+        this.holiday = msg.holiday || null;
+        this.emit('holiday', this.holiday);
         break;
       case 'summary':
         this.emit('summary', msg.s);

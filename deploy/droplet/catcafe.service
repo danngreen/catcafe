@@ -24,6 +24,9 @@ Environment=PORT=8080
 Environment=HOST=127.0.0.1
 # tools/rescue.js, over ssh, on 127.0.0.1 only.
 Environment=ADMIN_PORT=8081
+# House time, not the droplet's UTC: holidays start and end at midnight here
+# (server/holiday.js goes by this machine's local date).
+Environment=TZ=America/Los_Angeles
 
 # deploy/push.sh restarts the game by signalling it as the gamehost user; the
 # server saves and exits 0 and this brings it straight back on the new code.

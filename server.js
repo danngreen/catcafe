@@ -9,6 +9,7 @@ import { networkInterfaces } from 'node:os';
 import { upgrade } from './server/ws.js';
 import { PollHub } from './server/poll.js';
 import { Games } from './server/games.js';
+import { currentHoliday, watchHoliday } from './server/holiday.js';
 
 const ROOT = new URL('.', import.meta.url).pathname;
 const PORT = Number(process.env.PORT || 8080);
@@ -76,7 +77,10 @@ const server = createServer(async (req, res) => {
   }
   // What the lobby lists. Plain HTTP and no socket, so a player can read the
   // stats of every valley before deciding which one to walk into.
-  if (path === '/games' && req.method === 'GET') { json({ games: games.list(), locked: lobby.locked }); return; }
+  if (path === '/games' && req.method === 'GET') {
+    json({ games: games.list(), locked: lobby.locked, holiday: currentHoliday() });
+    return;
+  }
   if (path === '/games/new' && req.method === 'POST') {
     if (lobby.locked) { json({ ok: false, why: 'the lobby is locked' }, 403); return; }
     json(games.create());
@@ -200,6 +204,13 @@ function lanAddresses() {
   return out;
 }
 
+// A holiday starting or ending mid-session: tell everyone who's in, and let
+// them reload when it suits them.
+watchHoliday((h) => {
+  console.log(`[holiday] ${h ? `${h.id} ${h.year}` : 'none'}`);
+  for (const room of games.rooms.values()) room.broadcast({ t: 'holiday', holiday: h });
+});
+
 server.listen(PORT, HOST, () => {
   console.log(`Cat Cafe — http://${HOST || 'localhost'}:${PORT}`);
   if (!HOST) for (const addr of lanAddresses()) console.log(`  on this network: http://${addr}:${PORT}`);
@@ -208,4 +219,6 @@ server.listen(PORT, HOST, () => {
     console.log(`  game ${g.id}: ${g.started ? `${g.cafe || 'a cafe'}, day ${g.day}` : 'not started yet'}`);
   }
   console.log(SAVES ? `  valleys kept in ${SAVES}` : '  not saving anything');
+  const h = currentHoliday();
+  if (h) console.log(`  holiday: ${h.id} ${h.year}`);
 });

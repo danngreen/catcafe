@@ -16,7 +16,7 @@ import { audio } from '../engine/audio.js';
 import { setting, toggleSetting } from '../engine/settings.js';
 import { showDisplayReport } from '../engine/display.js';
 import { clamp, money, wrapText } from '../engine/util.js';
-import { QUESTS, objectiveText, progressText } from '../game/quests.js';
+import { liveQuests, objectiveText, progressText } from '../game/quests.js';
 import { HIRE_POOL, shiftHours, fmtHour } from '../game/cafe.js';
 import { shopOpen, hoursText, HOUR_SECONDS } from '../game/time.js';
 import { timeFraction, timeLeft, fullValue, orderText } from '../game/deliveries.js';
@@ -986,7 +986,8 @@ export class CafeScreen extends Screen {
       const idx = this.scroll + i;
       const id = list[idx];
       if (!id) continue;
-      const it = ITEMS[id];
+      // An item that has since left the catalogue still has to draw.
+      const it = ITEMS[id] || { name: id, icon: 'bag' };
       const ry = listY + i * 18;
       const sel = idx === this.index;
       if (sel) { ctx.fillStyle = 'rgba(255,207,107,0.12)'; ctx.fillRect(x + 8, ry - 2, w - 20, 17); }
@@ -1131,8 +1132,8 @@ export class CafeScreen extends Screen {
 export class JournalScreen extends ListScreen {
   constructor(game) {
     const st = game.state;
-    const active = QUESTS.filter((q) => st.quests[q.id] === 'active');
-    const done = QUESTS.filter((q) => st.quests[q.id] === 'done');
+    const active = liveQuests().filter((q) => st.quests[q.id] === 'active');
+    const done = liveQuests().filter((q) => st.quests[q.id] === 'done');
     super([...active, ...done], 7);
     this.game = game;
     this.activeCount = active.length;

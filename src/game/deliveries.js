@@ -8,10 +8,8 @@
 // The whole thing is one plain object in the shared books, so a co-op valley
 // sees the same orders on the same map, and either player can run them.
 
-import { ITEMS, isMenuItem } from './items.js';
+import { ITEMS, menuIds } from './items.js';
 import { HOUR_SECONDS } from './time.js';
-
-const MENU_IDS = Object.keys(ITEMS).filter((id) => isMenuItem(id));
 
 /** How long they will wait, in game hours. */
 export const MIN_HOURS = 3;
@@ -84,7 +82,7 @@ export function feeFor(from, to) {
  * appeal like a walk-in order, because the same people are ringing up.
  */
 export function rollOrder(rng = Math.random) {
-  const pool = MENU_IDS.slice();
+  const pool = menuIds();
   const want = 1 + Math.floor(rng() * 5);
   const picks = [];
   for (let n = 0; n < want && pool.length; n++) {

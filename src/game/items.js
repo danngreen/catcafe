@@ -6,6 +6,7 @@
 // keeps before it spoils.
 
 import { ITEM_DATA } from './itemdata.js';
+import { inHoliday } from '../holidays/index.js';
 
 /** The tabs a bag and a shop are divided into. */
 export const CAT = {
@@ -24,9 +25,14 @@ export const CAT = {
  */
 export const ITEMS = ITEM_DATA;
 
-/** Shop catalogues. Each entry is an item id, optionally with a stock limit. */
+/**
+ * Shop catalogues. Each entry is an item id, optionally with a stock limit.
+ * Holiday items can sit in these all year; stockFor() only shows them while
+ * their holiday is on.
+ */
 export const STOCK = {
-  grocer: ['house_coffee', 'black_tea', 'milk', 'cookie', 'muffin', 'sandwich', 'lemonade', 'iced_tea', 'kibble', 'treats'],
+  grocer: ['house_coffee', 'black_tea', 'milk', 'cookie', 'muffin', 'sandwich', 'lemonade', 'iced_tea', 'kibble', 'treats',
+    'pumpkin_latte', 'pumpkin_smoothie'],
   bakery: ['scone', 'croissant', 'cake', 'muffin', 'pancakes', 'toast', 'cookie', 'pie', 'ice_cream'],
   petshop: ['kibble', 'good_food', 'treats', 'toy_ball', 'toy_yarn', 'toy_wand', 'ribbon', 'bell', 'f_catbed', 'f_bowl', 'f_scratch'],
   hardware: ['pickaxe', 'shears', 'rope', 'lantern', 'f_counter', 'f_chair', 'f_table'],
@@ -34,7 +40,7 @@ export const STOCK = {
   harbour: ['black_tea', 'house_coffee', 'cookie', 'kibble', 'rope', 'valley_map'],
   furniture: ['f_chair', 'f_stool', 'f_barstool', 'f_table', 'f_table_cloth', 'f_table_long', 'f_bar', 'f_sofa', 'f_plant', 'f_lamp', 'f_painting', 'f_bookshelf', 'f_rug', 'f_case', 'f_machine', 'f_fireplace',
     'f_patio_chair', 'f_patio_stool', 'f_patio_table', 'f_patio_bench', 'f_umbrella', 'f_fountain'],
-  tea: ['black_tea', 'herbal_tea', 'matcha', 'cocoa', 'smoked_tea', 'cider', 'iced_coffee', 'iced_tea'],
+  tea: ['black_tea', 'herbal_tea', 'matcha', 'cocoa', 'smoked_tea', 'cider', 'iced_coffee', 'iced_tea', 'pumpkin_latte'],
   herbalist: ['herbal_tea', 'catnip', 'medicine', 'vitamins', 'kibble', 'dandelion'],
   beekeeper: ['honey', 'toast', 'cider'],
 };
@@ -61,6 +67,22 @@ export const invKey = (id, variant = 0) => (variant ? `${id}#${variant}` : id);
 export const item = (key) => ITEMS[baseId(key)];
 export const itemName = (key) => (item(key) ? item(key).name : key);
 export const isMenuItem = (id) => ITEMS[id] && (ITEMS[id].cat === CAT.DRINK || ITEMS[id].cat === CAT.FOOD);
+
+/**
+ * On the menu right now: food or drink, and not a holiday special out of its
+ * holiday. A pumpkin latte left in the pantry after Halloween is still in the
+ * pantry, but nobody asks for it and nobody buys it, and it spoils as usual.
+ */
+export const onMenu = (id) => isMenuItem(id) && inHoliday(ITEMS[id]);
+
+/** Everything anyone might ask for today. */
+export const menuIds = () => Object.keys(ITEMS).filter(onMenu);
+
+/** A shop's catalogue today: holiday stock only while the holiday is on. */
+export const stockFor = (list) => (STOCK[list] || []).filter((id) => inHoliday(ITEMS[id]));
+
+/** People want the holiday specials while they can get them. */
+export const HOLIDAY_EAGERNESS = 2.2;
 
 /** Buy price at a given shop, with weekend flea discounts folded in. */
 export function buyPrice(id, mult = 1) {

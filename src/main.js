@@ -26,7 +26,7 @@ import { GameState, seedStartingInventory } from './game/state.js';
 import { Player, Villager, RemotePlayer, Employee, canStand, Bear, riderOffset,
   WALK_SPEED, RUN_SPEED } from './game/entities.js';
 import { HIRE_BY_ID } from './game/cafe.js';
-import { ITEMS, STOCK, FLEA_POOL, baseId } from './game/items.js';
+import { ITEMS, stockFor, FLEA_POOL, baseId } from './game/items.js';
 import { shopOpen, hoursText, HOUR_SECONDS, DAY_FULL } from './game/time.js';
 import { BEAR_PRICE, BEAR_AFTER_DELIVERIES, BEAR_FOOD, BEAR_SPEED, BEAR_RUN,
   fedToday, rideable, deliverySpot, bearPrompt } from './game/bear.js';
@@ -37,7 +37,9 @@ import {
   timeFraction, timeLeft, expired,
 } from './game/deliveries.js';
 import { BOOK_BY_ID } from './world/places.js';
-import { QUESTS, QUESTS_BY_GIVER, objectiveMet, questSteps, currentStep,
+import { holidayOn, setHoliday, holiday, holidayName } from './holidays/index.js';
+import { holidayHook } from './holidays/content.js';
+import { QUESTS, liveQuests, liveQuestsFrom, objectiveMet, questSteps, currentStep,
   stepIndex, isLastStep, progressText, objectiveText, requiredFlag } from './game/quests.js';
 
 import { Dialogue, Hud, Fader, panel, panelTitle, dim, cursor } from './ui/core.js';
@@ -49,21 +51,9 @@ import {
 import { BuildScreen } from './ui/build.js';
 import { TaxiFlight, StairWalk } from './ui/cutscene.js';
 import { net, NetClient } from './net/client.js';
+import { RESIDENT_NAMES, householder } from './world/residents.js';
 
 const WORLD_SEED = 20260724;
-
-/**
- * What poking about somewhere gives you. Each returns what to say and, if
- * you've earned it, what you come away with. They are deliberately not
- * one-shot switches: a spot you searched too early should still be there when
- * you come back knowing what you're looking for.
- */
-export // Whoever answers the door. Not part of the cast — they exist for half a minute
-// and then go back to their evening.
-const RESIDENT_NAMES = [
-  'Amble', 'Perch', 'Wick', 'Fettle', 'Cobble', 'Tansy', 'Dabble', 'Rook',
-  'Nettle', 'Havers', 'Muddle', 'Quince', 'Sorrel', 'Pippin', 'Larch',
-];
 
 /**
  * Does a job still want this thing, and is it not in the bag?
@@ -98,6 +88,12 @@ export function spotBeside(map, l) {
   return null;
 }
 
+/**
+ * What poking about somewhere gives you. Each returns what to say and, if
+ * you've earned it, what you come away with. They are deliberately not
+ * one-shot switches: a spot you searched too early should still be there when
+ * you come back knowing what you're looking for.
+ */
 export const SEARCH_SPOTS = {
   bushes: (st) => {
     if (st.clock.isDark) {
@@ -288,7 +284,21 @@ class Game {
       seed = list.length ? list[0].seed : WORLD_SEED;
     }
     this.wireNet();
+    setHoliday(this.pickHoliday());
     this.boot(seed);
+  }
+
+  /**
+   * Which holiday, if any, this page plays: the address bar first, then the
+   * server (so everyone in a shared valley sees the same valley), then this
+   * device's own calendar. Decided once, before anything is painted.
+   */
+  pickHoliday() {
+    const asked = new URLSearchParams(location.search).get('holiday');
+    if (asked) return holidayOn(new Date(), asked);
+    if (net.holiday !== undefined) return net.holiday;
+    if (NetClient.holiday !== undefined) return NetClient.holiday;
+    return holidayOn(new Date());
   }
 
   /**
@@ -340,7 +350,7 @@ class Game {
     net.on('reconnected', () => {
       // We may have missed a whole afternoon of other people's changes, so take
       // the valley's books wholesale rather than trusting our stale copy.
-      if (net.world && this.mode === 'play') st.adopt(net.world, net.clock);
+      if (net.world && this.mode === 'play') { st.adopt(net.world, net.clock); this.startHolidayYear(); }
       // Anything done while the line was down has just been sent after us, and
       // comes back as ordinary syncs on top of what we adopted above.
       // Still holding a plan of the cafe: make sure it is still ours to hold.
@@ -365,9 +375,18 @@ class Game {
       if (this.mode !== 'play') return;
       st.adopt(world, clock);
       this.applyClearedBarriers();
+      this.startHolidayYear();
       this.refreshQuestMarks();
     });
     net.on('clock', (c) => { st.clock.day = c.day; st.clock.t = c.t; });
+    // The server's calendar turned over while we were playing. The valley was
+    // built for the old one, so say so rather than half-changing it.
+    net.on('holiday', (h) => {
+      const now = holiday();
+      if ((now && now.id) === (h && h.id) || new URLSearchParams(location.search).has('holiday')) return;
+      this.hud.toast(h ? `${holidayName(h.id)} has come to the valley! Reload the page to see it.`
+        : `${holidayName(now.id)} is over. Reload the page to put the valley back to normal.`, 'good', 12);
+    });
     net.on('newday', (m) => {
       // Connected to a valley is not in it. Somebody still choosing between
       // Resume and New has no day to be told the end of.
@@ -438,6 +457,9 @@ class Game {
     if (!this.weatherFx) this.weatherFx = new WeatherFx(VIEW_W, VIEW_H);
     this.sky = weatherNow(seed, (this.state && this.state.clock) || { day: 0, t: 999 });
     const world = generateWorld(seed);
+    // A holiday dresses the valley after it's made, from its own random numbers,
+    // so the ordinary valley underneath is the same one every other day.
+    holidayHook('decorateWorld', world, seed);
     this.overworld = world.map;
     this.towns = world.towns;
     this.doors = world.doors;
@@ -699,6 +721,11 @@ class Game {
         case T.CLIFF: return [107, 100, 90];
         case T.CLIFF_TOP: return [216, 207, 187];
         case T.HEDGE: return [47, 107, 49];
+        // The Halloween corn maze: tall corn, the straw paths through it, and
+        // the purple corn that makes the cat's eyes and nose.
+        case T.CORN: return [196, 160, 62];
+        case T.STRAW: return [226, 205, 140];
+        case T.CORN_PURPLE: return [112, 70, 140];
         case T.FARM: return [111, 74, 44];
         default: return [93, 168, 69];
       }
@@ -733,6 +760,7 @@ class Game {
     this.enterOverworld();
     this.mode = 'play';
     this.announce();
+    this.startHolidayYear();
     st.visit('cafe', 'Your Cat Cafe', this.homeDoor.x, this.homeDoor.y, 'brambleford');
     st.visit('brambleford', 'Brambleford', this.towns.brambleford.hub.x, this.towns.brambleford.hub.y);
     this.hud.showLocation('Brambleford');
@@ -781,6 +809,7 @@ class Game {
     this.announce();
     this.hud.toast('Welcome back.', 'good');
     this.applyClearedBarriers();
+    this.startHolidayYear();
     this.refreshQuestMarks();
   }
 
@@ -1512,12 +1541,9 @@ class Game {
     if (!d) return;
     const room = map.meta.room;
     const spot = { x: room.x + Math.floor(room.w / 2), y: room.y + Math.floor(room.h / 2) };
-    const rng = makeRng(hashStr(houseId));
     const def = {
       id: `resident:${houseId}`,
-      name: RESIDENT_NAMES[rng.int(RESIDENT_NAMES.length)],
-      species: SPECIES_LIST[rng.int(SPECIES_LIST.length)],
-      coat: COAT_LIST[rng.int(COAT_LIST.length)],
+      ...householder(houseId),
       lines: ['*has left the door unlocked and is waiting for you*'],
     };
     const v = new Villager(def, spot.x * TILE + TILE / 2, (spot.y + 1) * TILE - 2);
@@ -1661,13 +1687,13 @@ class Game {
   /** Have they already said the thing they keep coming in to say? */
   heardOut(id) {
     const st = this.state;
-    return QUESTS.some((q) => q.giver === id && st.quests[q.id]);
+    return liveQuests().some((q) => q.giver === id && st.quests[q.id]);
   }
 
   /** Is one of their errands sat on a step only they can move along? */
   waitingOn(id) {
     const st = this.state;
-    for (const q of QUESTS) {
+    for (const q of liveQuests()) {
       if (st.quests[q.id] !== 'active') continue;
       const o = currentStep(q, st).objective;
       if ((o.type === 'talk' || o.type === 'deliver') && o.to === id) return true;
@@ -2186,7 +2212,9 @@ class Game {
         this.openTaxi(it.town);
         break;
 
+      // Anything a holiday put in the valley (the corn maze's prize, say).
       default:
+        holidayHook('interact', this, it, tile);
         break;
     }
   }
@@ -2197,13 +2225,15 @@ class Game {
     if (this.riding) this.dismountBear();
 
     const st = this.state;
-    // Somebody's front door. Every cottage opens; the only ones with anything
-    // in them are the ones expecting a delivery.
+    // Somebody's front door. Every cottage opens; on an ordinary day the only
+    // ones with anybody in them are the ones expecting a delivery, and in a
+    // holiday the whole family may be home.
     if (it.house) {
       const key = `house:${it.house}`;
       let map = this.maps.get(key);
       if (!map) { map = buildHouseInterior(it.house); this.maps.set(key, map); }
       this.fitRecipient(map, it.house);
+      holidayHook('fillHouse', this, map, it.house);
       this.enterInterior(key, map, tile.x, tile.y);
       return;
     }
@@ -2272,7 +2302,7 @@ class Game {
           break;
         }
         default: {
-          const ids = STOCK[shop.stock] || [];
+          const ids = stockFor(shop.stock);
           this.push(new ShopScreen(this, shop, ids));
           break;
         }
@@ -2441,7 +2471,7 @@ class Game {
 
   /** Every active job's note, as one string — for telling whether one moved. */
   journalLines() {
-    return QUESTS.filter((q) => this.state.quests[q.id] === 'active')
+    return liveQuests().filter((q) => this.state.quests[q.id] === 'active')
       .map((q) => progressText(q, this.state)).join('|');
   }
 
@@ -2454,9 +2484,11 @@ class Game {
 
     // Somebody waiting on an order wants the order, not the weather.
     if (v.recipient) { this.completeDelivery(v, finish); return; }
+    // Somebody at home for a holiday has their own things to say.
+    if (def.resident && holidayHook('visitResident', this, v, finish)) return;
 
     // 1. Handing over, or reporting in on, whatever step is in play.
-    for (const q of QUESTS) {
+    for (const q of liveQuests()) {
       if (st.quests[q.id] !== 'active') continue;
       const step = currentStep(q, st);
       const o = step.objective;
@@ -2471,7 +2503,7 @@ class Game {
     }
 
     // 2. Turning a finished step back in to whoever set the job.
-    const mine = QUESTS_BY_GIVER[def.id] || [];
+    const mine = liveQuestsFrom(def.id);
     for (const q of mine) {
       if (st.quests[q.id] !== 'active') continue;
       const step = currentStep(q, st);
@@ -2532,7 +2564,7 @@ class Game {
     // second conversation. Matched on the flag the hint sets, so it is the one
     // hint that unblocks the job that gets brought forward, not everything this
     // person happens to know.
-    const gating = def.tellsFirst || hintsOf(def).some((h) => QUESTS.some(
+    const gating = def.tellsFirst || hintsOf(def).some((h) => liveQuests().some(
       (q) => requiredFlag(q) === h.sets && !st.quests[q.id]));
     // The next thing they know that you have not heard, and that they are
     // willing to say yet — a hint may wait on a flag, so somebody can have one
@@ -2705,6 +2737,33 @@ class Game {
     return o.type !== 'deliver' && o.type !== 'talk' && objectiveMet(q, st);
   }
 
+  /**
+   * The first time a holiday is played in a given year, its quests and its
+   * once-per-holiday flags (every house's treat, the maze prize, anything named
+   * `<holiday>_...`) start again from nothing, so each year's Halloween can be
+   * played through fresh. Whatever was left unfinished last year simply isn't
+   * there any more.
+   *
+   * Safe to run as often as you like, and from every player in a shared valley
+   * at once: after the first, the year flag says it's done.
+   */
+  startHolidayYear() {
+    const h = holiday();
+    const st = this.state;
+    if (!h || !st) return;
+    const mark = `holiday_${h.id}`;
+    if (st.flags[mark] === h.year) return;
+    for (const q of QUESTS) {
+      if (q.holiday !== h.id) continue;
+      delete st.quests[q.id];
+      delete st.questStep[q.id];
+    }
+    for (const f of Object.keys(st.flags)) if (f.startsWith(`${h.id}_`)) delete st.flags[f];
+    st.flags[mark] = h.year;
+    for (const k of ['quests', 'questStep', 'flags']) st.touch(k);
+    this.refreshQuestMarks();
+  }
+
   /** Put a ! over anyone who has something for you. */
   refreshQuestMarks() {
     const st = this.state;
@@ -2712,13 +2771,13 @@ class Game {
       // Somebody waiting for an order always has something for you, and is not
       // in the quest table at all — this pass would quietly unmark them.
       if (v.recipient) { v.hasQuestMark = true; continue; }
-      const mine = QUESTS_BY_GIVER[v.def.id] || [];
+      const mine = liveQuestsFrom(v.def.id);
       v.hasQuestMark = mine.some((q) => this.wantsToTalk(q, st));
     }
     for (const [, map] of this.maps) {
       if (!map.villagers) continue;
       for (const v of map.villagers) {
-        const mine = QUESTS_BY_GIVER[v.def.id] || [];
+        const mine = liveQuestsFrom(v.def.id);
         v.hasQuestMark = mine.some((q) => this.wantsToTalk(q, st));
       }
     }
@@ -2889,7 +2948,9 @@ class Game {
           : it.kind === 'shopkeeper' ? `Talk to ${shopKeeperName(SHOPS.find((s) => s.id === it.shop) || {})}`
             : it.kind === 'postbox' ? 'Mailbox'
               : it.kind === 'taxi' ? 'Call a taxi bird'
-                : it.kind === 'barrier' ? 'Examine' : null;
+                : it.kind === 'barrier' ? 'Examine'
+                  // Holiday things say what pressing does.
+                  : it.prompt || null;
     }
     this.promptLabel = label;
     if (!label) return;

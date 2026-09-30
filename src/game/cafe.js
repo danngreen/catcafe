@@ -6,7 +6,7 @@
 // have one) keeps it running in the background at a coarser grain.
 
 import { Customer } from './entities.js';
-import { ITEMS, isMenuItem } from './items.js';
+import { ITEMS, onMenu, menuIds, HOLIDAY_EAGERNESS } from './items.js';
 import { COAT_LIST, CLOTHES, SPECIES_LIST } from '../art/chars.js';
 import { makeRng, clamp } from '../engine/util.js';
 import { audio } from '../engine/audio.js';
@@ -15,10 +15,9 @@ import { mix, weatherOn } from './weather.js';
 
 const rng = makeRng(0x0cafe);
 
-// Everything anyone might ask for, and the plain things most people will settle
-// for. Built once: the menu doesn't change while the game is running.
-const MENU_IDS = Object.keys(ITEMS).filter((id) => isMenuItem(id));
-const STAPLE_IDS = MENU_IDS.filter((id) => ITEMS[id].appeal <= 1.05);
+// The plain things most people will settle for. Asked for fresh each time
+// rather than built once, because a holiday can put things on the menu.
+const stapleIds = () => menuIds().filter((id) => ITEMS[id].appeal <= 1.05);
 // How long somebody stands there mid-list waiting for you to answer the next
 // thing they asked for, before giving up on you.
 const ASK_PATIENCE = 16;
@@ -131,7 +130,7 @@ export class Cafe {
   availableMenu() {
     const out = [];
     for (const [id, batches] of Object.entries(this.state.stock)) {
-      if (!isMenuItem(id)) continue;
+      if (!onMenu(id)) continue;
       const qty = batches.reduce((s, b) => s + b.qty, 0);
       if (qty > 0) out.push(id);
     }
@@ -632,7 +631,7 @@ export class Cafe {
    * cafe with the basics in usually still makes a sale — a smaller one.
    */
   buildWishlist() {
-    const pool = MENU_IDS.slice();
+    const pool = menuIds();
     // The weather decides what sounds nice before appeal gets a say: nobody
     // orders cocoa in a heatwave, however good the cocoa is.
     const sky = this.state.sky;
@@ -642,7 +641,8 @@ export class Cafe {
       const a = liking(sky.from.drink, t), b = liking(sky.now.drink, t);
       return a + (b - a) * sky.blend;
     };
-    const weights = pool.map((id) => (0.35 + ITEMS[id].appeal) * taste(id));
+    const weights = pool.map((id) => (0.35 + ITEMS[id].appeal) * taste(id)
+      * (ITEMS[id].holiday ? HOLIDAY_EAGERNESS : 1));
     const picks = [];
     const want = 2 + Math.floor(rng() * 2);                 // two or three fancies
     for (let n = 0; n < want && pool.length; n++) {
@@ -657,7 +657,7 @@ export class Cafe {
     // Most people have something plain they'd settle for. Some don't, and those
     // are the ones who walk out — which is what makes the rest worth stocking.
     if (rng() < 0.72) {
-      const staples = STAPLE_IDS.filter((id) => !picks.includes(id));
+      const staples = stapleIds().filter((id) => !picks.includes(id));
       if (staples.length) picks.push(staples[Math.floor(rng() * staples.length)]);
     }
     picks.sort((a, b) => ITEMS[b].appeal - ITEMS[a].appeal);

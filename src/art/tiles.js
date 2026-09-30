@@ -53,6 +53,12 @@ export const T = {
   RAIL_IN: 35,
   RAIL_TOP: 36,
   RAIL_V: 37,
+  // The Halloween corn maze: a wall of tall corn, and the strawed path through
+  // it. Only ever laid by the holiday, after the valley is generated.
+  CORN: 38,
+  STRAW: 39,
+  // Purple "glass gem" corn, planted to draw the cat's eyes and nose.
+  CORN_PURPLE: 40,
 };
 
 /** Floors that mean "outside": these rooms get railings, not walls. */
@@ -343,6 +349,67 @@ function paintHedge(buf, v) {
   buf.rectBlend(0, 13, 16, 3, rgb('#000000', 45));
 }
 
+/**
+ * Corn taller than you are, seen from the usual three-quarter angle: stalks
+ * packed side by side, each with leaves arching off it, tassels catching the
+ * sun along the top and the foot of the row in shade. Painted like the hedge,
+ * as ground, because a maze is a few hundred of them and ground costs nothing
+ * to draw. `pal` is the colourway: dry gold for the field, purple for the
+ * cat's eyes and nose.
+ */
+const CORN_GOLD = {
+  base: '#6f5c26', stalks: ['#c9a44c', '#b8923e', '#d4b055'], leaf: '#d9bd62', leafDk: '#9c8a3a',
+  tassel: '#f4e2a0', ear: '#f2c94c',
+};
+const CORN_PURPLE_PAL = {
+  base: '#3e2c52', stalks: ['#8a66b8', '#7a58a6', '#9a78c8'], leaf: '#b494dc', leafDk: '#5e4484',
+  tassel: '#e2d0f4', ear: '#e0a8f0',
+};
+
+function paintCorn(buf, v, pal) {
+  buf.fill(rgb(pal.base));
+  // Five stalks, nudged a pixel or two per variant so a wall of them doesn't
+  // tile into stripes.
+  for (let k = 0; k < 6; k++) {
+    const x = ((v % 3) + k * 3) % TILE;
+    const top = 1 + Math.floor(n(k, 1, v + 3) * 3);
+    const c = pal.stalks[Math.floor(n(k, 2, v + 5) * pal.stalks.length) % pal.stalks.length];
+    buf.vline(x, top, TILE - top, rgb(c));
+    buf.set(x, top - 1, rgb(pal.tassel));
+    // Two leaves off each stalk, arching out and drooping at the tip.
+    for (let l = 0; l < 2; l++) {
+      const y = top + 3 + l * 5 + Math.floor(n(k, l, v + 7) * 2);
+      const dir = (k + l + v) % 2 ? 1 : -1;
+      buf.set(x + dir, y, rgb(pal.leaf));
+      buf.set(x + dir * 2, y, rgb(pal.leaf));
+      buf.set(x + dir * 3, y + 1, rgb(pal.leafDk));
+    }
+  }
+  // Now and then an ear of corn in its husk.
+  if (v % 2 === 0) {
+    const x = 4 + Math.floor(n(v, 8, 17) * 8), y = 6 + Math.floor(n(8, v, 19) * 3);
+    buf.vline(x, y, 3, rgb(pal.ear));
+    buf.set(x + 1, y + 1, rgb(pal.leafDk));
+  }
+  // Sunlit along the top, shaded at the foot, so each row stands up.
+  buf.rectBlend(0, 0, 16, 2, rgb('#fff4c8', 40));
+  buf.rectBlend(0, 11, 16, 2, rgb('#2b2333', 40));
+  buf.rectBlend(0, 13, 16, 3, rgb('#2b2333', 80));
+}
+
+/** The maze's floor: trodden earth with loose straw scattered over it. */
+function paintStraw(buf, v) {
+  dither(buf, v + 3, rgb('#c49a62'), rgb('#b0864f'), 0.3);
+  for (let i = 0; i < 11; i++) {
+    const x = Math.floor(n(i, 3, v + 21) * 15);
+    const y = Math.floor(n(3, i, v + 23) * 15);
+    const c = n(i, i, v + 25) > 0.45 ? '#ecd58e' : '#d6b86c';
+    if (n(i, 7, v + 27) > 0.5) { buf.set(x, y, rgb(c)); buf.set(x + 1, y, rgb(c)); buf.set(x + 2, y + 1, rgb(c)); }
+    else { buf.set(x, y, rgb(c)); buf.set(x, y + 1, rgb(c)); buf.set(x + 1, y + 2, rgb(c)); }
+  }
+  scatter(buf, v + 29, 3, rgb(P.soil));
+}
+
 function paintFloorWood(buf, v) {
   buf.fill(rgb(P.floorWood));
   for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
@@ -608,6 +675,11 @@ export const TERRAIN = {
   [T.CLIFF_TOP]:   { name: 'clifftop', prio: 8, paint: paintCliffTop, solid: false, edge: true, variants: 3 },
   [T.CLIFF]:       { name: 'cliff', prio: 9, paint: paintCliff, solid: true, edge: false, variants: 4 },
   [T.HEDGE]:       { name: 'hedge', prio: 9, paint: paintHedge, solid: true, edge: false, variants: 4 },
+  [T.CORN]:        { name: 'corn', prio: 9, paint: (b, v) => paintCorn(b, v, CORN_GOLD), solid: true, edge: false, variants: 4 },
+  [T.CORN_PURPLE]: { name: 'corn', prio: 9, paint: (b, v) => paintCorn(b, v, CORN_PURPLE_PAL), solid: true, edge: false, variants: 4 },
+  // Above the grasses, so the grass round the maze doesn't grow its fringe in
+  // over a path only one tile wide and leave a sliver of it to walk on.
+  [T.STRAW]:       { name: 'straw', prio: 8, paint: paintStraw, solid: false, edge: true, variants: 4 },
   [T.FLOOR_WOOD]:  { name: 'floor', prio: 10, paint: paintFloorWood, solid: false, edge: false, variants: 4 },
   [T.FLOOR_TILE]:  { name: 'tiles', prio: 10, paint: paintFloorTile, solid: false, edge: false, variants: 3 },
   [T.FLOOR_STONE]: { name: 'flagstones', prio: 10, paint: paintFloorStone, solid: false, edge: false, variants: 4 },

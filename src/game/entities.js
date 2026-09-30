@@ -2,10 +2,11 @@
 // the y coordinate doubles as the sort key for overlapping.
 
 import { TILE, T, isLiquid } from '../art/tiles.js';
-import { charSprite, catSprite, emoteSprite, orderBubble, bearSprite, bearSaddle, CHAR_W, CHAR_H, CAT_W, CAT_H, BEAR_W, BEAR_H, villagerLook, CAT_BREEDS } from '../art/chars.js';
+import { charSprite, catSprite, emoteSprite, orderBubble, bearSprite, bearSaddle, CHAR_W, CHAR_H, CAT_W, CAT_H, BEAR_W, BEAR_H, villagerLook, CAT_BREEDS, costumeTop } from '../art/chars.js';
 import { makeRng, clamp } from '../engine/util.js';
 import { audio } from '../engine/audio.js';
 import { drawTextCentered } from '../engine/font.js';
+import { holidayContent } from '../holidays/content.js';
 
 const rng = makeRng(0x51a7);
 
@@ -328,7 +329,14 @@ export class Villager extends Actor {
     this.seat = null;
     this.mode = 'arriving';
     if (this.regular) { this.speed = 22; this.range = 0; }
+    // Dressed up, if it's that time of year. Decided once: the holiday is
+    // fixed for the life of the page, and so is what they came as.
+    const hc = holidayContent();
+    this.costume = (hc.costumeFor && hc.costumeFor(def.id)) || null;
   }
+
+  /** A hat pokes up above the usual sprite, and whatever's said goes above the hat. */
+  emoteTop() { return this.y - CHAR_H - costumeTop(this.costume); }
 
   /** Give up whatever they were sitting on. */
   standUp() {
@@ -465,12 +473,13 @@ export class Villager extends Actor {
 
   draw(ctx, ox, oy) {
     if (this.shift === 'away') return;
-    const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, this.dir, this.frame);
+    const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, this.dir, this.frame, this.costume);
     // Ghosts hover, and you can see the hedge through them.
     const a = this.alpha * (this.ghost ? 0.62 : 1);
     const lift = this.ghost ? Math.sin(this.bobT * 1.7) * 1.5 - 2 : 0;
     if (a < 1) ctx.globalAlpha = a;
-    ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - CHAR_H - oy + lift));
+    // By the feet: a costume with a hat is taller than CHAR_H.
+    ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - spr.height - oy + lift));
     if (a < 1) ctx.globalAlpha = 1;
   }
 

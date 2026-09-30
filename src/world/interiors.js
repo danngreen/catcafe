@@ -215,9 +215,13 @@ export function buildHouseInterior(id) {
   map.addObject('windowIn', room.x + 2, room.y - 1, { offY: WALL_MOUNT });
   map.addObject('windowIn', room.x + room.w - 3, room.y - 1, { offY: WALL_MOUNT });
   if (rng.chance(0.7)) map.addObject('painting', room.x + Math.floor(room.w / 2), room.y - 1, { offY: WALL_MOUNT, variant: rng.int(3) });
+  // Before the furniture, not after: furnishCottage keeps the doorway clear by
+  // reading the door from here, and when this line came last it found nothing
+  // and kept nothing clear. (It never mattered in practice — no piece is laid
+  // out that close to the door — which is how it went unnoticed.)
+  map.meta = { house: id, room, door: { x: doorX, y: doorY } };
   furnishCottage(map, room, rng);
   map.lights.push({ x: (room.x + room.w / 2) * 16, y: (room.y + room.h / 2) * 16, r: 120, color: '#ffdcae' });
-  map.meta = { house: id, room, door: { x: doorX, y: doorY } };
   return map;
 }
 

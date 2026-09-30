@@ -16,6 +16,9 @@
 // written out again here — a second copy is a second thing to forget when the
 // shape changes, which is exactly how this file went stale.
 import { hintsOf } from '../../src/world/villagers.js';
+// Which holidays there are, for the flags they own. Safe to import from here:
+// the file is kept free of browser APIs because the server reads it too.
+import { HOLIDAYS } from '../../src/holidays/index.js';
 
 const OBJECTIVES = {
   stock: ['any', 'count'],
@@ -164,5 +167,9 @@ function flagIsSet(flag, quests, villagers) {
   // Flags the game itself sets — searching a spot, clearing a barrier, and so
   // on. The editor cannot know them all, so anything with a known prefix is
   // taken on trust rather than reported as a mistake.
-  return /^(barrier_|found_|saw_|got_|recipe_|call_|bought_)/.test(flag);
+  if (/^(barrier_|found_|saw_|got_|recipe_|call_|bought_)/.test(flag)) return true;
+  // A holiday's own flags (`halloween_maze`, `halloween_treat_<house>`) are set
+  // by the holiday's code out in the world, and cleared each year when it comes
+  // round again — which is why they all carry the holiday's name.
+  return HOLIDAYS.some((h) => flag.startsWith(`${h.id}_`));
 }
