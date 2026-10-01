@@ -43,6 +43,17 @@ const DOUBLE_TAP_MS = 320;
 // `?nopointer` on the address bar takes the old path on a modern browser,
 // which is the only way to try it without the iPad in your hands. The test
 // harness sets the flag instead, having no address bar to type in.
+/**
+ * Is this key meant for the page rather than the game: typing in a text box,
+ * or pressing a button in one of the page's own dialogs (an invite, a code)?
+ */
+function typingIn(e) {
+  const t = e.target;
+  if (!t) return false;
+  if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return true;
+  return !!(t.closest && t.closest('[role="dialog"]'));
+}
+
 function hasPointer() {
   return typeof window !== 'undefined' && 'PointerEvent' in window
     && !window.__noPointer && !location.search.includes('nopointer');
@@ -128,6 +139,8 @@ export class Input {
 
   _attach() {
     window.addEventListener('keydown', (e) => {
+      // Somebody typing in a text box (an invite code) is typing, not playing.
+      if (typingIn(e)) return;
       const b = KEYMAP[e.code];
       // Don't swallow devtools / reload shortcuts.
       if (b && !e.metaKey && !e.ctrlKey) {

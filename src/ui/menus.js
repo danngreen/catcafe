@@ -1759,7 +1759,10 @@ export class FriendsScreen extends Screen {
 
 export class PauseScreen extends ListScreen {
   constructor(game) {
-    super(['Cafe book', 'Journal', 'Map', 'Friends', 'Bag', 'Save game', 'Exit', 'Settings', 'Back'], 9);
+    // On the public server, a valley's link is how friends get in.
+    const items = ['Cafe book', 'Journal', 'Map', 'Friends', 'Bag', 'Save game', 'Exit', 'Settings', 'Back'];
+    if (game.publicValley) items.splice(4, 0, 'Invite friends');
+    super(items, items.length);
     this.game = game;
   }
   update(dt, input) {
@@ -1773,6 +1776,7 @@ export class PauseScreen extends ListScreen {
         case 'Journal': this.game.push(new JournalScreen(this.game)); break;
         case 'Map': this.game.push(new MapScreen(this.game)); break;
         case 'Friends': this.game.push(new FriendsScreen(this.game)); break;
+        case 'Invite friends': this.game.openInvite(); break;
         case 'Bag': this.game.push(new BagScreen(this.game)); break;
         case 'Save game': this.game.save(); break;
         // One row below Save game, on a screen driven by a thumb. Saving first

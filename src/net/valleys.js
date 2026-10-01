@@ -1,0 +1,137 @@
+// Valleys on the public server, from the browser's side: the ones this device
+// has been in, getting into a new one, and the creator's two buttons.
+//
+// There are no accounts. A valley's invite code is how you get in the first
+// time; the server answers with a device key, and the key is what this device
+// keeps (in localStorage) to come back. The device that made a valley holds the
+// creator key, which is also the only one that can change the code or send
+// everybody else away. On the LAN none of this is used.
+
+const LIST_KEY = 'catcafe.valleys';
+
+/** Everything this device remembers: [{ id, key, code, cafe, creator, at }]. */
+export function deviceValleys() {
+  try {
+    const list = JSON.parse(localStorage.getItem(LIST_KEY) || '[]');
+    return Array.isArray(list) ? list.filter((v) => v && v.id && v.key) : [];
+  } catch { return []; }
+}
+
+function saveDeviceValleys(list) {
+  try { localStorage.setItem(LIST_KEY, JSON.stringify(list)); } catch { /* private mode: this visit only */ }
+}
+
+/** Add or update one valley in this device's list, most recent first. */
+export function rememberValley(v) {
+  const list = deviceValleys().filter((x) => x.id !== v.id);
+  const old = deviceValleys().find((x) => x.id === v.id) || {};
+  // A creator key is never swapped for a member one: joining with the code from
+  // the creator's own device must not cost them their buttons.
+  const keep = old.creator && !v.creator ? { key: old.key, creator: true } : {};
+  list.unshift({ ...old, ...v, ...keep, at: Date.now() });
+  saveDeviceValleys(list);
+  return list[0];
+}
+
+/** This device stops listing a valley. The valley itself carries on. */
+export function forgetValley(id) {
+  saveDeviceValleys(deviceValleys().filter((x) => x.id !== id));
+}
+
+export const findValley = (id) => deviceValleys().find((v) => v.id === id) || null;
+export const findValleyByCode = (code) => deviceValleys().find((v) => v.code === code) || null;
+
+/** The link to give people. */
+export const inviteLink = (code) => `${location.origin}/v/${code}`;
+
+/**
+ * An invite this page was opened with, if any: /v/plum-otter-4271, or
+ * ?v=plum-otter-4271 (the same thing, where the path can't be used). A link
+ * from tools/rescue.js also ends in "creator=<valley id>.<key>" after a hash, which gives
+ * this device the creator's role back.
+ */
+export function inviteFromAddress(loc = location) {
+  const m = /^\/v\/([^/?#]+)\/?$/.exec(loc.pathname);
+  const raw = m ? decodeURIComponent(m[1]) : new URLSearchParams(loc.search).get('v');
+  const code = normalizeCode(raw);
+  const c = /creator=([a-z0-9]{3,16})\.([\w-]+)/.exec(loc.hash || '');
+  return { code, creator: c ? { id: c[1], key: c[2] } : null };
+}
+
+/** The same normalizing the server does, so a typo shows before a round trip. */
+export function normalizeCode(input) {
+  const parts = String(input || '').toLowerCase().match(/[a-z]+|\d+/g);
+  if (!parts || parts.length !== 3) return null;
+  const code = parts.join('-');
+  return /^[a-z]+-[a-z]+-\d{4}$/.test(code) ? code : null;
+}
+
+async function post(path, body) {
+  try {
+    const res = await fetch(path, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {}),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { status: res.status, ...data };
+  } catch {
+    return { ok: false, why: "Couldn't reach the valley's server. Check the connection and try again." };
+  }
+}
+
+/** Make a valley. This device becomes its creator. */
+export async function makeValley() {
+  const r = await post('/valleys', {});
+  if (r.ok) rememberValley({ id: r.id, key: r.key, code: r.code, creator: true });
+  return r;
+}
+
+/**
+ * Get into a valley with its invite code. A device that's already in it (by
+ * that code) goes straight in with the key it has, without asking for another.
+ */
+export async function joinValley(code) {
+  const known = findValleyByCode(code);
+  if (known) return { ok: true, ...known };
+  const r = await post('/valleys/join', { code });
+  if (r.ok) rememberValley({ id: r.id, key: r.key, code: r.code, creator: false });
+  return r;
+}
+
+/**
+ * Fresh details of this device's valleys for the title screen: the cafe's
+ * name, the day, who's in, and the current code. A valley the server no longer
+ * lets this key into comes back `gone`.
+ */
+export async function refreshValleys() {
+  const list = deviceValleys();
+  if (!list.length) return [];
+  const r = await post('/valleys/mine', { valleys: list.map(({ id, key }) => ({ id, key })) });
+  if (!r.ok || !Array.isArray(r.valleys)) return list.map((v) => ({ ...v, offline: true }));
+  const byId = new Map(r.valleys.map((x) => [x.id, x]));
+  const out = list.map((v) => {
+    const s = byId.get(v.id);
+    if (!s) return { ...v, offline: true };
+    if (s.gone) return { ...v, gone: true };
+    return { ...v, ...s, key: v.key, creator: !!s.creator };
+  });
+  // Keep what we learned (the cafe's name, the latest code) for next time.
+  saveDeviceValleys(out.map(({ id, key, code, cafe, creator, at, welcomed }) => ({ id, key, code, cafe, creator, at, welcomed })));
+  return out;
+}
+
+/** Creator only: a new invite code; the old one stops working. */
+export async function newInviteCode(v) {
+  const r = await post(`/valleys/${v.id}/code`, { key: v.key });
+  if (r.ok) rememberValley({ ...v, code: r.code });
+  return r;
+}
+
+/** Creator only: everyone else's access ends, and there's a new code. */
+export async function revokeOthers(v) {
+  const r = await post(`/valleys/${v.id}/revoke`, { key: v.key });
+  if (r.ok) rememberValley({ ...v, code: r.code });
+  return r;
+}

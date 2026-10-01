@@ -24,6 +24,7 @@ const MAX_PENDING = 500;
 export class NetClient {
   constructor() {
     this.gameId = null;       // which valley; null takes the server's default
+    this.gameKey = null;      // this device's key to it, on the public server
     this.link = null;         // WsLink or PollLink
     this.transport = null;    // 'ws' | 'poll'
     this.forcePoll = false;
@@ -134,16 +135,22 @@ export class NetClient {
     return !!location.host;                          // false when opened from file://
   }
 
-  /** Which valley to join. Set before connecting; null means the server's default. */
-  static gameParam(id) { return id ? `?game=${encodeURIComponent(id)}` : ''; }
+  /**
+   * Which valley to join, and on the public server the key that lets us in.
+   * Set before connecting; no id means the server's default.
+   */
+  static gameParam(id, key) {
+    if (!id) return '';
+    return `?game=${encodeURIComponent(id)}${key ? `&key=${encodeURIComponent(key)}` : ''}`;
+  }
 
   wsUrl() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${proto}//${location.host}/ws${NetClient.gameParam(this.gameId)}`;
+    return `${proto}//${location.host}/ws${NetClient.gameParam(this.gameId, this.gameKey)}`;
   }
 
   pollUrl() {
-    return `${location.protocol}//${location.host}/poll${NetClient.gameParam(this.gameId)}`;
+    return `${location.protocol}//${location.host}/poll${NetClient.gameParam(this.gameId, this.gameKey)}`;
   }
 
   /** The lobby list, over plain HTTP — no socket, so no valley is entered. */
@@ -159,6 +166,8 @@ export class NetClient {
       // The host may have locked the lobby for a party. Remembered here rather
       // than returned, so every existing caller is unchanged.
       NetClient.locked = !!data.locked;
+      // The public server: valleys have invite codes, and nothing is listed.
+      NetClient.codes = !!data.codes;
       // Which holiday the server says it is. Left undefined by an older server
       // that doesn't know, so the game falls back to its own calendar.
       if ('holiday' in data) NetClient.holiday = data.holiday || null;
@@ -252,6 +261,8 @@ export class NetClient {
         close: () => {
           if (this.link !== link) return;
           this.link = null;
+          // The valley's creator sent everybody else away, us included.
+          if (link.closeCode === 4001) this.emit('revoked');
           // The HTTP link knows exactly what it never got through.
           this.requeue(link.outbox);
           this.noteClose();

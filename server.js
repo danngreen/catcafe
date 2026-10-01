@@ -53,7 +53,10 @@ const front = PUBLIC ? new PublicValleys(games) : null;
 // What the public server will hand out: the page and the game, and nothing else
 // in this folder. The LAN server serves the whole tree, saves and all, which is
 // fine in a house and not on the internet.
-const SERVED = /^\/(index\.html|styles\.css|manifest\.webmanifest|\.deployed|favicon\.ico)$|^\/(icons|src)\//;
+const SERVED = process.env.SERVE_TOOLS === '1'
+  // The test harness, for tools/check.js only: never set this on a real server.
+  ? /^\/(index\.html|styles\.css|manifest\.webmanifest|\.deployed|favicon\.ico)$|^\/(icons|src|tools)\//
+  : /^\/(index\.html|styles\.css|manifest\.webmanifest|\.deployed|favicon\.ico)$|^\/(icons|src)\//;
 
 // With a room full of people who have never played, "New valley" and the
 // delete key are two ways to end up somewhere nobody meant to be. Locking the
@@ -283,7 +286,7 @@ if (ADMIN_PORT) {
       const key = games.addCreator(id);
       if (!key) { json({ ok: false, why: `no valley ${id}` }, 404); return; }
       console.log(`[rescue] valley ${id}: a new creator key was handed out`);
-      json({ ok: true, id, link: `${PUBLIC_URL}/v/${games.accessOf(id).code}#creator=${key}` });
+      json({ ok: true, id, link: `${PUBLIC_URL}/v/${games.accessOf(id).code}#creator=${id}.${key}` });
       return;
     }
     if (url.pathname !== '/rescue' || req.method !== 'POST') { json({ ok: false, why: 'not here' }, 404); return; }

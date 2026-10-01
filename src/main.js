@@ -9,7 +9,7 @@ import { Perf } from './engine/perf.js';
 import { audio } from './engine/audio.js';
 import { drawText, drawTextCentered, drawTextRight, textWidth, LINE_H } from './engine/font.js';
 import { makeCanvas } from './engine/pixel.js';
-import { clamp, money, makeRng, hashStr } from './engine/util.js';
+import { clamp, money, makeRng, hashStr, wrapText } from './engine/util.js';
 
 import { Tileset, TILE, T, isWater } from './art/tiles.js';
 import { P } from './art/palette.js';
@@ -52,6 +52,12 @@ import { BuildScreen } from './ui/build.js';
 import { TaxiFlight, StairWalk } from './ui/cutscene.js';
 import { net, NetClient } from './net/client.js';
 import { RESIDENT_NAMES, householder } from './world/residents.js';
+import {
+  deviceValleys, rememberValley, forgetValley, findValley, inviteFromAddress, normalizeCode,
+  makeValley, joinValley, refreshValleys,
+} from './net/valleys.js';
+import { askText } from './ui/textinput.js';
+import { showInvite } from './ui/invite.js';
 
 const WORLD_SEED = 20260724;
 
@@ -264,6 +270,7 @@ class Game {
     // so reading it doesn't put anyone in a valley.
     let list = null;
     try { list = await NetClient.listGames(2000); } catch { /* solo */ }
+    if (NetClient.codes) { await this.startPublic(); return; }
     // `?game=002` skips the lobby: a direct link to one valley, which is also
     // how a test says which of several it means.
     const wanted = new URLSearchParams(location.search).get('game');
@@ -289,6 +296,50 @@ class Game {
   }
 
   /**
+   * The public server: no list of valleys, just this device's own and an invite
+   * link, if the page was opened with one. A link to a valley this device is
+   * already in goes straight in; a new one is joined with its code first.
+   */
+  async startPublic() {
+    let seed = WORLD_SEED;
+    // Something to come back to: the title screen's Back goes to the valleys.
+    this.lobbyGames = [];
+    const invite = inviteFromAddress();
+    let target = null;
+    if (invite.creator) {
+      // A creator link from tools/rescue.js: this device gets its buttons back.
+      target = rememberValley({ id: invite.creator.id, key: invite.creator.key, code: invite.code, creator: true });
+    } else if (invite.code) {
+      const r = await joinValley(invite.code);
+      if (r.ok) target = findValley(r.id);
+      else this.valleyProblem = r.why || "That link doesn't work anymore. Ask for a new one.";
+    }
+    // Tidy the address, so a reload doesn't join again and a creator key isn't
+    // left sitting in the browser's history.
+    if (invite.code || invite.creator) {
+      try {
+        const url = new URL(location.href);
+        if (/^\/v\//.test(url.pathname)) url.pathname = '/';
+        url.searchParams.delete('v');
+        if (/creator=/.test(url.hash)) url.hash = '';
+        history.replaceState(null, '', url.toString());
+      } catch { /* an old browser keeps the link; no harm */ }
+    }
+    if (target) {
+      this.publicValley = target;
+      net.gameId = target.id;
+      net.gameKey = target.key;
+      try {
+        const ok = await net.connect(1500);
+        if (ok && Number.isFinite(net.seed)) seed = net.seed;
+      } catch { /* the valleys screen will say */ }
+    }
+    this.wireNet();
+    setHoliday(this.pickHoliday());
+    this.boot(seed);
+  }
+
+  /**
    * Which holiday, if any, this page plays: the address bar first, then the
    * server (so everyone in a shared valley sees the same valley), then this
    * device's own calendar. Decided once, before anything is painted.
@@ -307,8 +358,10 @@ class Game {
    * over to the usual title screen, which already knows how to tell a cafe
    * that is open from one that isn't.
    */
-  async enterGame(id) {
+  async enterGame(id, key = null) {
     net.gameId = id;
+    net.gameKey = key;
+    this.publicValley = key ? findValley(id) : null;
     let ok = false;
     try { ok = await net.connect(2500); } catch { /* fall through */ }
     if (ok && Number.isFinite(net.seed) && net.seed !== this.worldSeed) {
@@ -328,7 +381,14 @@ class Game {
   backToLobby() {
     try { net.leave(); } catch { /* going anyway */ }
     net.gameId = null;
+    net.gameKey = null;
+    this.publicValley = null;
     this.titleScreen = null;
+    if (NetClient.codes) {
+      this.screens.length = 0;
+      this.screens.push(new ValleysScreen(this));
+      return;
+    }
     const lobby = new LobbyScreen(this, this.lobbyGames || []);
     this.screens.length = 0;
     this.screens.push(lobby);
@@ -346,7 +406,13 @@ class Game {
       st.playerName = name;
     });
     net.on('left', (p) => this.hud.toast(`${p.n} left.`, 'info'));
-    net.on('disconnected', () => this.hud.toast('The connection to the cafe dropped. Trying to get back in...', 'bad'));
+    net.on('disconnected', () => {
+      this.hud.toast('The connection to the cafe dropped. Trying to get back in...', 'bad');
+      // On the public server a drop may mean the creator sent us away. A socket
+      // says so as it closes; the HTTP link can't, so ask.
+      if (NetClient.codes && this.publicValley) this.checkStillIn();
+    });
+    net.on('revoked', () => this.lostAccess());
     net.on('reconnected', () => {
       // We may have missed a whole afternoon of other people's changes, so take
       // the valley's books wholesale rather than trusting our stale copy.
@@ -515,7 +581,9 @@ class Game {
     // Several valleys on one server means choosing which before anything else.
     // With no server, or only one game, there is nothing to choose and the
     // lobby would just be a door to open on the way to the door.
-    if (this.lobbyGames && this.lobbyGames.length) {
+    if (NetClient.codes && !net.gameId) {
+      this.screens.push(new ValleysScreen(this, this.valleyProblem));
+    } else if (this.lobbyGames && this.lobbyGames.length) {
       this.screens.push(new LobbyScreen(this, this.lobbyGames));
     } else {
       this.titleScreen = new TitleScreen(this);
@@ -774,6 +842,13 @@ class Game {
         + 'grandmother closed her shop years ago. Let\'s set up this cafe and open the doors for business!',
       { speaker: st.shared && this.joinedExisting ? st.cafe.name || 'The cafe' : 'Brambleford', instant: true },
     );
+    // A brand new valley on the public server: once the welcome has been read,
+    // show its link, since that link is the way back in.
+    const v = this.publicValley;
+    if (NetClient.codes && v && v.creator && !v.welcomed) {
+      this.publicValley = rememberValley({ ...v, welcomed: true });
+      this.pendingInvite = true;
+    }
   }
 
   continueGame() {
@@ -897,6 +972,46 @@ class Game {
    * a screen the boot path can produce in a second is a fine way to end up on
    * the title screen with yesterday's cats still walking about.
    */
+  /**
+   * The invite for the valley we're in, on the public server: its link, code,
+   * QR code, and for its creator the two buttons. `first` is the card shown
+   * once, after starting a new cafe.
+   */
+  openInvite(first = false) {
+    const v = this.publicValley && findValley(this.publicValley.id);
+    if (!v) return;
+    const hold = new HoldScreen();
+    this.push(hold);
+    showInvite({ valley: v, first }).then((now) => {
+      if (now) this.publicValley = rememberValley(now);
+      hold.done = true;
+    });
+  }
+
+  /** After a drop on the public server: are we still allowed in? */
+  checkStillIn() {
+    if (this.checkingAccess) return;
+    this.checkingAccess = true;
+    setTimeout(async () => {
+      const id = net.gameId;
+      const list = await refreshValleys();
+      this.checkingAccess = false;
+      const mine = list.find((v) => v.id === id);
+      if (mine && mine.gone && id === net.gameId) this.lostAccess();
+    }, 1500);
+  }
+
+  /** The valley's creator sent everybody else away, and that includes us. */
+  lostAccess() {
+    if (this.lostShown) return;
+    this.lostShown = true;
+    try { net.leave(); } catch { /* going anyway */ }
+    this.screens.length = 0;
+    this.dialogue.say("The person who made this valley has changed who can come in, so you can't play in it anymore. "
+      + 'If they want you back, they can send you a new link.',
+    { speaker: 'Cat Cafe', onDone: () => this.reloadPage() });
+  }
+
   leaveValley() {
     this.state.save();
     // Say goodbye properly: the socket closing is how the server knows to take
@@ -1168,7 +1283,8 @@ class Game {
     if (!talking && !this.cutscene) {
       this.player.update(dt, this.input, map, !this.fader.busy);
       this.checkWarp();
-      if (this.input.hit('use')) this.interact();
+      if (this.pendingInvite && !this.cutscene) { this.pendingInvite = false; this.openInvite(true); }
+      else if (this.input.hit('use')) this.interact();
       if (this.input.hit('menu')) { this.push(new PauseScreen(this)); audio.sfx('ui_ok', { gain: 0.5 }); }
       if (this.input.hit('perf')) { this.perf.show = !this.perf.show; this.perf.clear(); }
       if (this.input.hit('cafe')) { this.push(new CafeScreen(this)); audio.sfx('ui_ok', { gain: 0.5 }); }
@@ -3143,6 +3259,188 @@ function worldTime(day, t) {
  * over: this is played on a keyboard and on a phone, and neither of those has
  * a hover.
  */
+/**
+ * Holds the game still while a page overlay (an invite, a typed code) is open,
+ * so a key pressed in the overlay doesn't also walk you somewhere.
+ */
+class HoldScreen extends Screen {
+  draw(ctx) { dim(ctx, 0.3); }
+}
+
+/**
+ * The public server's first screen: the valleys this device has been in, a
+ * new one, or one somebody gave you the code for. Nothing else is listed: on
+ * the public server nobody browses anybody else's valleys.
+ */
+class ValleysScreen extends Screen {
+  constructor(game, problem = null) {
+    super();
+    this.game = game;
+    this.valleys = deviceValleys();
+    this.index = 0;
+    this.busy = false;
+    this.msg = problem || '';
+    this.msgBad = !!problem;
+    this.refresh();
+  }
+
+  get rows() {
+    return [...this.valleys, { make: true }, { join: true }];
+  }
+
+  refresh() {
+    refreshValleys().then((list) => {
+      this.valleys = list;
+      this.index = Math.min(this.index, this.rows.length - 1);
+    });
+  }
+
+  say(text, bad = false) { this.msg = text; this.msgBad = bad; if (bad) audio.sfx('error'); }
+
+  update(dt, input) {
+    this.t += dt;
+    if (this.busy) return;
+    const rows = this.rows;
+    if (input.repeat('up', dt)) { this.index = (this.index - 1 + rows.length) % rows.length; audio.sfx('ui_move'); }
+    if (input.repeat('down', dt)) { this.index = (this.index + 1) % rows.length; audio.sfx('ui_move'); }
+    const row = rows[this.index];
+
+    // X forgets a valley on this device. It carries on for everyone else.
+    if (input.hit('cancel') && row && row.id) {
+      audio.sfx('ui_back');
+      this.game.push(new ConfirmScreen({
+        title: 'Forget this valley?',
+        lines: [row.cafe || 'A valley not started yet', 'It stays open for everyone else.',
+          row.creator ? "You made it, so you'll lose its buttons." : 'You can join again with its link.'],
+        yes: 'Forget it',
+        no: 'Keep it',
+        onYes: () => { forgetValley(row.id); this.valleys = this.valleys.filter((v) => v.id !== row.id); this.index = 0; this.say('Forgotten on this device.'); },
+      }));
+      return;
+    }
+    if (!input.hit('use')) return;
+    audio.sfx('ui_ok');
+
+    if (row.make) {
+      this.busy = true;
+      this.say('Making your valley...');
+      makeValley().then((r) => {
+        if (!r.ok) { this.busy = false; this.say(r.why || "The server couldn't make a valley just now.", true); return; }
+        this.enter({ id: r.id, key: r.key });
+      });
+      return;
+    }
+    if (row.join) {
+      this.busy = true;
+      const hold = new HoldScreen();
+      this.game.push(hold);
+      askText({
+        title: 'Join a valley',
+        hint: 'Type the code you were given, like plum-otter-4271.',
+        placeholder: 'plum-otter-4271',
+        button: 'Join',
+        check: (text) => (normalizeCode(text) ? null : 'That doesn\'t look like a code. It\'s two words and four numbers.'),
+      }).then(async (text) => {
+        hold.done = true;
+        if (text == null) { this.busy = false; return; }
+        this.say('Joining...');
+        const r = await joinValley(normalizeCode(text));
+        if (!r.ok) { this.busy = false; this.say(r.why || "That code doesn't match any valley.", true); return; }
+        this.enter({ id: r.id, key: r.key });
+      });
+      return;
+    }
+    if (row.gone) {
+      this.say("This valley's link was changed, or it was put away. Ask for a new link, or press X to forget it.", true);
+      return;
+    }
+    this.enter(row);
+  }
+
+  enter(v) {
+    this.busy = true;
+    this.say('Joining...');
+    this.game.enterGame(v.id, v.key).then((ok) => {
+      if (ok) { this.done = true; return; }
+      this.busy = false;
+      this.say("Couldn't get into that valley. Check the connection and try again.", true);
+    });
+  }
+
+  draw(ctx) {
+    drawSky(ctx, this.t);
+    drawTextCentered(ctx, 'CAT CAFE', VIEW_W / 2, 26, { color: '#3d2a1c', scale: 4 });
+    drawTextCentered(ctx, 'CAT CAFE', VIEW_W / 2, 24, { color: '#ffd9a0', scale: 4 });
+
+    const rows = this.rows;
+    const w = 340, h = 150;
+    const x = Math.round((VIEW_W - w) / 2), y = 62;
+    panel(ctx, x, y, w, h);
+    panelTitle(ctx, x, y, w, this.valleys.length ? 'Your valleys' : 'Welcome!');
+
+    const listW = 160;
+    const VIS = 6;
+    const scroll = Math.max(0, Math.min(this.index - 2, rows.length - VIS));
+    for (let i = 0; i < Math.min(VIS, rows.length); i++) {
+      const idx = scroll + i;
+      const row = rows[idx];
+      if (!row) break;
+      const ry = y + 22 + i * 16;
+      const sel = idx === this.index;
+      if (sel) {
+        ctx.fillStyle = 'rgba(255,207,107,0.14)';
+        ctx.fillRect(x + 8, ry - 3, listW, 15);
+        cursor(ctx, x + 10, ry + 1, this.t);
+      }
+      // A valley nobody has opened yet has no cafe name, but it has its code.
+      const full = row.make ? 'Start a new cafe' : row.join ? 'Join with a code' : (row.cafe || row.code || 'A new valley');
+      const label = full.length > 23 ? `${full.slice(0, 21)}..` : full;
+      const col = sel ? P.uiGold : row.make || row.join ? P.uiGreen : row.gone ? P.uiTextDim : P.uiText;
+      drawText(ctx, label, x + 22, ry + 1, { color: col, shadow: P.uiShadow });
+      if (row.playing) drawText(ctx, '\u25cf', x + 8 + listW - 8, ry + 1, { color: P.uiGreen, shadow: P.uiShadow });
+    }
+
+    const dx = x + listW + 22, dw = w - listW - 32;
+    const row = rows[this.index];
+    panel(ctx, dx, y + 20, dw, h - 34, { fill: P.uiBg2 });
+    let ly = y + 30;
+    const line = (text, c = P.uiTextDim) => {
+      for (const part of wrapText(text, Math.floor((dw - 16) / 6))) {
+        drawText(ctx, part, dx + 8, ly, { color: c, shadow: P.uiShadow });
+        ly += LINE_H;
+      }
+    };
+    if (row && row.make) {
+      line('A brand new valley and an empty cafe, all yours.', P.uiText);
+      ly += 4;
+      line('Play on your own, or share its link with friends.');
+    } else if (row && row.join) {
+      line('Somebody gave you a code like plum-otter-4271? Type it in to join their valley.', P.uiText);
+    } else if (row && row.gone) {
+      line(row.cafe || 'A valley', P.uiGold);
+      line("Its link was changed, or it was put away. Ask whoever invited you for a new one.");
+    } else if (row) {
+      line(row.cafe || 'Not started yet', P.uiGold);
+      if (row.code) line(row.code);
+      ly += 2;
+      if (!row.started && !row.offline) line('Nobody has opened the cafe yet.');
+      if (row.started) {
+        line(worldTime(row.day, row.t));
+        line(`Day ${row.daysPlayed + 1}`);
+        line(`${money(row.money)}   ${row.cats} cat${row.cats === 1 ? '' : 's'}`);
+      }
+      if (row.offline) line("Couldn't reach the server.");
+      if (row.creator) line('You made this one.');
+      if (row.playing) line(`${row.playing} playing now`, P.uiGreen);
+    }
+
+    const hint = row && row.id ? 'Up / Down to choose    Space to play    X to forget' : 'Up / Down to choose    Space to pick';
+    const msgLines = this.msg ? wrapText(this.msg, 74) : [hint];
+    msgLines.slice(0, 2).forEach((m, i) => drawTextCentered(ctx, m, VIEW_W / 2, y + h + 8 + i * 11,
+      { color: this.msg ? (this.msgBad ? '#7a2a2a' : '#3d2a1c') : '#2f3d22' }));
+  }
+}
+
 class LobbyScreen extends Screen {
   constructor(game, games) {
     super();
@@ -3514,7 +3812,14 @@ class TitleScreen extends Screen {
       // Naming the host matters: the commonest way to end up alone is for each
       // player to run their own server and browse to their own localhost.
       const n = this.game.net;
-      if (n.connected) {
+      if (n.connected && NetClient.codes) {
+        // The public server: friends come in by the valley's link, not its address.
+        const here = Math.max(1, n.here);
+        drawTextCentered(ctx, here > 1 ? `${here} people are in this valley right now` : "You're the only one here right now",
+          VIEW_W / 2, VIEW_H - 26, { color: '#2f3d22' });
+        drawTextCentered(ctx, 'Invite friends from the pause menu once you\'re playing',
+          VIEW_W / 2, VIEW_H - 14, { color: '#2f3d22' });
+      } else if (n.connected) {
         const here = Math.max(1, n.here);
         drawTextCentered(ctx, here > 1 ? `${here} here — shared valley on ${n.host}`
           : `Shared valley on ${n.host} — you're the only one connected`,

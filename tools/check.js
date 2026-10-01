@@ -61,6 +61,10 @@ const BUDGET = {
   taxi: 22000,
   sleep: 20000,
   counter: 20000,
+  pubstart: 25000,
+  pubjoin: 25000,
+  pubrevoke: 25000,
+  pubrevokepoll: 30000,
   door: 20000,
   doorblock: 25000,
   resumeplace: 25000,
@@ -222,10 +226,13 @@ const GROUPS = {
   net: ['netclock', 'net', 'netmobile', 'netbooks', 'netdrop', 'netoffline', 'netbuildlock', 'netforget',
     'netpollbooks', 'netpollgone', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbyback', 'netlobbydel', 'netlobbyone', 'netnewvalley', 'netexit', 'netbookfields', 'nettitlecontinue', 'nettitleghost', 'nettitleghostpoll', 'netghostmove', 'netghostmovepoll', 'solo'],
   slow: ['netidle', 'netping', 'netmute', 'netpollquiet', 'netidletitle'],
+  // The public server: a valley of your own, joining with a code, and the creator
+  // sending everybody else away. They run against a VALLEY_CODES=1 server.
+  public: ['pubstart', 'pubjoin', 'pubrevoke', 'pubrevokepoll'],
 };
 GROUPS.all = [...new Set([
   ...GROUPS.world, ...GROUPS.ui, ...GROUPS.cafe, ...GROUPS.quests,
-  ...GROUPS.cutscene, ...GROUPS.mobile, ...GROUPS.net, ...GROUPS.perf,
+  ...GROUPS.cutscene, ...GROUPS.mobile, ...GROUPS.net, ...GROUPS.perf, ...GROUPS.public,
 ])];
 
 /** Expand any group names given on the command line. */
@@ -247,18 +254,39 @@ function freePort() {
 
 /** Start a server for this run alone. Returns the process, to be killed. */
 async function ownServer() {
+  const { proc, base } = await startServer({});
+  BASE = base;
+  return proc;
+}
+
+async function startServer(extraEnv) {
   const port = await freePort();
   const proc = spawn(process.execPath, [`${HERE}../server.js`], {
     stdio: 'ignore',
-    env: { ...process.env, PORT: String(port), SESSION_SAVE: '0', ADMIN_PORT: '0', LOBBY_LOCK: '0' },
+    env: { ...process.env, PORT: String(port), SESSION_SAVE: '0', ADMIN_PORT: '0', LOBBY_LOCK: '0', ...extraEnv },
   });
-  BASE = `http://localhost:${port}`;
+  const base = `http://localhost:${port}`;
   for (let i = 0; i < 60; i++) {
     await sleep(100);
-    try { if ((await fetch(`${BASE}/games`)).ok) return proc; } catch { /* not up yet */ }
+    try { if ((await fetch(`${base}/games`)).ok) return { proc, base }; } catch { /* not up yet */ }
   }
   proc.kill();
   throw new Error('the test server did not start');
+}
+
+// The pub... scenarios are about the public server (VALLEY_CODES=1): invite
+// codes, device keys, the valleys screen. They get a server of their own,
+// started the first time one of them runs.
+let PUBLIC_BASE = null;
+let publicProc = null;
+async function publicBase() {
+  if (!PUBLIC_BASE) {
+    const { proc, base } = await startServer({ VALLEY_CODES: '1', SERVE_TOOLS: '1' });
+    publicProc = proc;
+    PUBLIC_BASE = base;
+    process.on('exit', () => { try { publicProc.kill(); } catch { /* gone */ } });
+  }
+  return PUBLIC_BASE;
 }
 
 /**
@@ -440,10 +468,11 @@ async function main() {
     await asPhone(mobileIdx >= 0 || GROUPS.mobile.includes(sc));
     // Title and lobby scenarios need the real screens, so they skip autostart.
     const params = [];
-    if (!sc.includes('title') && !sc.includes('lobby')) params.push('autostart');
+    const pub = sc.startsWith('pub');
+    if (!sc.includes('title') && !sc.includes('lobby') && !pub) params.push('autostart');
     if (hideOut) params.push('hideout');
-    // Everything but the net scenarios plays alone, so runs can't see each other.
-    if (!sc.startsWith('net')) params.push('solo');
+    // Everything but the net and public scenarios plays alone, so runs can't see each other.
+    if (!sc.startsWith('net') && !pub) params.push('solo');
     // A scenario named ...poll... runs over the HTTP transport instead of a
     // socket, which is what a machine behind a content filter ends up using.
     if (sc.includes('poll')) params.push('poll');
@@ -464,7 +493,7 @@ async function main() {
     // where nobody is connected to anything yet.
     else if (sc.includes('title')) params.push(`game=${DEFAULT_GAME}`);
     const url = urlIdx >= 0 ? args[urlIdx + 1]
-      : `${BASE}/tools/harness.html${params.length ? '?' + params.join('&') : ''}#${sc}`;
+      : `${pub ? await publicBase() : BASE}/tools/harness.html${params.length ? '?' + params.join('&') : ''}#${sc}`;
     // A hard reload guarantees a clean world for each scenario.
     await send('Page.navigate', { url: 'about:blank' });
     await sleep(120);
@@ -518,7 +547,10 @@ async function main() {
 
     // `.deployed` only exists on a deployed copy (deploy/push.sh writes it); the
     // display report asks for it anyway and expects the 404 from a working tree.
-    const real = problems.filter((p) => !p.includes('favicon') && !p.includes('/.deployed'));
+    // A wrong invite code is answered 404 and a revoked key 403, which the
+    // browser logs; the public scenarios do both on purpose.
+    const real = problems.filter((p) => !p.includes('favicon') && !p.includes('/.deployed')
+      && !(pub && (p.includes('/valleys/join') || (p.includes('403') && p.includes('/poll?')))));
     console.log(`--- ${sc} --- ${(took / 1000).toFixed(1)}s${hung ? ` (hit its ${budget / 1000}s ceiling)` : ''}`);
     console.log(summary.trim() || '(no in-page summary)');
     if (real.length) {

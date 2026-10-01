@@ -6177,6 +6177,154 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         }
         hour(12);
         window.__cont = `halloweenQuests=${hw.length} ${report.join(' ')}`;
+      } else if (SCRIPT === 'pubstart' || SCRIPT === 'pubjoin' || SCRIPT.startsWith('pubrevoke')) {
+        // The public server (VALLEY_CODES=1): invite codes and device keys.
+        const V = await import('../src/net/valleys.js');
+        const M = await import('../src/ui/menus.js');
+        const top = () => g.screens[g.screens.length - 1];
+        const topName = () => (top() ? top().constructor.name : 'none');
+        const err = (m) => window.__errors.push(m);
+        const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }).then((r) => r.json());
+        const button = (root, label) => [...root.querySelectorAll('button')].find((b) => b.textContent === label);
+        // Every scenario starts as a device that has never been here.
+        localStorage.removeItem('catcafe.valleys');
+        g.backToLobby();
+        await settle();
+        if (topName() !== 'ValleysScreen') err(`first screen is ${topName()}`);
+        /** Through the title and the creation screen, and the welcome. */
+        const startCafe = async () => {
+          await until(() => topName() === 'TitleScreen', 6000);
+          await pressKey('Space'); await settle();
+          await pressKey('Space'); await settle();
+          for (let i = 0; i < 8 && g.dialogue.active; i++) await pressKey('Space');
+          await settle();
+        };
+
+        if (SCRIPT === 'pubstart') {
+          const rows = top().rows;
+          if (rows.length !== 2 || !rows[0].make || !rows[1].join) err(`a new device sees ${JSON.stringify(rows)}`);
+          top().index = 0;
+          await pressKey('Space');
+          await until(() => topName() === 'TitleScreen', 6000);
+          const mine = V.deviceValleys();
+          if (mine.length !== 1 || !mine[0].creator) err(`device list after making one: ${JSON.stringify(mine)}`);
+          if (!g.net.connected || !mine[0] || g.net.gameKey !== mine[0].key) err('not connected to the new valley with its key');
+          await startCafe();
+          await until(() => document.querySelector('[data-invite]'), 4000);
+          const box = document.querySelector('[data-invite]');
+          if (!box) err('the first-time invite never showed');
+          else {
+            if (!/ready/.test(box.textContent)) err('not the first-time card');
+            if (!box.textContent.includes(mine[0].code)) err('the invite does not show the code');
+            if (!box.querySelector('canvas')) err('no QR code');
+            const mk = button(box, 'Make a new link');
+            if (!mk) err('the creator has no Make a new link');
+            else {
+              mk.click();
+              if (V.deviceValleys()[0].code !== mine[0].code) err('one tap changed the code');
+              mk.click();
+              await until(() => V.deviceValleys()[0].code !== mine[0].code, 4000);
+              const code2 = V.deviceValleys()[0].code;
+              if (code2 === mine[0].code) err('the code did not change');
+              if (!box.textContent.includes(code2)) err('the invite still shows the old code');
+              const joinOld = await post('/valleys/join', { code: mine[0].code });
+              if (joinOld.ok) err('the old code still works');
+            }
+            button(box, 'Close').click();
+          }
+          await settle();
+          if (document.querySelector('[data-invite]')) err('the invite did not close');
+          if (g.screens.some((x) => x.constructor.name === 'HoldScreen')) err('the game is still held');
+          await V.refreshValleys();     // which rewrites the list: it must keep the flag
+          if (!V.deviceValleys()[0].welcomed) err('the first-time card would show again');
+          if (!new M.PauseScreen(g).items.includes('Invite friends')) err('no Invite friends in the pause menu');
+          window.__cont = `valleys=${V.deviceValleys().length} creator=${V.deviceValleys()[0].creator}`;
+        } else if (SCRIPT === 'pubjoin') {
+          const other = await post('/valleys', {});
+          const open = async () => {
+            top().index = top().rows.findIndex((r) => r.join);
+            await pressKey('Space');
+            await until(() => document.querySelector('[role="dialog"] input'), 3000);
+            return document.querySelector('[role="dialog"]');
+          };
+          let box = await open();
+          // Not a code at all: said on the spot, and the box stays.
+          box.querySelector('input').value = 'hello';
+          button(box, 'Join').click();
+          await settle();
+          if (!document.querySelector('[role="dialog"] input')) err('a non-code closed the box');
+          // A code, but nobody's: back on the list with the reason.
+          box.querySelector('input').value = 'plum-otter-0000';
+          button(box, 'Join').click();
+          await until(() => !document.querySelector('[role="dialog"]') && topName() === 'ValleysScreen' && !top().busy, 4000);
+          if (!/doesn't match/.test(top().msg)) err(`wrong code said: ${top().msg}`);
+          // The real one, typed the way a phone might.
+          box = await open();
+          box.querySelector('input').value = ` ${other.code.toUpperCase().replace(/-/g, ' ')} `;
+          button(box, 'Join').click();
+          await until(() => topName() === 'TitleScreen', 6000);
+          const mine = V.deviceValleys();
+          if (mine.length !== 1 || mine[0].id !== other.id || mine[0].creator) err(`after joining: ${JSON.stringify(mine)}`);
+          if (!g.net.connected || g.net.gameId !== other.id) err('not in the valley after joining');
+          // Coming back: it's on this device's list.
+          g.backToLobby();
+          await until(() => topName() === 'ValleysScreen' && top().valleys.some((v) => v.id === other.id && 'started' in v), 4000);
+          if (!top().valleys.some((v) => v.id === other.id)) err('the valley is not on the list');
+          // Links, as the address bar would have them.
+          const a = V.inviteFromAddress({ pathname: `/v/${other.code}`, search: '', hash: '' });
+          const b = V.inviteFromAddress({ pathname: '/', search: `?v=${other.code.toUpperCase()}`, hash: '#creator=abc123.k-ey_1' });
+          if (a.code !== other.code || b.code !== other.code) err('a link did not read');
+          if (!b.creator || b.creator.id !== 'abc123' || b.creator.key !== 'k-ey_1') err('a creator link did not read');
+          window.__cont = `joined=${other.id}`;
+        } else {
+          // A friend in somebody else's valley, when the creator sends everybody else away.
+          const other = await post('/valleys', {});
+          const r = await V.joinValley(other.code);
+          if (!r.ok) err(`could not join: ${r.why}`);
+          await g.enterGame(r.id, r.key);
+          await startCafe();
+          if (document.querySelector('[data-invite]')) err('a friend got the first-time card');
+          g.openInvite();
+          await until(() => document.querySelector('[data-invite]'), 3000);
+          const box = document.querySelector('[data-invite]');
+          if (box && button(box, 'Make a new link')) err('a friend got the creator buttons');
+          if (box) button(box, 'Close').click();
+          await settle();
+          window.__reloaded = false;
+          g.reloadPage = () => { window.__reloaded = true; };
+          const sent = await post(`/valleys/${other.id}/revoke`, { key: other.key });
+          if (!sent.ok) err('the creator could not revoke');
+          const said = () => g.dialogue.active && /can't play in it anymore/.test(g.dialogue.pages.flat().join(' '));
+          await until(said, 8000);
+          if (!said()) err('the friend was never told');
+          for (let i = 0; i < 6 && g.dialogue.active; i++) await pressKey('Space');
+          if (!window.__reloaded) err('it did not go back to the valleys');
+          const after = await V.refreshValleys();
+          if (!(after.find((v) => v.id === other.id) || {}).gone) err('the device list does not say gone');
+          window.__cont = `revoked=${other.id} transport=${g.net.transport}`;
+        }
+      } else if (SCRIPT === 'pubshot' || SCRIPT === 'pubshotinvite') {
+        // Pictures, not checks: the valleys screen with a couple of valleys on
+        // it, or the invite card. Take with --shot.
+        const V = await import('../src/net/valleys.js');
+        localStorage.removeItem('catcafe.valleys');
+        const mine = await V.makeValley();
+        const other = await fetch('/valleys', { method: 'POST', body: '{}' }).then((r) => r.json());
+        await V.joinValley(other.code);
+        if (SCRIPT === 'pubshot') {
+          g.backToLobby();
+          await until(() => g.screens[0] && g.screens[0].valleys && g.screens[0].valleys.every((v) => 'started' in v), 4000);
+          await settle();
+        } else {
+          await g.enterGame(mine.id, mine.key);
+          g.screens.length = 0;
+          g.startNewGame({ species: 'cat', coat: 'ginger', cloth: '#5b8fd6' }, { wall: '#efe2c8', roof: '#c86a4a', awning: '#c05a7a', floor: 1, name: 'The Sleepy Saucer' });
+          g.dialogue.active = false;
+          await settle();
+          g.openInvite(true);
+          await until(() => document.querySelector('[data-invite]'), 3000);
+        }
+        await wait(300);
       } else if (SCRIPT === 'counter') {
         // A keeper and their counter are one thing: the same prompt from
         // anywhere in front of it, however the keeper wanders, and a press

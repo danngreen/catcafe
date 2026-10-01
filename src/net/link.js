@@ -27,7 +27,7 @@ export class WsLink {
     this.ws = new WebSocket(url);
     this.ws.onmessage = (ev) => { if (!this.dead) h.message(ev.data); };
     this.ws.onerror = () => this.die();
-    this.ws.onclose = () => this.die();
+    this.ws.onclose = (ev) => { this.closeCode = ev && ev.code; this.die(); };
   }
 
   die() {
@@ -85,6 +85,9 @@ export class PollLink {
         cache: 'no-store',
         signal: ac ? ac.signal : undefined,
       });
+      // The public server turning this device's key away: the valley's creator
+      // has sent everybody else away. Over, at once, said the way a socket says it.
+      if (res.status === 403) { this.closeCode = 4001; this.die(); return; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (this.dead) return;
