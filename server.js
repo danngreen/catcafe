@@ -3,7 +3,8 @@
 // point every player's browser at it.
 
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { extname, isAbsolute, join, normalize } from 'node:path';
 import { networkInterfaces } from 'node:os';
 import { upgrade } from './server/ws.js';
@@ -55,8 +56,38 @@ const front = PUBLIC ? new PublicValleys(games) : null;
 // fine in a house and not on the internet.
 const SERVED = process.env.SERVE_TOOLS === '1'
   // The test harness, for tools/check.js only: never set this on a real server.
-  ? /^\/(index\.html|styles\.css|manifest\.webmanifest|\.deployed|favicon\.ico)$|^\/(icons|src|tools)\//
-  : /^\/(index\.html|styles\.css|manifest\.webmanifest|\.deployed|favicon\.ico)$|^\/(icons|src)\//;
+  ? /^\/(index\.html|styles\.css|manifest\.webmanifest|sw\.js|\.deployed|favicon\.ico)$|^\/(icons|src|tools)\//
+  : /^\/(index\.html|styles\.css|manifest\.webmanifest|sw\.js|\.deployed|favicon\.ico)$|^\/(icons|src)\//;
+
+/**
+ * Every file the game is made of, and a stamp that changes when any of them
+ * does. The service worker (sw.js) keeps a copy of exactly these on the
+ * device, so the game opens with no connection; a new stamp is how it knows to
+ * fetch a new copy. Worked out from the files themselves, so there's no build
+ * step to forget. Remembered for a few seconds: every page load asks.
+ */
+let assetsCache = null;
+async function gameAssets() {
+  if (assetsCache && Date.now() - assetsCache.at < 5000) return assetsCache.body;
+  const files = ['/', '/index.html', '/styles.css', '/manifest.webmanifest'];
+  const walk = async (dir, ext) => {
+    for (const ent of await readdir(join(ROOT, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${ent.name}`;
+      if (ent.isDirectory()) await walk(rel, ext);
+      else if (ext.test(ent.name)) files.push(`/${rel}`);
+    }
+  };
+  await walk('src', /\.js$/);
+  await walk('icons', /\.png$/);
+  const hash = createHash('sha1');
+  for (const f of files.slice(1)) {
+    const st = await stat(join(ROOT, f));
+    hash.update(`${f}:${st.size}:${st.mtimeMs}\n`);
+  }
+  const body = { version: hash.digest('hex').slice(0, 12), files };
+  assetsCache = { at: Date.now(), body };
+  return body;
+}
 
 // With a room full of people who have never played, "New valley" and the
 // delete key are two ways to end up somewhere nobody meant to be. Locking the
@@ -122,6 +153,7 @@ const server = createServer(async (req, res) => {
     json(room ? room.status() : { error: 'no such game' }, room ? 200 : 404);
     return;
   }
+  if (path === '/sw-assets.json') { json(await gameAssets()); return; }
   if (PUBLIC) {
     if (await front.handle(req, path, json)) return;
     // An invite link opens the game; the page reads the code from the address.

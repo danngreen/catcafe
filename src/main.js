@@ -54,7 +54,7 @@ import { net, NetClient } from './net/client.js';
 import { RESIDENT_NAMES, householder } from './world/residents.js';
 import {
   deviceValleys, rememberValley, forgetValley, findValley, inviteFromAddress, normalizeCode,
-  makeValley, joinValley, refreshValleys,
+  makeValley, joinValley, refreshValleys, localValleySeed, markPublicSite, wasPublicSite, homeScreenTipDue,
 } from './net/valleys.js';
 import { askText } from './ui/textinput.js';
 import { showInvite } from './ui/invite.js';
@@ -270,7 +270,10 @@ class Game {
     // so reading it doesn't put anyone in a valley.
     let list = null;
     try { list = await NetClient.listGames(2000); } catch { /* solo */ }
-    if (NetClient.codes) { await this.startPublic(); return; }
+    if (NetClient.codes) { markPublicSite(); await this.startPublic(); return; }
+    // No answer at all, on a device that has played on the public site: we're
+    // offline. Show its valleys, and the one it can play without a connection.
+    if (!list && NetClient.available() && wasPublicSite()) { this.startOffline(); return; }
     // `?game=002` skips the lobby: a direct link to one valley, which is also
     // how a test says which of several it means.
     const wanted = new URLSearchParams(location.search).get('game');
@@ -337,6 +340,37 @@ class Game {
     this.wireNet();
     setHoliday(this.pickHoliday());
     this.boot(seed);
+    registerOffline(this);
+  }
+
+  /** Opened with no connection, on a device that knows the public site. */
+  startOffline() {
+    this.offlinePublic = true;
+    this.lobbyGames = [];
+    this.wireNet();
+    setHoliday(this.pickHoliday());
+    this.boot(this.localSeed());
+  }
+
+  /** This device's own valley: offline, and nobody else's. */
+  localSeed() {
+    return localValleySeed(WORLD_SEED, (seed) => GameState.hasSave(seed));
+  }
+
+  /**
+   * Play the valley kept on this device. No server is involved: it saves here,
+   * works with no connection, and nobody else can join it.
+   */
+  playLocal() {
+    try { net.leave(); } catch { /* not in one */ }
+    net.gameId = null;
+    net.gameKey = null;
+    this.publicValley = null;
+    const seed = this.localSeed();
+    if (seed !== this.worldSeed) this.buildWorld(seed);
+    this.titleScreen = new TitleScreen(this);
+    this.screens.length = 0;
+    this.screens.push(this.titleScreen);
   }
 
   /**
@@ -384,7 +418,7 @@ class Game {
     net.gameKey = null;
     this.publicValley = null;
     this.titleScreen = null;
-    if (NetClient.codes) {
+    if (NetClient.codes || this.offlinePublic) {
       this.screens.length = 0;
       this.screens.push(new ValleysScreen(this));
       return;
@@ -581,7 +615,7 @@ class Game {
     // Several valleys on one server means choosing which before anything else.
     // With no server, or only one game, there is nothing to choose and the
     // lobby would just be a door to open on the way to the door.
-    if (NetClient.codes && !net.gameId) {
+    if ((NetClient.codes || this.offlinePublic) && !net.gameId) {
       this.screens.push(new ValleysScreen(this, this.valleyProblem));
     } else if (this.lobbyGames && this.lobbyGames.length) {
       this.screens.push(new LobbyScreen(this, this.lobbyGames));
@@ -3260,6 +3294,27 @@ function worldTime(day, t) {
  * a hover.
  */
 /**
+ * Keep a copy of the game on this device (sw.js), so the public site opens and
+ * plays with no connection, and say when a newer version has been fetched.
+ * Public site only: on the LAN a cached copy would just get in the way of
+ * somebody editing the game and reloading. `?nosw` skips it.
+ */
+function registerOffline(game) {
+  if (!('serviceWorker' in navigator) || new URLSearchParams(location.search).has('nosw')) return;
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data && e.data.t === 'updated') {
+      game.hud.toast('A new version of Cat Cafe is ready. Reload the page to get it.', 'good', 10);
+    }
+  });
+  navigator.serviceWorker.register('/sw.js').then((reg) => {
+    // Every start asks it to look for a newer version; the first start's
+    // install has just fetched one, so that ask finds nothing to do.
+    const ask = () => { const w = navigator.serviceWorker.controller || reg.active; if (w) w.postMessage({ t: 'check' }); };
+    if (reg.active) ask(); else navigator.serviceWorker.ready.then(ask);
+  }).catch(() => { /* no offline copy; the game works the same online */ });
+}
+
+/**
  * Holds the game still while a page overlay (an invite, a typed code) is open,
  * so a key pressed in the overlay doesn't also walk you somewhere.
  */
@@ -3276,16 +3331,23 @@ class ValleysScreen extends Screen {
   constructor(game, problem = null) {
     super();
     this.game = game;
-    this.valleys = deviceValleys();
+    // Opened with no connection: the shared valleys wait, this device's own plays.
+    this.offline = !!game.offlinePublic;
+    this.valleys = deviceValleys().map((v) => (this.offline ? { ...v, offline: true } : v));
+    // What the valley kept on this device has in it, if anything yet.
+    this.localSave = GameState.readSlot(game.localSeed());
     this.index = 0;
     this.busy = false;
     this.msg = problem || '';
     this.msgBad = !!problem;
-    this.refresh();
+    if (!problem && homeScreenTipDue()) {
+      this.msg = 'Tip: add Cat Cafe to your Home Screen (Share, then Add to Home Screen) so this device keeps your valleys.';
+    }
+    if (!this.offline) this.refresh();
   }
 
   get rows() {
-    return [...this.valleys, { make: true }, { join: true }];
+    return [...this.valleys, { local: true }, { make: true }, { join: true }];
   }
 
   refresh() {
@@ -3321,6 +3383,11 @@ class ValleysScreen extends Screen {
     if (!input.hit('use')) return;
     audio.sfx('ui_ok');
 
+    if (row.local) { this.done = true; this.game.playLocal(); return; }
+    if (this.offline && (row.make || row.join || row.id)) {
+      this.say("You need a connection for that. You can still play the valley on this device.", true);
+      return;
+    }
     if (row.make) {
       this.busy = true;
       this.say('Making your valley...');
@@ -3376,7 +3443,7 @@ class ValleysScreen extends Screen {
     const w = 340, h = 150;
     const x = Math.round((VIEW_W - w) / 2), y = 62;
     panel(ctx, x, y, w, h);
-    panelTitle(ctx, x, y, w, this.valleys.length ? 'Your valleys' : 'Welcome!');
+    panelTitle(ctx, x, y, w, this.offline ? 'No connection' : this.valleys.length ? 'Your valleys' : 'Welcome!');
 
     const listW = 160;
     const VIS = 6;
@@ -3393,9 +3460,12 @@ class ValleysScreen extends Screen {
         cursor(ctx, x + 10, ry + 1, this.t);
       }
       // A valley nobody has opened yet has no cafe name, but it has its code.
-      const full = row.make ? 'Start a new cafe' : row.join ? 'Join with a code' : (row.cafe || row.code || 'A new valley');
+      const full = row.local ? 'On this device'
+        : row.make ? 'Start a new cafe' : row.join ? 'Join with a code' : (row.cafe || row.code || 'A new valley');
       const label = full.length > 23 ? `${full.slice(0, 21)}..` : full;
-      const col = sel ? P.uiGold : row.make || row.join ? P.uiGreen : row.gone ? P.uiTextDim : P.uiText;
+      // With no connection, everything but this device's own valley is greyed.
+      const col = sel ? P.uiGold : this.offline && !row.local ? P.uiTextDim
+        : row.local || row.make || row.join ? P.uiGreen : row.gone ? P.uiTextDim : P.uiText;
       drawText(ctx, label, x + 22, ry + 1, { color: col, shadow: P.uiShadow });
       if (row.playing) drawText(ctx, '\u25cf', x + 8 + listW - 8, ry + 1, { color: P.uiGreen, shadow: P.uiShadow });
     }
@@ -3410,7 +3480,14 @@ class ValleysScreen extends Screen {
         ly += LINE_H;
       }
     };
-    if (row && row.make) {
+    if (row && row.local) {
+      const save = this.localSave;
+      const name = save && save.cafe && save.cafe.name;
+      line(name || 'Your own valley', P.uiGold);
+      ly += 2;
+      if (save && Number.isFinite(save.daysPlayed)) line(`Day ${save.daysPlayed + 1}`);
+      line('Kept on this device. It works with no connection, but nobody else can join it.');
+    } else if (row && row.make) {
       line('A brand new valley and an empty cafe, all yours.', P.uiText);
       ly += 4;
       line('Play on your own, or share its link with friends.');
@@ -3429,7 +3506,7 @@ class ValleysScreen extends Screen {
         line(`Day ${row.daysPlayed + 1}`);
         line(`${money(row.money)}   ${row.cats} cat${row.cats === 1 ? '' : 's'}`);
       }
-      if (row.offline) line("Couldn't reach the server.");
+      if (row.offline) line(this.offline ? 'Needs a connection.' : "Couldn't reach the server.");
       if (row.creator) line('You made this one.');
       if (row.playing) line(`${row.playing} playing now`, P.uiGreen);
     }

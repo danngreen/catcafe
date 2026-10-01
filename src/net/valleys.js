@@ -135,3 +135,53 @@ export async function revokeOthers(v) {
   if (r.ok) rememberValley({ ...v, code: r.code });
   return r;
 }
+
+// ---------------------------------------------------------------------------
+// This device's own valley, and what it knows about the site
+// ---------------------------------------------------------------------------
+
+const LOCAL_SEED_KEY = 'catcafe.localSeed';
+const PUBLIC_SITE_KEY = 'catcafe.publicSite';
+const TIP_KEY = 'catcafe.homeScreenTip';
+
+/**
+ * The seed of the valley kept on this device, which plays with no connection
+ * and is nobody else's. Each device gets its own. A device that already has a
+ * single-player save from before this (always the same seed, `legacySeed`)
+ * keeps that valley rather than losing it.
+ */
+export function localValleySeed(legacySeed, hasSaveFor) {
+  try {
+    const saved = Number(localStorage.getItem(LOCAL_SEED_KEY));
+    if (Number.isInteger(saved) && saved > 0) return saved;
+  } catch { /* no storage: a fresh one each visit */ }
+  const seed = hasSaveFor(legacySeed) ? legacySeed : 1 + Math.floor(Math.random() * (2 ** 31 - 2));
+  try { localStorage.setItem(LOCAL_SEED_KEY, String(seed)); } catch { /* this visit only */ }
+  return seed;
+}
+
+/**
+ * Has this device played on the public server? If so, opening the game with no
+ * connection shows its valleys (and the one it can play offline) rather than
+ * dropping straight into single player as an unconnected LAN game would.
+ */
+export function markPublicSite() { try { localStorage.setItem(PUBLIC_SITE_KEY, '1'); } catch { /* fine */ } }
+export function wasPublicSite() { try { return localStorage.getItem(PUBLIC_SITE_KEY) === '1'; } catch { return false; } }
+
+/**
+ * Should we suggest adding the game to the Home Screen? Only on an iPhone or
+ * iPad, only in Safari rather than the Home Screen app itself, and only once:
+ * Safari clears a website's storage after a week without a visit, and this
+ * device's list of valleys lives there, but a Home Screen app's doesn't.
+ */
+export function homeScreenTipDue() {
+  try {
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const standalone = navigator.standalone === true
+      || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    if (!ios || standalone || localStorage.getItem(TIP_KEY)) return false;
+    localStorage.setItem(TIP_KEY, '1');
+    return true;
+  } catch { return false; }
+}

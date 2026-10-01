@@ -65,6 +65,7 @@ const BUDGET = {
   pubjoin: 25000,
   pubrevoke: 25000,
   pubrevokepoll: 30000,
+  puboffline: 25000,
   door: 20000,
   doorblock: 25000,
   resumeplace: 25000,
@@ -228,7 +229,8 @@ const GROUPS = {
   slow: ['netidle', 'netping', 'netmute', 'netpollquiet', 'netidletitle'],
   // The public server: a valley of your own, joining with a code, and the creator
   // sending everybody else away. They run against a VALLEY_CODES=1 server.
-  public: ['pubstart', 'pubjoin', 'pubrevoke', 'pubrevokepoll'],
+  // puboffline last: it stops the public server to see the game open without it.
+  public: ['pubstart', 'pubjoin', 'pubrevoke', 'pubrevokepoll', 'puboffline'],
 };
 GROUPS.all = [...new Set([
   ...GROUPS.world, ...GROUPS.ui, ...GROUPS.cafe, ...GROUPS.quests,
@@ -522,6 +524,39 @@ async function main() {
     const out = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }, 12000);
     let summary = out.result?.value !== undefined ? String(out.result.value)
       : JSON.stringify(out.exceptionDetails || out.result || {});
+
+    // The offline test: with the game's copy cached by the scenario above, the
+    // server is stopped outright and the game reopened. That's a truer outage
+    // than the browser's network emulation, which needn't apply to the service
+    // worker's own requests. What should come up is the valleys screen in its
+    // offline form, with this device's own valley playable.
+    if (sc === 'puboffline' && out.result?.value !== undefined && !/FAIL/.test(summary)) {
+      const origin = PUBLIC_BASE;
+      try { publicProc.kill(); } catch { /* gone */ }
+      PUBLIC_BASE = null;                 // a later pub scenario starts another
+      await sleep(400);
+      const keep = problems.length;
+      await send('Page.navigate', { url: `${origin}/` });
+      const look = "(() => { const g = window.game; const s = g && g.screens[0];"
+        + " return g ? `${!!g.offlinePublic}|${s ? s.constructor.name : 'none'}|${s && s.rows ? s.rows.map((r) => (r.local ? 'local' : r.make ? 'make' : r.join ? 'join' : 'valley')).join(',') : ''}` : ''; })()";
+      let seen = '';
+      for (let i = 0; i < 100 && !seen.startsWith('true|ValleysScreen'); i++) {
+        await sleep(100);
+        seen = (await send('Runtime.evaluate', { expression: look, returnByValue: true }, 4000)).result?.value || '';
+      }
+      let local = '';
+      if (seen.startsWith('true|ValleysScreen')) {
+        const play = "(async () => { const g = window.game; g.playLocal(); await new Promise((r) => setTimeout(r, 300));"
+          + " return `${g.screens[0] ? g.screens[0].constructor.name : 'none'} seed=${g.worldSeed} net=${g.net.connected}`; })()";
+        local = (await send('Runtime.evaluate', { expression: play, returnByValue: true, awaitPromise: true }, 6000)).result?.value || '';
+      }
+      // With the server gone the page logs every request that can't connect;
+      // those are the point of the test. Only real errors count.
+      const errs = problems.splice(keep).filter((p) => p.startsWith('EXCEPTION'));
+      problems.push(...errs);
+      const ok = seen.startsWith('true|ValleysScreen') && /local/.test(seen) && local.startsWith('TitleScreen') && /net=false/.test(local);
+      summary = `${summary.trim()}\noffline: ${seen} -> ${local}${ok ? '' : '\nRESULT FAIL (offline)'}`;
+    }
 
     if (out.result?.value === undefined) {
       // Unresponsive: break in and grab a stack before giving up.

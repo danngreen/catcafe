@@ -6202,8 +6202,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
 
         if (SCRIPT === 'pubstart') {
           const rows = top().rows;
-          if (rows.length !== 2 || !rows[0].make || !rows[1].join) err(`a new device sees ${JSON.stringify(rows)}`);
-          top().index = 0;
+          if (rows.length !== 3 || !rows[0].local || !rows[1].make || !rows[2].join) err(`a new device sees ${JSON.stringify(rows)}`);
+          top().index = rows.findIndex((r) => r.make);
           await pressKey('Space');
           await until(() => topName() === 'TitleScreen', 6000);
           const mine = V.deviceValleys();
@@ -6303,7 +6303,45 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           if (!(after.find((v) => v.id === other.id) || {}).gone) err('the device list does not say gone');
           window.__cont = `revoked=${other.id} transport=${g.net.transport}`;
         }
-      } else if (SCRIPT === 'pubshot' || SCRIPT === 'pubshotinvite') {
+      } else if (SCRIPT === 'puboffline') {
+        // The first half of the offline test: the game's copy is on the device,
+        // whole. check.js then stops the server and opens the game again.
+        const err = (m) => window.__errors.push(m);
+        if (!('serviceWorker' in navigator)) err('no service worker support');
+        await until(async () => !!navigator.serviceWorker.controller, 6000);
+        const done = async () => {
+          for (const k of await caches.keys()) {
+            if (k.startsWith('catcafe-') && await (await caches.open(k)).match('/__complete__')) return k;
+          }
+          return null;
+        };
+        let name = null;
+        for (let i = 0; i < 80 && !name; i++) { name = await done(); if (!name) await wait(100); }
+        if (!name) err('the game was never fully cached');
+        else {
+          const list = await fetch('/sw-assets.json').then((r) => r.json());
+          const cache = await caches.open(name);
+          const missing = [];
+          for (const f of list.files) if (!(await cache.match(f))) missing.push(f);
+          if (missing.length) err(`not cached: ${missing.slice(0, 5).join(', ')}`);
+          if (!name.endsWith(list.version)) err(`cached ${name}, but the version is ${list.version}`);
+          // And something to come back to: this device's own valley, started.
+          const V = await import('../src/net/valleys.js');
+          if (!V.wasPublicSite()) err('the device does not remember the public site');
+          // An update: make the copy on the device look like an older version,
+          // then ask, as the game does when it starts. The real one should be
+          // fetched whole, the old one dropped, and the player told to reload.
+          await caches.delete(name);
+          await (await caches.open('catcafe-000000000000')).put('/__complete__', new Response('1'));
+          navigator.serviceWorker.controller.postMessage({ t: 'check' });
+          const told = () => g.hud.toasts.some((t) => /new version/.test(t.text));
+          await until(told, 8000);
+          if (!told()) err('no reload toast after an update');
+          const keys = (await caches.keys()).filter((k) => k.startsWith('catcafe-'));
+          if (keys.length !== 1 || keys[0] !== name) err(`after the update the caches are ${keys.join(', ')}`);
+          window.__cont = `cache=${name} files=${list.files.length} updated=${told()}`;
+        }
+      } else if (SCRIPT === 'pubshot' || SCRIPT === 'pubshotinvite' || SCRIPT === 'pubshotoffline') {
         // Pictures, not checks: the valleys screen with a couple of valleys on
         // it, or the invite card. Take with --shot.
         const V = await import('../src/net/valleys.js');
@@ -6311,9 +6349,11 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const mine = await V.makeValley();
         const other = await fetch('/valleys', { method: 'POST', body: '{}' }).then((r) => r.json());
         await V.joinValley(other.code);
-        if (SCRIPT === 'pubshot') {
+        if (SCRIPT === 'pubshot' || SCRIPT === 'pubshotoffline') {
+          if (SCRIPT === 'pubshotoffline') g.offlinePublic = true;
           g.backToLobby();
-          await until(() => g.screens[0] && g.screens[0].valleys && g.screens[0].valleys.every((v) => 'started' in v), 4000);
+          await until(() => g.screens[0] && g.screens[0].valleys && g.screens[0].valleys.every((v) => 'started' in v || v.offline), 4000);
+          if (SCRIPT === 'pubshotoffline') g.screens[0].index = g.screens[0].rows.findIndex((r) => r.local);
           await settle();
         } else {
           await g.enterGame(mine.id, mine.key);

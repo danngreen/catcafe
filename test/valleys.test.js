@@ -310,3 +310,29 @@ test('the LAN server is unchanged: every valley listed, no keys needed', async (
   assert.equal((await s.call('GET', '/package.json')).status, 200);
   assert.ok(readdirSync(s.dir).includes('valley-001.json'));
 });
+
+// ------------------------------------------------------- this device's valley
+
+test("a device's own valley: its own seed, kept, and an old save keeps its world", async () => {
+  const store = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+  };
+  try {
+    const { localValleySeed } = await import('../src/net/valleys.js');
+    const LEGACY = 20260724;
+    // A new device: a seed of its own, the same one every time after.
+    const a = localValleySeed(LEGACY, () => false);
+    assert.notEqual(a, LEGACY);
+    assert.ok(Number.isInteger(a) && a > 0);
+    assert.equal(localValleySeed(LEGACY, () => false), a);
+    // A device with a single-player save from before: it keeps that valley.
+    store.clear();
+    assert.equal(localValleySeed(LEGACY, (seed) => seed === LEGACY), LEGACY);
+    assert.equal(localValleySeed(LEGACY, () => false), LEGACY);
+  } finally {
+    delete globalThis.localStorage;
+  }
+});
