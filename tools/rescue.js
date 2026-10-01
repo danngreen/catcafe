@@ -17,6 +17,14 @@
 //   node tools/rescue.js lock              no new valleys, and none deleted
 //   node tools/rescue.js unlock            allow both again
 //
+// On the public server (VALLEY_CODES=1) there are also:
+//
+//   node tools/rescue.js links             every valley's invite link
+//   node tools/rescue.js stats             how busy the server is
+//   node tools/rescue.js pin <valley>      never expire this one (pin <valley> off to undo)
+//   node tools/rescue.js creator <valley>  a new creator link, for somebody whose
+//                                          device lost theirs
+//
 // Nothing is announced to the players. The money on their screens just goes
 // up, and a sneezing cat stops sneezing.
 
@@ -69,8 +77,27 @@ async function main() {
     for (const g of r.games) {
       console.log(`${g.id}  ${g.cafe || '(not opened)'}  day ${g.day}  money ${g.money}  cats ${g.cats}  ${g.playing} playing`);
     }
+  } else if (cmd === 'links') {
+    const r = await call('GET', '/links');
+    if (!r.valleys) { console.error(r.why || 'only on the public server (VALLEY_CODES=1)'); process.exit(1); }
+    for (const v of r.valleys) {
+      console.log(`${v.id}  ${v.link || '(no code)'}  ${v.cafe || '(not opened)'}  day ${v.day}${v.pinned ? '  pinned' : ''}${v.playing ? `  ${v.playing} playing` : ''}`);
+    }
+  } else if (cmd === 'stats') {
+    const r = await call('GET', '/stats');
+    console.log(`${r.valleys} valleys (${r.createdToday} made today, ${r.archived} archived), `
+      + `${r.open} open, ${r.playing} playing, ${Math.round(r.savesBytes / 1024)} KB of saves`);
+  } else if (cmd === 'pin' || cmd === 'creator') {
+    if (!amount) { console.error(`which valley? e.g. node tools/rescue.js ${cmd} 001`); process.exit(1); }
+    const q = `?game=${encodeURIComponent(amount)}`;
+    const r = cmd === 'pin'
+      ? await call('POST', `/pin${q}&on=${args[2] === 'off' ? 0 : 1}`, {})
+      : await call('POST', `/creator${q}`, {});
+    if (!r.ok) { console.error(`not done: ${r.why}`); process.exit(1); }
+    if (cmd === 'pin') console.log(args[2] === 'off' ? `Valley ${amount} can expire again.` : `Valley ${amount} is pinned. It will never expire.`);
+    else console.log(`Open this on the creator's device to make it the creator again:\n  ${r.link}`);
   } else {
-    console.error('commands: status, money <n>, heal, lock, unlock, games   (and --game NNN)');
+    console.error('commands: status, money <n>, heal, lock, unlock, games, links, stats, pin <valley>, creator <valley>   (and --game NNN)');
     process.exit(1);
   }
 }

@@ -60,6 +60,13 @@ export class Room {
     // tile, a chair in a room the other plan knocked down.
     this.builder = null;
     this.dirty = false;
+    // Who may come in, on the public server: the invite code and the hashed
+    // device keys (see access.js). Null on the LAN, where everyone may.
+    this.access = null;
+    // When somebody was last in here, for expiring valleys nobody plays.
+    this.lastPlayed = null;
+    // Since when nobody has been connected, so an idle valley can be put away.
+    this.emptySince = Date.now();
     this.lastTick = Date.now();
     this.sinceClock = 0;
     this.sinceSave = 0;
@@ -475,6 +482,9 @@ export class Room {
     }
 
     const joined = [...this.players.values()].filter((p) => p.joined);
+    if (joined.length) this.lastPlayed = now;
+    if (this.players.size) this.emptySince = null;
+    else if (!this.emptySince) this.emptySince = now;
 
     // Has the owner gone quiet, or has the wait for a dropped one run out?
     const owner = this.players.get(this.owner);
@@ -557,6 +567,16 @@ export class Room {
     this.closed = true;
   }
 
+  /**
+   * Put an idle valley away: write it out and stop its clock. Nobody is lost
+   * by this; the next person to come in loads it again, exactly as it was.
+   */
+  unload() {
+    this.persist(!!this.access);
+    clearInterval(this.timer);
+    this.closed = true;
+  }
+
   // ------------------------------------------------------------- persistence
 
   restore() {
@@ -571,20 +591,28 @@ export class Room {
       this.clock = WorldClock.from(data.clock);
       // A save from before this was kept is taken to be up to date.
       this.cashedDay = Number.isFinite(data.cashedDay) ? data.cashedDay : this.clock.day;
+      this.access = data.access || null;
+      this.lastPlayed = data.lastPlayed || null;
       if (this.world) console.log(`[room] resumed day ${this.clock.day} from ${this.savePath}`);
     } catch { /* no save yet */ }
   }
 
-  persist() {
-    if (!this.savePath || !this.world || !this.dirty) return;
+  /**
+   * Write the valley out if anything changed. `force` writes it regardless,
+   * started or not, which is what a change to who may come in needs: a new
+   * device key must not wait for somebody to buy a muffin.
+   */
+  persist(force = false) {
+    if (!this.savePath) return;
+    if (!force && (!this.world || !this.dirty)) return;
     this.dirty = false;
+    const data = { seed: this.seed, world: this.world, clock: this.clock.save(), cashedDay: this.cashedDay };
+    if (this.access) { data.access = this.access; data.lastPlayed = this.lastPlayed; }
     // Write beside the target and rename, so a crash mid-write can't leave a
     // half-written valley where the real one was.
     const tmp = `${this.savePath}.tmp`;
     try {
-      writeFileSync(tmp, JSON.stringify({
-        seed: this.seed, world: this.world, clock: this.clock.save(), cashedDay: this.cashedDay,
-      }));
+      writeFileSync(tmp, JSON.stringify(data));
       renameSync(tmp, this.savePath);
     } catch (err) {
       console.warn('[room] could not save the valley:', err.message);

@@ -10,6 +10,8 @@ import { upgrade } from './server/ws.js';
 import { PollHub } from './server/poll.js';
 import { Games } from './server/games.js';
 import { currentHoliday, watchHoliday } from './server/holiday.js';
+import { PublicValleys, MAX_PLAYERS } from './server/valleys.js';
+import { hashKey } from './server/access.js';
 
 const ROOT = new URL('.', import.meta.url).pathname;
 const PORT = Number(process.env.PORT || 8080);
@@ -37,8 +39,21 @@ const TYPES = {
   '.ico': 'image/x-icon',
 };
 
-const games = new Games(SAVES);
+// The public server (VALLEY_CODES=1): valleys have invite codes, nothing lists
+// them all, and only the game's own files are served. Unset, it's the LAN
+// server it has always been. See server/valleys.js.
+const PUBLIC = process.env.VALLEY_CODES === '1';
+// The address players use, for the links the admin port prints.
+const PUBLIC_URL = (process.env.PUBLIC_URL || 'https://catcafe.cafe').replace(/\/$/, '');
+
+const games = new Games(SAVES, { codes: PUBLIC });
 const polls = new PollHub();
+const front = PUBLIC ? new PublicValleys(games) : null;
+
+// What the public server will hand out: the page and the game, and nothing else
+// in this folder. The LAN server serves the whole tree, saves and all, which is
+// fine in a house and not on the internet.
+const SERVED = /^\/(index\.html|styles\.css|manifest\.webmanifest|\.deployed|favicon\.ico)$|^\/(icons|src)\//;
 
 // With a room full of people who have never played, "New valley" and the
 // delete key are two ways to end up somewhere nobody meant to be. Locking the
@@ -47,14 +62,41 @@ const polls = new PollHub();
 const lobby = { locked: process.env.LOBBY_LOCK === '1' };
 
 // A single-valley save from before there were several becomes game 001.
-const moved = games.adoptLegacy(SAVES ? join(ROOT, 'valley.json') : null);
-// There is always somewhere to play, so a fresh install has a game to join.
-if (!games.ids().length) games.create();
+const moved = PUBLIC ? null : games.adoptLegacy(SAVES ? join(ROOT, 'valley.json') : null);
+// There is always somewhere to play on the LAN, so a fresh install has a game
+// to join. The public server starts empty: valleys are made by the people who
+// play in them.
+if (!PUBLIC && !games.ids().length) games.create();
 
-/** The game a request is asking for, defaulting to the first one. */
+/**
+ * The game a request is asking for. On the LAN, defaulting to the first one.
+ * On the public server, only with a device key that valley knows, and never a
+ * default: `{ room, keyHash }`, or null.
+ */
 function gameFor(url) {
-  const want = new URL(url, 'http://x').searchParams.get('game');
-  return games.get(want || DEFAULT_GAME) || games.get(games.ids()[0]);
+  const q = new URL(url, 'http://x').searchParams;
+  if (PUBLIC) {
+    const id = q.get('game'), key = q.get('key');
+    if (!games.roleOf(id, key)) return null;
+    const room = games.get(id);
+    return room ? { room, keyHash: hashKey(key) } : null;
+  }
+  const room = games.get(q.get('game') || DEFAULT_GAME) || games.get(games.ids()[0]);
+  return room ? { room, keyHash: null } : null;
+}
+
+/** Is this request from this machine itself, not through Caddy? */
+const fromHere = (req) => !req.headers['x-forwarded-for']
+  && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+
+/** The game's page, with links like /v/plum-otter-4271 still finding its files. */
+let pageCache = null;
+async function pageForLink() {
+  if (!pageCache) {
+    const html = await readFile(join(ROOT, 'index.html'), 'utf8');
+    pageCache = html.replace(/<head>/i, '<head>\n<base href="/">');
+  }
+  return pageCache;
 }
 
 // Closing the laptop lid should not cost anyone their afternoon.
@@ -70,13 +112,33 @@ const server = createServer(async (req, res) => {
     res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify(body, null, 2));
   };
-  if (path === '/status') {
-    const room = gameFor(req.url);
+  // On the public server, only from the machine itself: it names everybody in.
+  if (path === '/status' && (!PUBLIC || fromHere(req))) {
+    const room = PUBLIC ? games.get(new URL(req.url, 'http://x').searchParams.get('game'))
+      : (gameFor(req.url) || {}).room;
     json(room ? room.status() : { error: 'no such game' }, room ? 200 : 404);
     return;
   }
+  if (PUBLIC) {
+    if (await front.handle(req, path, json)) return;
+    // An invite link opens the game; the page reads the code from the address.
+    if (/^\/v\/[^/]+\/?$/.test(path) && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': TYPES['.html'], 'Cache-Control': 'no-cache' });
+      res.end(await pageForLink());
+      return;
+    }
+  }
   // What the lobby lists. Plain HTTP and no socket, so a player can read the
-  // stats of every valley before deciding which one to walk into.
+  // stats of every valley before deciding which one to walk into. The public
+  // server answers with no valleys at all: nobody gets to browse other people's.
+  if (path === '/games' && req.method === 'GET' && PUBLIC) {
+    json({ games: [], locked: true, codes: true, holiday: currentHoliday() });
+    return;
+  }
+  if (PUBLIC && (path === '/games/new' || path.startsWith('/games/'))) {
+    json({ ok: false, why: 'not on this server' }, 404);
+    return;
+  }
   if (path === '/games' && req.method === 'GET') {
     json({ games: games.list(), locked: lobby.locked, holiday: currentHoliday() });
     return;
@@ -104,9 +166,15 @@ const server = createServer(async (req, res) => {
     req.on('end', () => {
       let body;
       try { body = JSON.parse(raw || '{}'); } catch { body = {}; }
-      const room = gameFor(req.url);
-      if (!room) { json({ error: 'no such game' }, 404); return; }
-      const reply = polls.handle(body, (conn) => room.attach(conn));
+      const g = gameFor(req.url);
+      if (!g) { json({ error: 'no such game' }, PUBLIC ? 403 : 404); return; }
+      const { room, keyHash } = g;
+      // A new connection to a full valley is turned away; one already in is fine.
+      if (PUBLIC && !body.id && room.players.size >= MAX_PLAYERS) {
+        json({ error: 'full', why: 'That valley is full right now.' }, 503);
+        return;
+      }
+      const reply = polls.handle(body, (conn) => { conn.keyHash = keyHash; room.attach(conn); });
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify(reply));
     });
@@ -114,7 +182,16 @@ const server = createServer(async (req, res) => {
   }
 
   if (path === '/') path = '/index.html';
-  const file = join(ROOT, normalize(path).replace(/^(\.\.[/\\])+/, ''));
+  // Checked on the path as it will actually be read: an escaped slash in the
+  // address ("/src/..%2Fsaves/...") only becomes a way out once it's decoded and
+  // normalized, so the check has to come after both.
+  const clean = normalize(path).replace(/^(\.\.[/\\])+/, '');
+  if (PUBLIC && !SERVED.test(clean)) {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('404');
+    return;
+  }
+  const file = join(ROOT, clean);
   try {
     const body = await readFile(file);
     res.writeHead(200, {
@@ -131,10 +208,18 @@ const server = createServer(async (req, res) => {
 server.on('upgrade', (req, socket, head) => {
   const path = new URL(req.url, 'http://x').pathname;
   if (path !== '/ws') { socket.destroy(); return; }
-  const room = gameFor(req.url);
-  if (!room) { socket.destroy(); return; }
+  const g = gameFor(req.url);
+  if (!g) {
+    if (PUBLIC) socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+    else socket.destroy();
+    return;
+  }
+  if (PUBLIC && g.room.players.size >= MAX_PLAYERS) {
+    socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');
+    return;
+  }
   const ws = upgrade(req, socket, head);
-  if (ws) room.attach(ws);
+  if (ws) { ws.keyHash = g.keyHash; g.room.attach(ws); }
 });
 
 // The host's back door, for tools/rescue.js: more money in the till, every cat
@@ -176,6 +261,31 @@ if (ADMIN_PORT) {
       json({ ok: true, locked: lobby.locked });
       return;
     }
+    // The public server's books: every valley's link, how busy it is, and the
+    // two things only you can do — pin a valley so it never expires, and give a
+    // creator who lost their device a new creator key.
+    if (PUBLIC && url.pathname === '/links' && req.method === 'GET') {
+      json({ valleys: games.links().map((v) => ({ ...v, link: v.code ? `${PUBLIC_URL}/v/${v.code}` : null })) });
+      return;
+    }
+    if (url.pathname === '/stats' && req.method === 'GET') {
+      json({ public: PUBLIC, ...games.stats() });
+      return;
+    }
+    if (PUBLIC && url.pathname === '/pin' && req.method === 'POST') {
+      const id = url.searchParams.get('game');
+      const ok = games.pin(id, url.searchParams.get('on') !== '0');
+      json(ok ? { ok, id } : { ok: false, why: `no valley ${id}` }, ok ? 200 : 404);
+      return;
+    }
+    if (PUBLIC && url.pathname === '/creator' && req.method === 'POST') {
+      const id = url.searchParams.get('game');
+      const key = games.addCreator(id);
+      if (!key) { json({ ok: false, why: `no valley ${id}` }, 404); return; }
+      console.log(`[rescue] valley ${id}: a new creator key was handed out`);
+      json({ ok: true, id, link: `${PUBLIC_URL}/v/${games.accessOf(id).code}#creator=${key}` });
+      return;
+    }
     if (url.pathname !== '/rescue' || req.method !== 'POST') { json({ ok: false, why: 'not here' }, 404); return; }
     let raw = '';
     req.on('data', (c) => { raw += c; if (raw.length > 1e4) req.destroy(); });
@@ -204,6 +314,20 @@ function lanAddresses() {
   return out;
 }
 
+// The public server may hold thousands of valleys: put away the ones nobody is
+// in, and let go of the ones nobody wants (see Games.expire).
+if (PUBLIC) {
+  setInterval(() => games.sweep(), 60 * 1000).unref();
+  const expire = () => {
+    const out = games.expire();
+    if (out.deleted.length || out.archived.length || out.purged) {
+      console.log(`[valleys] expired: ${out.deleted.length} never started, ${out.archived.length} archived, ${out.purged} archives purged`);
+    }
+  };
+  expire();
+  setInterval(expire, 6 * 60 * 60 * 1000).unref();
+}
+
 // A holiday starting or ending mid-session: tell everyone who's in, and let
 // them reload when it suits them.
 watchHoliday((h) => {
@@ -212,11 +336,15 @@ watchHoliday((h) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`Cat Cafe — http://${HOST || 'localhost'}:${PORT}`);
+  console.log(`Cat Cafe — http://${HOST || 'localhost'}:${PORT}${PUBLIC ? ` (public: valley codes, ${PUBLIC_URL})` : ''}`);
   if (!HOST) for (const addr of lanAddresses()) console.log(`  on this network: http://${addr}:${PORT}`);
   if (moved) console.log(`  moved your old valley.json to ${moved}`);
-  for (const g of games.list()) {
-    console.log(`  game ${g.id}: ${g.started ? `${g.cafe || 'a cafe'}, day ${g.day}` : 'not started yet'}`);
+  // The public server may have thousands; a count is enough there.
+  if (PUBLIC) console.log(`  ${games.ids().length} valleys`);
+  else {
+    for (const g of games.list()) {
+      console.log(`  game ${g.id}: ${g.started ? `${g.cafe || 'a cafe'}, day ${g.day}` : 'not started yet'}`);
+    }
   }
   console.log(SAVES ? `  valleys kept in ${SAVES}` : '  not saving anything');
   const h = currentHoliday();
