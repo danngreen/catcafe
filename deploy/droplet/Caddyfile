@@ -5,10 +5,14 @@
 # certificates itself; the email is only for Let's Encrypt to write to if one
 # is about to expire and can't be renewed.
 #
-# Every game sits behind the same wall: /login and /logout go to the sign-in
-# service, and everything else is let through only if that service says the
-# visitor has signed in. WebSockets go through the same check and then the
-# game's /ws is proxied as normal.
+# A game can sit behind the family's wall (`gated`): /login and /logout go to
+# the sign-in service, and everything else is let through only if that service
+# says the visitor has signed in. WebSockets go through the same check and then
+# the game's /ws is proxied as normal.
+#
+# Or it can be open to everyone (`open`), which is how the public Cat Cafe runs
+# (setup.sh --public): its invite codes are the way into a valley, and the game
+# server keeps its own limits on top.
 
 {
 	email you@example.com
@@ -36,6 +40,18 @@
 	}
 }
 
+# The open kind: no sign-in, the same headers.
+(open) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	reverse_proxy {args[0]}
+}
+
+# setup.sh --public changes `gated` to `open` here, and adds a redirect block
+# below for each name given with --redirect.
 catcafe.example.com {
 	import gated 127.0.0.1:8080
 }

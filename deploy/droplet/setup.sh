@@ -15,6 +15,9 @@
 #   --password                     set a new password
 #   --new-invite                   retire the invite link, make a new one
 #   --new-secret                   sign every device out
+#   --public                       open the game to everyone, with invite codes
+#                                  instead of the password (--private undoes it)
+#   --redirect old.example,www.x   names that redirect to --domain
 #   --force                        deploy even with uncommitted changes
 #
 # See deploy/droplet/README.md for the whole story, DigitalOcean settings
@@ -29,9 +32,9 @@ while [ $# -gt 0 ]; do
     --ip) IP=$2; shift ;;
     --force) FORCE=--force ;;
     --domain) DOMAIN=$2; PASS+=("$1" "$2"); shift ;;
-    --email|--cookie-domain|--title) PASS+=("$1" "$2"); shift ;;
-    --password|--new-invite|--new-secret) PASS+=("$1") ;;
-    -h|--help) sed -n '3,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --email|--cookie-domain|--title|--redirect) PASS+=("$1" "$2"); shift ;;
+    --password|--new-invite|--new-secret|--public|--private) PASS+=("$1") ;;
+    -h|--help) sed -n '3,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "setup.sh: unknown option $1" >&2; exit 2 ;;
   esac
   shift
@@ -65,10 +68,11 @@ say "Starting it …"
 # and a certificate, so on a brand new name it can take a minute or two.
 code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "https://$DOMAIN/" || true)
 case "$code" in
+  200) say "https://$DOMAIN is up and open to everyone." ;;
   302) say "https://$DOMAIN is up and asking for the password." ;;
   000) warn "https://$DOMAIN isn't answering yet — usually DNS still settling or the certificate"
        warn "still being issued. Try it in a few minutes; nothing needs re-running." ;;
-  *) warn "https://$DOMAIN answered $code, not the expected redirect to the sign-in page." ;;
+  *) warn "https://$DOMAIN answered $code, which isn't the game or its sign-in page." ;;
 esac
 
 say ""

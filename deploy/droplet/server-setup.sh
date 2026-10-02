@@ -13,10 +13,14 @@
 #       [--password]                     set a new password
 #       [--new-invite]                   retire the invite link, make a new one
 #       [--new-secret]                   sign every device out
+#       [--public]                       open the game to everyone, with invite
+#                                        codes (VALLEY_CODES=1) instead of the
+#                                        family password; --private undoes it
+#       [--redirect a.example,b.example] names that redirect to --domain
 
 set -euo pipefail
 
-DOMAIN= EMAIL= COOKIE_DOMAIN= TITLE= NEWPW= NEWINVITE= NEWSECRET=
+DOMAIN= EMAIL= COOKIE_DOMAIN= TITLE= NEWPW= NEWINVITE= NEWSECRET= PUBLIC= REDIRECT=
 while [ $# -gt 0 ]; do
   case "$1" in
     --domain) DOMAIN=$2; shift ;;
@@ -26,6 +30,9 @@ while [ $# -gt 0 ]; do
     --password) NEWPW=1 ;;
     --new-invite) NEWINVITE=1 ;;
     --new-secret) NEWSECRET=1 ;;
+    --public) PUBLIC=1 ;;
+    --private) PUBLIC=0 ;;
+    --redirect) REDIRECT=$2; shift ;;
     *) echo "server-setup.sh: unknown option $1" >&2; exit 2 ;;
   esac
   shift
@@ -41,10 +48,15 @@ CONF=/etc/games-setup.conf
 if [ -f "$CONF" ]; then
   # shellcheck disable=SC1090
   . "$CONF"
+  WAS_PUBLIC=${SAVED_PUBLIC:-}
   DOMAIN=${DOMAIN:-$SAVED_DOMAIN} EMAIL=${EMAIL:-$SAVED_EMAIL}
+  PUBLIC=${PUBLIC:-${SAVED_PUBLIC:-}} REDIRECT=${REDIRECT:-${SAVED_REDIRECT:-}}
 fi
+WAS_PUBLIC=${WAS_PUBLIC:-}
+if [ "$PUBLIC" = 0 ]; then PUBLIC=; fi
 [ -n "$DOMAIN" ] && [ -n "$EMAIL" ] || die "Need --domain and --email the first time."
-printf 'SAVED_DOMAIN=%q\nSAVED_EMAIL=%q\n' "$DOMAIN" "$EMAIL" > "$CONF"
+printf 'SAVED_DOMAIN=%q\nSAVED_EMAIL=%q\nSAVED_PUBLIC=%q\nSAVED_REDIRECT=%q\n' \
+  "$DOMAIN" "$EMAIL" "$PUBLIC" "$REDIRECT" > "$CONF"
 HERE=$(cd "$(dirname "$0")" && pwd)
 for f in auth.js Caddyfile catcafe.service games-auth.service; do
   [ -f "$HERE/$f" ] || die "Missing $HERE/$f — copy the whole deploy/droplet folder up."
@@ -162,6 +174,24 @@ if [ -n "$TITLE" ]; then envset AUTH_TITLE "$TITLE"; fi
 
 install -m 644 "$HERE/games-auth.service" /etc/systemd/system/games-auth.service
 install -m 644 "$HERE/catcafe.service" /etc/systemd/system/catcafe.service
+
+# Public or family-only. Public is the same game server with VALLEY_CODES=1:
+# invite codes instead of a lobby, and its own limits. It's kept in a drop-in so
+# catcafe.service itself stays the same either way.
+DROPIN=/etc/systemd/system/catcafe.service.d
+if [ -n "$PUBLIC" ]; then
+  if [ -z "$WAS_PUBLIC" ] && [ -d /home/gamehost/catcafe/saves ]; then
+    # Going public gives every existing valley an invite code, written into its
+    # file. Keep a copy of them as they were first.
+    BACKUP=/root/catcafe-saves-before-public-$(date +%Y%m%d-%H%M%S)
+    cp -a /home/gamehost/catcafe/saves "$BACKUP"
+    say "Going public. The valleys as they were are copied to $BACKUP"
+  fi
+  install -d "$DROPIN"
+  printf '[Service]\nEnvironment=VALLEY_CODES=1\nEnvironment=PUBLIC_URL=https://%s\n' "$DOMAIN" > "$DROPIN/public.conf"
+else
+  rm -f "$DROPIN/public.conf"
+fi
 systemctl daemon-reload
 systemctl enable games-auth catcafe >/dev/null 2>&1
 systemctl restart games-auth
@@ -175,6 +205,16 @@ fi
 
 sed -e "s/catcafe\.example\.com/$DOMAIN/g" -e "s/you@example\.com/$EMAIL/g" \
   "$HERE/Caddyfile" > /etc/caddy/Caddyfile
+# Public: no sign-in in front of the game; its invite codes are the way in.
+if [ -n "$PUBLIC" ]; then
+  sed -i "s/import gated 127\.0\.0\.1:8080/import open 127.0.0.1:8080/" /etc/caddy/Caddyfile
+fi
+# Old or extra names go to the real one, keeping the rest of the address, so an
+# old bookmark or an invite link sent before the move still lands.
+for name in ${REDIRECT//,/ }; do
+  [ -n "$name" ] || continue
+  printf '\n%s {\n\tredir https://%s{uri} permanent\n}\n' "$name" "$DOMAIN" >> /etc/caddy/Caddyfile
+done
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 \
   || { caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile; die "The Caddyfile didn't validate."; }
 systemctl reload caddy || systemctl restart caddy
@@ -192,5 +232,10 @@ elif [ -n "$ME" ] && [ "$POINTS" != "$ME" ]; then
 fi
 
 say ""
-say "Done. Invite link (signs a device in with one tap — keep it in the family):"
-say "  https://$DOMAIN/login?key=$(envget AUTH_INVITE)"
+if [ -n "$PUBLIC" ]; then
+  say "Done. https://$DOMAIN is open to everyone, with invite codes."
+  say "Each valley's link: ssh gamehost@<this droplet> 'cd catcafe && node tools/rescue.js links'"
+else
+  say "Done. Invite link (signs a device in with one tap — keep it in the family):"
+  say "  https://$DOMAIN/login?key=$(envget AUTH_INVITE)"
+fi

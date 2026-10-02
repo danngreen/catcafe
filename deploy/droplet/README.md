@@ -124,6 +124,44 @@ After that, `CATCAFE_HOST=catcafe-public deploy/push.sh` works.
 `tools/rescue.js` works the same way as on the Pi, over ssh:
 `ssh catcafe-public 'cd catcafe && node tools/rescue.js …'`.
 
+## Going public: invite codes instead of a password
+
+The game can be opened to everyone instead of sitting behind the family
+password. Each valley then has its own invite link (catcafe.cafe/v/plum-otter-4271),
+anybody can start a cafe of their own, and nobody can see a valley without its
+link. The game server limits how fast valleys can be made and codes guessed.
+
+```bash
+deploy/droplet/setup.sh --ip 143.198.168.75 --domain catcafe.cafe --public \
+  --redirect catcafe.4ms.info,www.catcafe.cafe
+```
+
+That run:
+
+- copies the valleys as they are to `/root/catcafe-saves-before-public-<date>`
+  on the droplet, the first time only;
+- starts the game with `VALLEY_CODES=1` (a drop-in,
+  `/etc/systemd/system/catcafe.service.d/public.conf`);
+- gives every existing valley an invite code and pins it so it never expires;
+- serves catcafe.cafe with no sign-in, and redirects the `--redirect` names to
+  it (old links keep working).
+
+Then print each valley's link and send them round:
+
+```bash
+ssh gamehost@143.198.168.75 'cd catcafe && node tools/rescue.js links'
+```
+
+Each person opens their valley's link once on each device, and the device
+remembers it from then on. Running setup again later keeps it public;
+`--private` puts the password back. Other things for the public server:
+
+| To | Run on the droplet (`ssh gamehost@...`, then `cd catcafe`) |
+| --- | --- |
+| See how busy it is | `node tools/rescue.js stats` |
+| Stop a valley from ever expiring | `node tools/rescue.js pin <valley>` |
+| Give a creator their buttons back on a new device | `node tools/rescue.js creator <valley>`, then send them the link it prints |
+
 ## Passwords, invites, signing out
 
 Run setup again with one of these:
