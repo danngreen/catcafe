@@ -60,7 +60,11 @@ async function loadContent() {
   const bust = `?t=${Date.now()}`;
   const q = await import(pathToFileURL(FILES.quests).href + bust);
   const v = await import(pathToFileURL(FILES.villagers).href + bust);
-  const items = await import(pathToFileURL(join(ROOT, 'src/game/items.js')).href + bust);
+  // The items straight from itemdata.js, not through items.js: the bust only
+  // reaches the file named, and items.js would hand back whatever itemdata.js
+  // said the first time it was loaded. New items would be missing, and a save
+  // would write the file without them.
+  const items = await import(pathToFileURL(FILES.items).href + bust);
   const places = await import(pathToFileURL(join(ROOT, 'src/world/places.js')).href + bust);
   const chars = await import(pathToFileURL(join(ROOT, 'src/art/chars.js')).href + bust);
   const objects = await import(pathToFileURL(join(ROOT, 'src/art/objects.js')).href + bust);
@@ -74,14 +78,14 @@ async function loadContent() {
   return {
     quests: q.QUESTS,
     villagers: v.VILLAGERS,
-    items: items.ITEMS,
+    items: items.ITEM_DATA,
     // Everything the forms need to offer a choice rather than a text box.
     options: {
       species: chars.SPECIES_LIST,
       coats: Object.keys(chars.COATS || {}),
       towns: places.TOWNS.map((t) => ({ id: t.id, name: t.name })),
       shops: places.SHOPS.map((s) => ({ id: s.id, name: s.name, keeper: s.keeper })),
-      categories: [...new Set(Object.values(items.ITEMS).map((i) => i.cat))].filter(Boolean),
+      categories: [...new Set(Object.values(items.ITEM_DATA).map((i) => i.cat))].filter(Boolean),
       icons: Object.keys(icons.ICONS || {}).sort(),
       furniture: Object.keys(objects.OBJECTS).sort(),
       objectiveTypes: OBJECTIVE_TYPES,
