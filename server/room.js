@@ -190,6 +190,17 @@ export class Room {
         console.log(`[room] ${player.name} joined (${this.count} playing)`);
         break;
       }
+      // A change of clothes (or costume) mid-game. Everyone else sees it at
+      // once rather than at the next roster, five seconds on. Kept small and
+      // plain: it's only ever species, fur, shirt and costume.
+      case 'look': {
+        const look = msg.look;
+        if (!player.joined || !look || typeof look !== 'object' || Array.isArray(look)) break;
+        if (JSON.stringify(look).length > 300) break;
+        player.look = look;
+        this.broadcast({ t: 'look', id: player.id, look }, player.id);
+        break;
+      }
       case 'move': {
         player.x = Number(msg.x) || 0;
         player.y = Number(msg.y) || 0;

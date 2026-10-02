@@ -20,8 +20,8 @@ import { liveQuests, objectiveText, progressText } from '../game/quests.js';
 import { HIRE_POOL, shiftHours, fmtHour } from '../game/cafe.js';
 import { shopOpen, hoursText, HOUR_SECONDS } from '../game/time.js';
 import { timeFraction, timeLeft, fullValue, orderText } from '../game/deliveries.js';
-import { lookOf } from '../game/entities.js';
-import { charSprite } from '../art/chars.js';
+import { lookOf, wornCostume, playerCostumes } from '../game/entities.js';
+import { charSprite, CLOTHES, COSTUMES, costumeHidesShirt } from '../art/chars.js';
 
 /** Above this, buying asks first. */
 export const BIG_SPEND = 500;
@@ -1757,10 +1757,104 @@ export class FriendsScreen extends Screen {
   }
 }
 
+/**
+ * What you're wearing: a costume while a holiday has them, and your shirt
+ * colour all year. A preview turns to show all four sides as you go. Nothing
+ * changes until you keep it, and then everyone in the valley sees it at once.
+ */
+export class OutfitScreen extends Screen {
+  constructor(game) {
+    super();
+    this.game = game;
+    this.costumes = playerCostumes();
+    const look = game.state.playerLook;
+    this.cloth = CLOTHES.includes(look.cloth) ? look.cloth : CLOTHES[0];
+    // `null` is "no costume", and comes first.
+    this.choices = [null, ...this.costumes];
+    this.costume = this.choices.includes(look.costume) ? look.costume : null;
+    this.rows = this.costumes.length ? ['costume', 'shirt'] : ['shirt'];
+    this.row = 0;
+  }
+
+  get look() {
+    const base = this.game.state.playerLook;
+    return { species: base.species, coat: base.coat, cloth: this.cloth, costume: this.costume };
+  }
+
+  update(dt, input) {
+    this.t += dt;
+    if (input.repeat('up', dt) || input.repeat('down', dt)) {
+      this.row = (this.row + 1) % this.rows.length;
+      audio.sfx('ui_move', { gain: 0.6 });
+    }
+    const dir = input.repeat('right', dt) ? 1 : input.repeat('left', dt) ? -1 : 0;
+    if (dir) {
+      audio.sfx('ui_move', { gain: 0.6 });
+      const step = (arr, cur) => arr[(arr.indexOf(cur) + dir + arr.length) % arr.length];
+      if (this.rows[this.row] === 'costume') this.costume = step(this.choices, this.costume);
+      else this.cloth = step(CLOTHES, this.cloth);
+    }
+    if (input.hit('use')) {
+      audio.sfx('ui_ok');
+      this.game.changeLook({ cloth: this.cloth, costume: this.costume });
+      this.done = true;
+      return;
+    }
+    if (input.hit('cancel') || input.hit('menu')) this.close();
+  }
+
+  draw(ctx) {
+    dim(ctx, 0.5);
+    const w = 340, h = 178;
+    const x = Math.round((VIEW_W - w) / 2), y = Math.round((VIEW_H - h) / 2) - 6;
+    panel(ctx, x, y, w, h);
+    panelTitle(ctx, x, y, w, this.costumes.length ? 'Change costume' : 'Change clothes');
+
+    // You, from all four sides, walking on the spot.
+    const look = this.look;
+    const worn = wornCostume(look);
+    const frame = Math.floor(this.t * 5) % 4;
+    const Z = 2;
+    ['down', 'left', 'up', 'right'].forEach((d, i) => {
+      const spr = charSprite(look.species, look.coat, look.cloth, d, frame, worn);
+      const cx = x + 56 + i * 76;
+      ctx.drawImage(spr, 0, 0, spr.width, spr.height, cx - spr.width, y + 84 - spr.height * Z, spr.width * Z, spr.height * Z);
+    });
+
+    // The rows, each a value you step through with left and right.
+    const hidden = costumeHidesShirt(worn);
+    const rowY = (i) => y + 100 + i * 22;
+    this.rows.forEach((r, i) => {
+      const ry = rowY(i);
+      const on = i === this.row;
+      if (on) { ctx.fillStyle = 'rgba(255,207,107,0.14)'; ctx.fillRect(x + 10, ry - 4, w - 20, 18); }
+      const label = r === 'costume' ? 'Costume' : 'Shirt';
+      drawText(ctx, label, x + 20, ry + 1, { color: on ? P.uiGold : P.uiText, shadow: P.uiShadow });
+      const vx = x + 180;
+      drawText(ctx, '<', vx - 10, ry + 1, { color: on ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
+      drawText(ctx, '>', vx + 120, ry + 1, { color: on ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
+      if (r === 'costume') {
+        const name = this.costume ? COSTUMES[this.costume].name : 'None';
+        drawTextCentered(ctx, name, vx + 58, ry + 1, { color: on ? P.uiGold : P.uiText, shadow: P.uiShadow });
+      } else {
+        ctx.fillStyle = '#1d1830';
+        ctx.fillRect(vx + 28, ry - 2, 64, 13);
+        ctx.fillStyle = this.cloth;
+        ctx.fillRect(vx + 29, ry - 1, 62, 11);
+        if (hidden) drawText(ctx, 'hidden by the costume', x + 20, ry + 13, { color: P.uiTextDim, shadow: P.uiShadow });
+      }
+    });
+    drawTextCentered(ctx, 'Left/Right to change   Space to keep   X to cancel',
+      x + w / 2, y + h - 14, { color: P.uiTextDim, shadow: P.uiShadow });
+  }
+}
+
 export class PauseScreen extends ListScreen {
   constructor(game) {
     // On the public server, a valley's link is how friends get in.
-    const items = ['Cafe book', 'Journal', 'Map', 'Friends', 'Bag', 'Save game', 'Exit', 'Settings', 'Back'];
+    // A costume while a holiday has them; the rest of the year, just your shirt.
+    const outfit = playerCostumes().length ? 'Change costume' : 'Change clothes';
+    const items = ['Cafe book', 'Journal', 'Map', 'Friends', 'Bag', outfit, 'Save game', 'Exit', 'Settings', 'Back'];
     if (game.publicValley) items.splice(4, 0, 'Invite friends');
     super(items, items.length);
     this.game = game;
@@ -1777,6 +1871,8 @@ export class PauseScreen extends ListScreen {
         case 'Map': this.game.push(new MapScreen(this.game)); break;
         case 'Friends': this.game.push(new FriendsScreen(this.game)); break;
         case 'Invite friends': this.game.openInvite(); break;
+        case 'Change costume':
+        case 'Change clothes': this.game.push(new OutfitScreen(this.game)); break;
         case 'Bag': this.game.push(new BagScreen(this.game)); break;
         case 'Save game': this.game.save(); break;
         // One row below Save game, on a screen driven by a thumb. Saving first

@@ -6385,6 +6385,66 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           window.__cont = `cafe=${cafe.name}`;
         }
         g.net.world = was;
+      } else if (SCRIPT === 'hwoutfit' || SCRIPT === 'outfit') {
+        // Change costume (or, out of season, Change clothes) from the pause menu.
+        const M = await import('../src/ui/menus.js');
+        const C = await import('../src/art/chars.js');
+        const E = await import('../src/game/entities.js');
+        const st = g.state;
+        const on = SCRIPT === 'hwoutfit';
+        const err = (m) => window.__errors.push(m);
+        const items = new M.PauseScreen(g).items;
+        const label = on ? 'Change costume' : 'Change clothes';
+        if (!items.includes(label)) err(`no ${label} in the pause menu: ${items.join(', ')}`);
+        if (items.indexOf('Save game') + 1 !== items.indexOf('Exit')) err('Save game and Exit are no longer together');
+        const scr = new M.OutfitScreen(g);
+        g.push(scr);
+        await settle();
+        if (on !== scr.rows.includes('costume')) err(`rows: ${scr.rows.join(', ')}`);
+        const cloth0 = st.playerLook.cloth;
+        if (on) {
+          // Right on the costume row: the first costume after None.
+          await pressKey('ArrowRight');
+          if (scr.costume !== scr.choices[1]) err(`right picked ${scr.costume}`);
+          scr.costume = 'witch';
+          await pressKey('ArrowDown');
+        }
+        await pressKey('ArrowRight');
+        if (scr.cloth === cloth0) err('the shirt did not change');
+        const cloth1 = scr.cloth;
+        await pressKey('Space');
+        await settle();
+        if (g.screens.includes(scr)) err('the screen did not close');
+        if (st.playerLook.cloth !== cloth1) err('the new shirt was not kept');
+        const me = JSON.parse(localStorage.getItem('catcafe.me') || '{}');
+        if (me.cloth !== cloth1) err('the new shirt is not remembered for next time');
+        if (on) {
+          if (st.playerLook.costume !== 'witch' || g.player.look.costume !== 'witch') err('the costume was not put on');
+          if (E.wornCostume(g.player.look) !== 'witch') err('the costume is not being worn');
+          if (g.player.sprite().height !== C.CHAR_H + C.costumeTop('witch')) err('the sprite is not the costume\'s');
+          if (me.costume !== 'witch') err('the costume is not remembered');
+          // And off again.
+          const off = new M.OutfitScreen(g);
+          g.push(off);
+          await settle();
+          off.costume = null;
+          await pressKey('Space');
+          await settle();
+          if (st.playerLook.costume) err('taking the costume off did not');
+        } else {
+          // Out of season, a costume in the look is kept but not drawn.
+          g.changeLook({ costume: 'witch' });
+          if (E.wornCostume(g.player.look) !== null) err('a costume is worn out of season');
+          if (g.player.sprite().height !== C.CHAR_H) err('out of season the sprite is still tall');
+        }
+        window.__cont = `look=${JSON.stringify(st.playerLook)}`;
+      } else if (SCRIPT === 'hwoutfitshot') {
+        // A picture of the screen, for --shot.
+        const M = await import('../src/ui/menus.js');
+        const scr = new M.OutfitScreen(g);
+        scr.costume = 'wizard';
+        g.push(scr);
+        await wait(400);
       } else if (SCRIPT === 'counter') {
         // A keeper and their counter are one thing: the same prompt from
         // anywhere in front of it, however the keeper wanders, and a press

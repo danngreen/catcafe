@@ -497,20 +497,26 @@ function paintEye(buf, sp, c, ex, eyeY) {
 
 export const COSTUMES = {
   // Masks: over the eyes, tied at the back.
-  domino:  { kind: 'mask' },
-  catmask: { kind: 'mask' },
-  foxmask: { kind: 'mask' },
-  owlmask: { kind: 'mask' },
-  // The whole outfit.
-  witch:   { kind: 'full', top: 6 },
-  wizard:  { kind: 'full', top: 7, cloth: '#5b4bb0' },
-  ghost:   { kind: 'full', top: 2 },               // room for the ears under the sheet
-  pumpkin: { kind: 'full', top: 3 },
-  bat:     { kind: 'full', top: 3, cloth: '#6a4a9e' },
-  bee:     { kind: 'full', top: 4, cloth: '#f0c13c' },
-  pirate:  { kind: 'full', top: 3, cloth: '#efe6d2' },
-  royal:   { kind: 'full', top: 3 },
+  domino:  { kind: 'mask', name: 'Eye mask' },
+  catmask: { kind: 'mask', name: 'Cat mask' },
+  foxmask: { kind: 'mask', name: 'Fox mask' },
+  owlmask: { kind: 'mask', name: 'Owl mask' },
+  // The whole outfit. `covers` means your own shirt doesn't show.
+  witch:   { kind: 'full', name: 'Witch', top: 6 },
+  wizard:  { kind: 'full', name: 'Wizard', top: 7, cloth: '#5b4bb0' },
+  ghost:   { kind: 'full', name: 'Ghost', top: 2, covers: true },   // room for the ears under the sheet
+  pumpkin: { kind: 'full', name: 'Pumpkin', top: 3, covers: true },
+  bat:     { kind: 'full', name: 'Bat', top: 3, cloth: '#6a4a9e' },
+  bee:     { kind: 'full', name: 'Bumblebee', top: 4, cloth: '#f0c13c' },
+  pirate:  { kind: 'full', name: 'Pirate', top: 3, cloth: '#efe6d2' },
+  royal:   { kind: 'full', name: 'Royalty', top: 3 },
 };
+
+/** Does this costume hide the shirt underneath? */
+export function costumeHidesShirt(key) {
+  const c = key && COSTUMES[key];
+  return !!(c && (c.covers || c.cloth));
+}
 
 export const COSTUME_LIST = Object.keys(COSTUMES);
 

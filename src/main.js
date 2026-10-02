@@ -13,7 +13,7 @@ import { clamp, money, makeRng, hashStr, wrapText } from './engine/util.js';
 
 import { Tileset, TILE, T, isWater } from './art/tiles.js';
 import { P } from './art/palette.js';
-import { charSprite, catSprite, CAT_BREED_LIST, CAT_BREEDS, COAT_LIST, CLOTHES, COATS, SPECIES_LIST } from './art/chars.js';
+import { charSprite, catSprite, CAT_BREED_LIST, CAT_BREEDS, COAT_LIST, CLOTHES, COATS, SPECIES_LIST, COSTUMES, CHAR_H } from './art/chars.js';
 import { buildingSprite } from './art/objects.js';
 
 import { generateWorld, WORLD_W, WORLD_H } from './world/worldgen.js';
@@ -24,7 +24,7 @@ import { secretMet, arrivesNow, nextHint, hintsOf } from './world/villagers.js';
 
 import { GameState, seedStartingInventory } from './game/state.js';
 import { Player, Villager, RemotePlayer, Employee, canStand, Bear, riderOffset,
-  WALK_SPEED, RUN_SPEED } from './game/entities.js';
+  WALK_SPEED, RUN_SPEED, wornCostume } from './game/entities.js';
 import { HIRE_BY_ID } from './game/cafe.js';
 import { ITEMS, stockFor, FLEA_POOL, baseId } from './game/items.js';
 import { shopOpen, hoursText, HOUR_SECONDS, DAY_FULL } from './game/time.js';
@@ -1044,6 +1044,21 @@ class Game {
     this.dialogue.say("The person who made this valley has changed who can come in, so you can't play in it anymore. "
       + 'If they want you back, they can send you a new link.',
     { speaker: 'Cat Cafe', onDone: () => this.reloadPage() });
+  }
+
+  /**
+   * New clothes, or a costume: on you at once, remembered for next time, and
+   * shown to everybody else in the valley straight away.
+   */
+  changeLook(look) {
+    const st = this.state;
+    const next = { ...st.playerLook, ...look };
+    if (!next.costume) delete next.costume;
+    st.playerLook = next;
+    this.player.look = next;
+    saveMe(st.playerName, next);
+    st.save();
+    net.setLook(next);
   }
 
   leaveValley() {
@@ -3227,14 +3242,16 @@ function loadMe() {
     const coat = COAT_LIST.includes(me.coat) ? me.coat : null;
     const cloth = CLOTHES.includes(me.cloth) ? me.cloth : null;
     const name = typeof me.name === 'string' && me.name.trim() ? me.name.slice(0, 16) : null;
+    // Kept even out of season: it's drawn only while its holiday is on.
+    const costume = COSTUMES[me.costume] ? me.costume : null;
     if (!coat && !cloth && !name) return null;
-    return { name, coat, cloth };
+    return { name, coat, cloth, costume };
   } catch { return null; }
 }
 
 function saveMe(name, look) {
   try {
-    localStorage.setItem(ME_KEY, JSON.stringify({ name, coat: look.coat, cloth: look.cloth }));
+    localStorage.setItem(ME_KEY, JSON.stringify({ name, coat: look.coat, cloth: look.cloth, costume: look.costume || null }));
   } catch { /* private browsing; not worth mentioning */ }
 }
 
@@ -3767,6 +3784,7 @@ class TitleScreen extends Screen {
       coat: (me && me.coat) || 'ginger',
       cloth: (me && me.cloth) || CLOTHES[5],
     };
+    if (me && me.costume) this.look.costume = me.costume;
     // Only shown when there's a session: solo play needs no name.
     this.multiplayer = !!game.net.connected;
     this.joining = false;
@@ -3870,8 +3888,11 @@ class TitleScreen extends Screen {
       // rather than having it drawn over their heads.
       const drop = Math.max(0, (118 + this.options.length * 18 + 16) - 166);
       const bob = Math.sin(this.t * 3) > 0 ? 0 : 1;
-      const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, 'down', Math.floor(this.t * 4) % 4);
-      ctx.drawImage(spr, 0, 0, spr.width, spr.height, VIEW_W / 2 - 40, 168 + drop + bob, spr.width * 2, spr.height * 2);
+      const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, 'down', Math.floor(this.t * 4) % 4,
+        wornCostume(this.look));
+      // By the feet, so a costume's hat rises above rather than pushing them down.
+      const lift = (spr.height - CHAR_H) * 2;
+      ctx.drawImage(spr, 0, 0, spr.width, spr.height, VIEW_W / 2 - 40, 168 + drop + bob - lift, spr.width * 2, spr.height * 2);
       const cs = catSprite('tabby', 'right', Math.floor(this.t * 3) % 4, 'sit');
       ctx.drawImage(cs, 0, 0, cs.width, cs.height, VIEW_W / 2 + 8, 192 + drop, cs.width * 2, cs.height * 2);
 

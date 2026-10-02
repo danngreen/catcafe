@@ -114,6 +114,23 @@ export function findPath(map, from, to, limit = 2400) {
 // Base actor
 // ---------------------------------------------------------------------------
 
+/**
+ * The costume a player is actually wearing: the one in their look, but only
+ * while the holiday that has it is on. Kept in the look all year, so it's
+ * waiting for them next October; drawn only in season.
+ */
+export function wornCostume(look) {
+  const c = look && look.costume;
+  if (!c) return null;
+  const allowed = holidayContent().playerCostumes;
+  return allowed && allowed.indexOf(c) >= 0 ? c : null;
+}
+
+/** The costumes a player may put on right now; empty outside a holiday that has any. */
+export function playerCostumes() {
+  return holidayContent().playerCostumes || [];
+}
+
 export class Actor {
   constructor(x, y) {
     this.x = x;
@@ -227,13 +244,17 @@ export class Player extends Actor {
 
   /** The frame we'd draw right now — the taxi cutscene borrows it. */
   sprite() {
-    return charSprite(this.look.species, this.look.coat, this.look.cloth, this.dir, this.frame);
+    return charSprite(this.look.species, this.look.coat, this.look.cloth, this.dir, this.frame, wornCostume(this.look));
   }
+
+  /** A hat pokes up above the usual sprite, and anything said goes above the hat. */
+  emoteTop() { return this.y - CHAR_H - costumeTop(wornCostume(this.look)); }
 
   draw(ctx, ox, oy) {
     const spr = this.sprite();
     let dx = Math.round(this.x - CHAR_W / 2 - ox);
-    let dy = Math.round(this.y - CHAR_H - oy);
+    // By the feet: a costume with a hat is taller than CHAR_H.
+    let dy = Math.round(this.y - spr.height - oy);
     const a = this.alpha != null ? this.alpha : 1;
     if (a < 1) ctx.globalAlpha = a;
     // Anyone on a mount is drawn as one animal: the bear first, at the rider's
@@ -983,9 +1004,11 @@ export class RemotePlayer extends Actor {
   }
 
   draw(ctx, ox, oy) {
-    const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, this.dir, this.frame);
-    ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - CHAR_H - oy));
+    const spr = charSprite(this.look.species, this.look.coat, this.look.cloth, this.dir, this.frame, wornCostume(this.look));
+    ctx.drawImage(spr, Math.round(this.x - CHAR_W / 2 - ox), Math.round(this.y - spr.height - oy));
   }
+
+  emoteTop() { return this.y - CHAR_H - costumeTop(wornCostume(this.look)); }
 
   /** The name tag rides in the emote pass, above everything else. */
   drawEmote(ctx, ox, oy, topY) {

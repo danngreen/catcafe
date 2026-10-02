@@ -466,6 +466,11 @@ export class NetClient {
         this.emit('roster');
         break;
       }
+      case 'look': {
+        const r = this.remotes.get(msg.id);
+        if (r && msg.look) r.look = msg.look;
+        break;
+      }
       case 'joined':
         this.remotes.set(msg.p.id, { ...msg.p });
         this.emit('joined', msg.p);
@@ -498,6 +503,11 @@ export class NetClient {
 
   send(obj) {
     if (this.link) this.link.send(JSON.stringify(obj));
+  }
+
+  /** We changed clothes: tell the valley, if we're in one. */
+  setLook(look) {
+    if (this.joined) this.send({ t: 'look', look });
   }
 
   /**

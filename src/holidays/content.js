@@ -14,6 +14,9 @@
 //   fillHouse(game, map, houseId)    who's home when you walk into a cottage.
 //   visitResident(game, v, finish)   talking to somebody at home; return true
 //                                    if it handled the conversation.
+//   playerCostumes                   (a list, not a hook) the costumes players may
+//                                    put on from the pause menu. A costume is
+//                                    only drawn while its holiday is on.
 //   interact(game, it, tile)         an interact tile the game doesn't know
 //                                    (its `kind` is the holiday's own); give it
 //                                    a `prompt` for the label on screen.

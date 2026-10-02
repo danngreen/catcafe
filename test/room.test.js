@@ -275,3 +275,23 @@ test('with nobody rearranging, anybody may write the layout', (t) => {
   b.say({ t: 'op', op: 'put', k: 'cafe', key: 'wall', v: '#fff' });
   assert.equal(room.world.cafe.wall, '#fff');
 });
+
+test('a change of clothes reaches everyone else at once, and junk is ignored', (t) => {
+  const { room, join } = setup(t);
+  const a = join('Ann', 'who-a');
+  const b = join('Bea', 'who-b');
+  const look = { species: 'cat', coat: 'ginger', cloth: '#5b8fd6', costume: 'witch' };
+  a.say({ t: 'look', look });
+  const got = b.last('look');
+  assert.ok(got, 'nobody heard about the new look');
+  assert.deepEqual(got.look, look);
+  assert.equal(a.count('look'), 0, 'told the changer about their own change');
+  const ann = [...room.players.values()].find((p) => p.name === 'Ann');
+  assert.deepEqual(ann.look, look, 'the roster still has the old look');
+  // Nothing that isn't a small plain object gets passed on.
+  const before = b.count('look');
+  a.say({ t: 'look', look: 'witch' });
+  a.say({ t: 'look', look: [1, 2] });
+  a.say({ t: 'look', look: { cloth: 'x'.repeat(400) } });
+  assert.equal(b.count('look'), before);
+});
