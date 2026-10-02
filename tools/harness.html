@@ -6365,6 +6365,26 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           await until(() => document.querySelector('[data-invite]'), 3000);
         }
         await wait(300);
+      } else if (SCRIPT === 'nettitlecafe') {
+        // Joining a valley whose cafe is already open: the creation screen shows
+        // that cafe's name and colours, not a random name it made up. It used to
+        // copy them and then overwrite them a few lines later.
+        // As it stands when you arrive with somebody's cafe already open.
+        const was = g.net.world;
+        const cafe = { name: 'The Test Kitty', wall: '#e6dcc2', roof: '#5a6472', awning: '#5b8fd6', floor: 1 };
+        g.net.world = { ...(was || {}), cafe };
+        {
+          const Title = g.titleScreen.constructor;
+          for (let i = 0; i < 5; i++) {
+            const ts = new Title(g);
+            if (!ts.joining) window.__errors.push('the title screen does not see the open cafe');
+            if (ts.style.name !== cafe.name) window.__errors.push(`it says ${ts.style.name}, not ${cafe.name}`);
+            if (ts.style.roof !== cafe.roof || ts.style.awning !== cafe.awning) window.__errors.push('the colours are not the open cafe\'s');
+            if (!Number.isFinite(ts.row)) window.__errors.push(`row is ${ts.row}`);
+          }
+          window.__cont = `cafe=${cafe.name}`;
+        }
+        g.net.world = was;
       } else if (SCRIPT === 'counter') {
         // A keeper and their counter are one thing: the same prompt from
         // anywhere in front of it, however the keeper wanders, and a press

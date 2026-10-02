@@ -3769,9 +3769,7 @@ class TitleScreen extends Screen {
     };
     // Only shown when there's a session: solo play needs no name.
     this.multiplayer = !!game.net.connected;
-    // Somebody has already opened the cafe, so its paint isn't ours to pick.
     this.joining = false;
-    if (game.net.world) this.adoptOpenCafe();
     this.name = game.state.playerName || (me && me.name)
       || PLAYER_NAMES[Math.floor(Math.random() * PLAYER_NAMES.length)];
     this.remembered = !!me;
@@ -3784,6 +3782,10 @@ class TitleScreen extends Screen {
       floor: T.FLOOR_WOOD, name: cafeName(this.word1, this.word2),
     };
     this.row = 0;
+    // Somebody has already opened the cafe, so its name and paint aren't ours to
+    // pick. Last, after the choices above are set up: done first, they were
+    // promptly overwritten with a random name and the default colours.
+    if (game.net.world) this.adoptOpenCafe();
   }
 
   /** There's a cafe already: show its colours, and drop the choices we can't make. */

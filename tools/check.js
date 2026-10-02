@@ -225,7 +225,7 @@ const GROUPS = {
   // Each of these gets a valley of its own — see freshValley() — so the order
   // they run in no longer matters.
   net: ['netclock', 'net', 'netmobile', 'netbooks', 'netdrop', 'netoffline', 'netbuildlock', 'netforget',
-    'netpollbooks', 'netpollgone', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbyback', 'netlobbydel', 'netlobbyone', 'netnewvalley', 'netexit', 'netbookfields', 'nettitlecontinue', 'nettitleghost', 'nettitleghostpoll', 'netghostmove', 'netghostmovepoll', 'solo'],
+    'netpollbooks', 'netpollgone', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbyback', 'netlobbydel', 'netlobbyone', 'netnewvalley', 'netexit', 'netbookfields', 'nettitlecafe', 'nettitlecontinue', 'nettitleghost', 'nettitleghostpoll', 'netghostmove', 'netghostmovepoll', 'solo'],
   slow: ['netidle', 'netping', 'netmute', 'netpollquiet', 'netidletitle'],
   // The public server: a valley of your own, joining with a code, and the creator
   // sending everybody else away. They run against a VALLEY_CODES=1 server.
