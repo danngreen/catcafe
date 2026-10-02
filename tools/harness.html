@@ -815,7 +815,10 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const coats = ['ginger', 'white', 'fox', 'brown', 'cream', 'cream', 'owl', 'bear', 'grey', 'green'];
         const cloths = ['#5b8fd6', '#d95f5f', '#7fbe57', '#eec453', '#4fa8a0', '#d472b0', '#a0714f', '#8a72d6', '#e08b3f', '#c9c2b0'];
         const dirs = ['down', 'left', 'up', 'right'];
-        const rows = [null, ...(secondHalf ? C.COSTUME_LIST.slice(half) : C.COSTUME_LIST.slice(0, half))];
+        // Or exactly the ones named: `?costumes=astronaut,tiger`.
+        const named = new URLSearchParams(location.search).get('costumes');
+        const rows = [null, ...(named ? named.split(',')
+          : secondHalf ? C.COSTUME_LIST.slice(half) : C.COSTUME_LIST.slice(0, half))];
 
         const c = document.createElement('canvas');
         c.width = 740; c.height = 358;
@@ -6442,7 +6445,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         // A picture of the screen, for --shot.
         const M = await import('../src/ui/menus.js');
         const scr = new M.OutfitScreen(g);
-        scr.costume = 'wizard';
+        scr.costume = new URLSearchParams(location.search).get('costume') || 'wizard';
         g.push(scr);
         await wait(400);
       } else if (SCRIPT === 'counter') {

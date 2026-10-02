@@ -1831,10 +1831,12 @@ export class OutfitScreen extends Screen {
       const label = r === 'costume' ? 'Costume' : 'Shirt';
       drawText(ctx, label, x + 20, ry + 1, { color: on ? P.uiGold : P.uiText, shadow: P.uiShadow });
       const vx = x + 180;
-      drawText(ctx, '<', vx - 10, ry + 1, { color: on ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
-      drawText(ctx, '>', vx + 120, ry + 1, { color: on ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
+      const name = r === 'costume' ? (this.costume ? COSTUMES[this.costume].name : 'None') : '';
+      // The arrows sit either side of the value, a little further out for a long name.
+      const spread = Math.max(65, Math.ceil(textWidth(name) / 2) + 8);
+      drawText(ctx, '<', vx + 55 - spread, ry + 1, { color: on ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
+      drawText(ctx, '>', vx + 55 + spread, ry + 1, { color: on ? P.uiGold : P.uiTextDim, shadow: P.uiShadow });
       if (r === 'costume') {
-        const name = this.costume ? COSTUMES[this.costume].name : 'None';
         drawTextCentered(ctx, name, vx + 58, ry + 1, { color: on ? P.uiGold : P.uiText, shadow: P.uiShadow });
       } else {
         ctx.fillStyle = '#1d1830';

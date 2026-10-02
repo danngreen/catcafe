@@ -510,6 +510,15 @@ export const COSTUMES = {
   bee:     { kind: 'full', name: 'Bumblebee', top: 4, cloth: '#f0c13c' },
   pirate:  { kind: 'full', name: 'Pirate', top: 3, cloth: '#efe6d2' },
   royal:   { kind: 'full', name: 'Royalty', top: 3 },
+  // A couple of silly ones, and the classics.
+  sandwich:  { kind: 'full', name: 'Peanut butter sandwich', top: 1, cloth: '#f3dca6', covers: true },
+  banana:    { kind: 'full', name: 'Banana', top: 6, cloth: '#f5d74a', covers: true },
+  astronaut: { kind: 'full', name: 'Astronaut', top: 2, cloth: '#e9edf3' },
+  tiger:     { kind: 'full', name: 'Tiger', top: 2, cloth: '#ee8a2c' },
+  dinosaur:  { kind: 'full', name: 'Dinosaur', top: 3, cloth: '#6fae4a' },
+  robot:     { kind: 'full', name: 'Robot', top: 4, cloth: '#a9b2bd', covers: true },
+  superhero: { kind: 'full', name: 'Superhero', cloth: '#4a7fd0' },
+  fairy:     { kind: 'full', name: 'Fairy', top: 1, cloth: '#f2a7c8' },
 };
 
 /** Does this costume hide the shirt underneath? */
@@ -537,6 +546,12 @@ const K = {
   cream: '#f5e8cc', leaf: '#6f9a3c', leafLt: '#93bd57',
   plum: '#96386c',
   wing: '#e4f1fa', blush: '#f4a3b0',
+  white: '#e9edf3', glass: '#bfe3f5', steel: '#a9b2bd', steelDk: '#6f7a88', steelLt: '#ccd3db',
+  red: '#d8473f', redDk: '#a8302b',
+  green: '#6fae4a', greenDk: '#4d8a33', greenLt: '#a8d77e',
+  bread: '#f3dca6', crust: '#c98a3e', pb: '#b9783a', jelly: '#8e3b8a',
+  banana: '#f5d74a', bananaDk: '#cfa82a', bananaLt: '#fbe98e',
+  lilac: '#d9c4f2', lilacDk: '#b29ad8', spark: '#fff6c8',
 };
 
 /** The villager's palette with a costume's clothes swapped in. */
@@ -609,6 +624,39 @@ function wearCostume(buf, g, layer) {
     case 'royal':
       cape(buf, g, layer, K.plum, true);
       if (layer === 'head') crown(buf, g);
+      break;
+    case 'sandwich':
+      if (layer === 'over') sandwichSuit(buf, g);
+      break;
+    case 'banana':
+      if (layer === 'over') bananaSuit(buf, g);
+      if (layer === 'head') bananaHood(buf, g);
+      break;
+    case 'astronaut':
+      if (layer === 'under') buf.ellipse(g.hx, g.cy, g.rx + 1.4, g.ry + 1.4, rgb(K.glass));
+      if (layer === 'over') { spaceSuit(buf, g); backpack(buf, g); }
+      if (layer === 'head') helmet(buf, g);
+      break;
+    case 'tiger':
+      if (layer === 'over') { tigerStripes(buf, g); tail(buf, g, K.orange, K.ink); }
+      if (layer === 'head') tigerEars(buf, g);
+      break;
+    case 'dinosaur':
+      if (layer === 'over') dinoSuit(buf, g);
+      if (layer === 'head') dinoSpikes(buf, g);
+      break;
+    case 'robot':
+      if (layer === 'over') robotBox(buf, g);
+      if (layer === 'head') robotAntenna(buf, g);
+      break;
+    case 'superhero':
+      cape(buf, g, layer, K.red, false);
+      if (layer === 'over') heroEmblem(buf, g);
+      if (layer === 'head') mask(buf, g, K.red, K.redDk, 'domino');
+      break;
+    case 'fairy':
+      fairyWings(buf, g, layer);
+      if (layer === 'head') flowerCrown(buf, g);
       break;
     default: break;
   }
@@ -1033,6 +1081,324 @@ function paintSheet(buf, g) {
     buf.ellipseBlend(hx - 3.8, eyeY + 2, 1.2, 0.8, pink);
     buf.ellipseBlend(hx + 3.8, eyeY + 2, 1.2, 0.8, pink);
   }
+}
+
+/** A ring round an ellipse, `thick` pixels deep, for helmets and hoods. */
+function ring(buf, cx, cy, rx, ry, col, thick = 1) {
+  for (let a = 0; a < 360; a += 3) {
+    const r = (a * Math.PI) / 180;
+    for (let t = 0; t < thick; t++) {
+      buf.set(Math.round(cx + Math.cos(r) * (rx + t)), Math.round(cy + Math.sin(r) * (ry + t)), col);
+    }
+  }
+}
+
+/** Paws out of the armholes of something boxy: the sandwich, the robot. */
+function pawsOut(buf, g, x0, w) {
+  const F = rgb(g.c.fur);
+  const armY = g.bodyTop + 1, armH = 6;
+  if (g.dir === 'side') return;
+  buf.rect(x0 - 2, armY + armH - g.step - 1, 2, 2, F);
+  buf.rect(x0 + w, armY + armH + g.step - 1, 2, 2, F);
+}
+
+/**
+ * A peanut butter and jelly sandwich, with somebody in the middle. From the
+ * front it's a slice of bread with the filling squeezing out of the sides;
+ * edge on, it's the whole stack.
+ */
+function sandwichSuit(buf, g) {
+  const { dir, bodyTop, legY, torsoX, torsoW } = g;
+  const Cr = rgb(K.crust), Br = rgb(K.bread), Pb = rgb(K.pb), J = rgb(K.jelly);
+  const top = bodyTop - 1, bot = legY + 1;
+  if (dir === 'side') {
+    const x0 = torsoX - 1;
+    const cols = [Cr, Br, Br, Pb, J, Pb, Br, Br, Cr];
+    for (let y = top; y <= bot; y++) {
+      cols.forEach((col, i) => {
+        if (y === top && (i === 0 || i === cols.length - 1)) return;   // the crust is rounded
+        buf.set(x0 + i, y, col);
+      });
+    }
+    buf.set(x0 + 4, bot + 1, J);                                      // a drip of jelly
+    return;
+  }
+  const x0 = torsoX - 2, w = torsoW + 4;
+  const bot2 = bot - 1;                     // the slice; the filling peeks out below
+  // A slice of bread: the domed top is wider than the rest, like a loaf.
+  buf.hline(x0 + 2, top - 2, w - 4, Cr);
+  buf.hline(x0, top - 1, w, Cr);
+  buf.rect(x0 + 1, top, w - 2, bot2 - top + 1, Cr);
+  buf.hline(x0 + 1, top - 1, w - 2, Br);
+  buf.hline(x0 + 3, top - 2, w - 6, Br);
+  for (let y = top; y < bot2; y++) buf.hline(x0 + 2, y, w - 4, Br);
+  // The filling, squeezing out along the bottom edge: peanut butter, then jelly.
+  buf.hline(x0 + 1, bot, w - 2, Pb);
+  buf.hline(x0 + 2, bot + 1, w - 4, J);
+  buf.set(x0 + 3, bot + 2, J);                              // a drip
+  if (dir === 'down') {
+    // A few crumbs of texture on the bread.
+    buf.set(x0 + 4, top + 1, rgb(K.crust));
+    buf.set(x0 + w - 5, top + 4, rgb(K.crust));
+    buf.set(x0 + 5, top + 6, rgb(K.crust));
+  }
+  pawsOut(buf, g, x0, w);
+}
+
+/** A banana suit: yellow, a bit spotty, with the peel flapping open at the waist. */
+function bananaSuit(buf, g) {
+  const { dir, bodyTop, legY, torsoX, torsoW, frame } = g;
+  const Y = rgb(K.banana), D = rgb(K.bananaDk), L = rgb(K.bananaLt), S = rgb(K.brown);
+  const side = dir === 'side';
+  const x0 = torsoX - 1, w = torsoW + 2;
+  const bot = legY + 2;
+  for (let y = bodyTop - 1; y <= bot; y++) {
+    const nar = y >= bot - 1 ? 1 : 0;
+    buf.hline(x0 + nar, y, w - nar * 2, Y);
+    buf.set(x0 + nar, y, L);
+    buf.set(x0 + w - 1 - nar, y, D);
+  }
+  // It's a ripe one.
+  if (dir === 'up') buf.set(x0 + 3, bodyTop + 5, S);
+  else { buf.set(x0 + 2, bodyTop + 3, S); buf.set(x0 + w - 3, bodyTop + 6, S); }
+  // The peel, open at the waist and swinging as they walk.
+  const sw = frame % 2;
+  const flaps = side ? [1] : [-1, 1];
+  for (const s of flaps) {
+    const fx = s < 0 ? x0 - 1 : x0 + w;
+    buf.vline(fx, legY - 3 + sw, 4, Y);
+    buf.set(fx, legY + 1 + sw, D);
+    buf.set(fx + s, legY - 2 + sw, D);
+  }
+  pawsOut(buf, g, x0, w);
+}
+
+/** The top of the banana: round the face, up over the head, and the stalk. */
+function bananaHood(buf, g) {
+  const { hx, cy, rx, ry, dir } = g;
+  const Y = rgb(K.banana), D = rgb(K.bananaDk);
+  if (dir === 'up') buf.ellipse(hx, cy, rx + 0.6, ry + 0.6, Y);       // all banana, from behind
+  ring(buf, hx, cy, rx + 0.6, ry + 0.6, Y, 2);
+  const top = crownOf(g);
+  const lean = dir === 'up' ? -1 : 1;
+  [6, 5, 4, 3, 2, 2].forEach((w, i) => {
+    const x = Math.round(hx - w / 2) + Math.floor(i / 2) * lean;
+    buf.hline(x, top - 1 - i, w, Y);
+    buf.set(x + (lean > 0 ? w - 1 : 0), top - 1 - i, D);
+  });
+  // The stalk.
+  buf.rect(Math.round(hx) + 2 * lean - (lean < 0 ? 1 : 0), top - 7, 2, 1, rgb(K.brownDk));
+}
+
+/** A white space suit: a control panel on the chest and a belt. */
+function spaceSuit(buf, g) {
+  const { dir, bodyTop, legY, torsoX, torsoW } = g;
+  const St = rgb(K.steel), R = rgb(K.red), B = rgb('#4a7fd0');
+  buf.hline(torsoX, legY - 1, torsoW, St);
+  if (dir === 'down') {
+    const px = Math.round(CHAR_W / 2 - 2);
+    buf.rect(px, bodyTop + 3, 4, 3, St);
+    buf.set(px + 1, bodyTop + 4, R);
+    buf.set(px + 2, bodyTop + 4, B);
+  } else if (dir === 'side') {
+    buf.rect(torsoX, bodyTop + 3, 2, 2, St);
+    buf.set(torsoX, bodyTop + 3, R);
+  }
+}
+
+/** The air tanks, on their back: seen from behind and from the side. */
+function backpack(buf, g) {
+  const { dir, bodyTop, torsoX, torsoW } = g;
+  const St = rgb(K.steel), D = rgb(K.steelDk), L = rgb(K.steelLt);
+  if (dir === 'up') {
+    buf.rect(torsoX + 1, bodyTop + 1, torsoW - 2, 7, St);
+    buf.vline(torsoX + 1, bodyTop + 1, 7, L);
+    buf.vline(torsoX + torsoW - 2, bodyTop + 1, 7, D);
+    buf.vline(Math.round(CHAR_W / 2) - 1, bodyTop + 2, 5, D);
+  } else if (dir === 'side') {
+    const x = torsoX + torsoW - 1;
+    buf.rect(x, bodyTop + 1, 3, 7, St);
+    buf.vline(x + 2, bodyTop + 1, 7, D);
+    buf.set(x, bodyTop + 1, L);
+  }
+}
+
+/** A bubble helmet: glass over the whole head, a rim, a shine, and a collar. */
+function helmet(buf, g) {
+  const { hx, cy, rx, ry, bodyTop, torsoX, torsoW } = g;
+  buf.ellipseBlend(hx, cy, rx + 1.4, ry + 1.4, rgb(K.glass, 50));
+  ring(buf, hx, cy, rx + 1.8, ry + 1.8, rgb(K.steelLt));
+  buf.set(Math.round(hx - rx * 0.55), Math.round(cy - ry * 0.65), rgb('#ffffff'));
+  buf.set(Math.round(hx - rx * 0.55) + 1, Math.round(cy - ry * 0.75), rgb('#ffffff'));
+  buf.hline(torsoX - 1, bodyTop, torsoW + 2, rgb(K.steel));
+}
+
+/** Tiger stripes: dashes in from both sides, and a pale tummy from the front. */
+function tigerStripes(buf, g) {
+  const { dir, bodyTop, legY, torsoX, torsoW, step } = g;
+  const S = rgb(K.ink);
+  if (dir === 'down') buf.rect(Math.round(CHAR_W / 2) - 1, bodyTop + 3, 2, legY - bodyTop - 4, rgb(K.cream));
+  for (const r of [2, 4, 6]) {
+    const y = bodyTop + r;
+    if (dir === 'side') { buf.hline(torsoX + 1, y, torsoW - 2, S); continue; }
+    buf.hline(torsoX, y, 2, S);
+    buf.hline(torsoX + torsoW - 2, y, 2, S);
+    if (dir === 'up') buf.set(Math.round(CHAR_W / 2) - 1 + (r % 4 ? 0 : 1), y, S);
+    // A stripe on each sleeve, too.
+    if (r === 4) { buf.set(torsoX - 2, y - step, S); buf.set(torsoX + torsoW + 1, y + step, S); }
+  }
+}
+
+/** A striped tail: curling up behind them in profile, hanging down from behind. */
+function tail(buf, g, col, band) {
+  const { dir, bodyTop, legY, torsoX, torsoW } = g;
+  const C = rgb(col), B = rgb(band);
+  if (dir === 'side') {
+    const pts = [[0, 6], [1, 6], [2, 5], [3, 4], [3, 3], [3, 2], [2, 1]];
+    pts.forEach(([dx, dy], i) => buf.set(torsoX + torsoW + dx, bodyTop + dy, i % 3 === 2 ? B : C));
+  } else if (dir === 'up') {
+    const x = Math.round(CHAR_W / 2) - 1;
+    for (let i = 0; i < 5; i++) buf.set(x, legY - 1 + i, i % 2 ? B : C);
+  }
+}
+
+/** Round tiger ears on a headband, and three stripes on the forehead. */
+function tigerEars(buf, g) {
+  const cx = Math.round(g.hx);
+  const top = crownOf(g);
+  const O = rgb(K.orange), I = rgb(K.blush), S = rgb(K.ink);
+  const ears = g.dir === 'side' ? [cx + 1] : [cx - 3, cx + 3];
+  for (const ex of ears) {
+    buf.rect(ex - 1, top - 1, 3, 2, O);
+    buf.set(ex, top - 2, O);
+    buf.set(ex - 1, top - 1, S);
+    buf.set(ex + 1, top - 1, S);
+    if (g.dir !== 'up') buf.set(ex, top - 1, I);
+  }
+  if (g.dir === 'down') {
+    buf.set(cx, top + 1, S);
+    buf.set(cx - 2, top + 2, S);
+    buf.set(cx + 2, top + 2, S);
+  }
+}
+
+/** A dinosaur: a pale tummy, spikes down the back, and a tail in profile. */
+function dinoSuit(buf, g) {
+  const { dir, bodyTop, legY, torsoX, torsoW } = g;
+  const G = rgb(K.green), D = rgb(K.greenDk), L = rgb(K.greenLt), Sp = rgb(K.orange);
+  if (dir === 'down') {
+    buf.ellipse(CHAR_W / 2 - 0.5, (bodyTop + legY) / 2 + 1, 2, 3, L);
+  } else if (dir === 'up') {
+    const x = Math.round(CHAR_W / 2) - 1;
+    for (let y = bodyTop; y < legY; y += 2) { buf.set(x, y, Sp); buf.set(x + 1, y + 1, Sp); }
+  } else {
+    const back = torsoX + torsoW;
+    for (let y = bodyTop + 1; y < legY; y += 2) buf.set(back, y, Sp);
+    // The tail, thick at the base and tapering away behind them.
+    [2, 3, 4, 5].forEach((len, i) => {
+      const y = legY - 3 + i;
+      buf.hline(back, y, len, i === 3 ? D : G);
+    });
+  }
+}
+
+/** The spikes along the top of a dinosaur hood. */
+function dinoSpikes(buf, g) {
+  const cx = Math.round(g.hx);
+  const top = crownOf(g);
+  const Sp = rgb(K.orange), D = rgb(K.orangeDk);
+  const xs = g.dir === 'side' ? [[cx + 1, 0], [cx + 3, 1], [cx + 5, 3]] : [[cx - 3, 1], [cx, 0], [cx + 3, 1]];
+  for (const [x, dy] of xs) {
+    buf.vline(x, top - 2 + dy, 2, Sp);
+    buf.set(x - 1, top - 1 + dy, D);
+    buf.set(x + 1, top - 1 + dy, Sp);
+  }
+}
+
+/** A cardboard robot: a grey box with buttons, and the paws poking out. */
+function robotBox(buf, g) {
+  const { dir, bodyTop, legY, torsoX, torsoW } = g;
+  const St = rgb(K.steel), D = rgb(K.steelDk), L = rgb(K.steelLt);
+  const x0 = torsoX - 1, w = torsoW + 2;
+  buf.rect(x0, bodyTop - 1, w, legY - bodyTop + 2, St);
+  buf.hline(x0, bodyTop - 1, w, L);
+  buf.vline(x0, bodyTop, legY - bodyTop + 1, L);
+  buf.vline(x0 + w - 1, bodyTop, legY - bodyTop + 1, D);
+  buf.hline(x0, legY, w, D);
+  if (dir === 'down') {
+    buf.set(x0 + 2, bodyTop + 2, rgb(K.red));
+    buf.set(x0 + 4, bodyTop + 2, rgb(K.gold));
+    buf.set(x0 + 6, bodyTop + 2, rgb('#7fbe57'));
+    buf.hline(x0 + 2, bodyTop + 5, w - 4, D);
+    buf.hline(x0 + 3, bodyTop + 7, w - 6, rgb(K.ink));
+  } else if (dir === 'up') {
+    for (const r of [2, 4, 6]) buf.hline(x0 + 2, bodyTop + r, w - 4, D);
+  } else {
+    buf.set(x0 + 1, bodyTop + 2, rgb(K.red));
+    buf.hline(x0 + 1, bodyTop + 5, 3, D);
+  }
+  pawsOut(buf, g, x0, w);
+}
+
+/** An antenna with a light on the end, and a bolt on each side of the head. */
+function robotAntenna(buf, g) {
+  const cx = Math.round(g.hx);
+  const top = crownOf(g);
+  const blink = g.frame % 2 ? rgb(K.red) : rgb('#ff8a7a');
+  buf.vline(cx, top - 2, 3, rgb(K.steelDk));
+  buf.rect(cx - 1, top - 4, 2, 2, blink);
+  buf.set(cx - 1, top - 4, rgb('#ffffff'));
+  const bolt = rgb(K.steel);
+  const ys = Math.round(g.cy);
+  if (g.dir === 'side') buf.rect(cx, ys, 2, 2, bolt);
+  else { buf.rect(Math.round(g.hx - g.rx) - 1, ys, 2, 2, bolt); buf.rect(Math.round(g.hx + g.rx) - 1, ys, 2, 2, bolt); }
+}
+
+/** A superhero's star on the chest, and a belt. */
+function heroEmblem(buf, g) {
+  const { dir, bodyTop, legY, torsoX, torsoW } = g;
+  const Y = rgb(K.gold);
+  buf.hline(torsoX, legY - 1, torsoW, Y);
+  if (dir === 'down') {
+    const cx = Math.round(CHAR_W / 2) - 1, by = bodyTop + 2;
+    buf.rect(cx, by, 2, 3, Y);
+    buf.hline(cx - 1, by + 1, 4, Y);
+    buf.set(cx, by + 1, rgb(K.red));
+  } else if (dir === 'side') {
+    buf.rect(torsoX, bodyTop + 2, 2, 2, Y);
+  }
+}
+
+/** Fairy wings: two shimmering lobes a side, with a sparkle that comes and goes. */
+function fairyWings(buf, g, layer) {
+  const { dir, bodyTop, torsoX, torsoW, frame } = g;
+  const W = rgb(K.lilac), D = rgb(K.lilacDk), Sp = rgb(K.spark);
+  const flap = frame % 2 ? -1 : 0;
+  const lobes = (x, s) => {
+    buf.ellipse(x, bodyTop - 1 + flap, 2.2, 3.2, W);
+    buf.ellipse(x - s * 0.5, bodyTop + 4 + flap, 1.6, 2.0, W);
+    buf.set(Math.round(x), bodyTop + flap, D);
+    if (frame % 2 === 0) buf.set(Math.round(x + s), bodyTop - 3 + flap, Sp);
+  };
+  if (dir === 'side') {
+    if (layer === 'over') lobes(torsoX + torsoW + 1, 1);
+    return;
+  }
+  if ((dir === 'down') !== (layer === 'under')) return;
+  lobes(torsoX - 3, -1);
+  lobes(torsoX + torsoW + 2, 1);
+}
+
+/** A crown of little flowers, with leaves between. */
+function flowerCrown(buf, g) {
+  const cx = Math.round(g.hx);
+  const top = crownOf(g) + 1;
+  const cols = [K.blush, K.gold, '#ffffff', K.purpleLt];
+  const xs = g.dir === 'side' ? [cx - 2, cx, cx + 2] : [cx - 4, cx - 2, cx, cx + 2, cx + 4];
+  xs.forEach((x, i) => {
+    buf.set(x, top - 1, rgb(cols[i % cols.length]));
+    if (i < xs.length - 1) buf.set(x + 1, top, rgb(K.leaf));
+  });
 }
 
 // ---------------------------------------------------------------------------
