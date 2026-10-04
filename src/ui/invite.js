@@ -6,12 +6,13 @@
 // page copy to the clipboard or open its share sheet from inside a real tap on
 // a real button, and the game's own buttons aren't that.
 //
-// The valley's creator also gets the two things only they can do: make a new
-// link (the old one stops working; nobody already in is affected) and send
-// everybody else away (for when a griefer gets in).
+// The valley's creator also gets the one thing only they can do, for when a
+// griefer gets in: revoke everyone's access. Everybody else is sent out on the
+// spot, the old link stops working, and there's a new one to give to the
+// people they trust.
 
 import qrcode from '../vendor/qrcode.js';
-import { inviteLink, newInviteCode, revokeOthers } from '../net/valleys.js';
+import { inviteLink, revokeOthers } from '../net/valleys.js';
 import { copyText, canShare, shareLink } from './textinput.js';
 
 /** Draw a link as a QR code on a canvas, with the white border scanners want. */
@@ -132,7 +133,7 @@ export function showInvite({ valley, first = false }) {
       buttons.push(share);
     }
 
-    // The creator's buttons each ask twice: the first tap says what will happen.
+    // The creator's button asks twice: the first tap says what will happen.
     const twice = (label, confirmText, act) => {
       const b = button(label, 'danger');
       let armed = false;
@@ -151,16 +152,14 @@ export function showInvite({ valley, first = false }) {
       return b;
     };
     // Not on the first card: nobody else has seen the link yet, so there's
-    // nobody to send away and no reason to change it.
+    // nobody to send away.
     const extra = [];
     if (v.creator && !first) {
       extra.push(el('hr', null, { border: '0', borderTop: '1px solid #4a3f5e', margin: '16px 0 0' }));
-      extra.push(el('div', 'You are the creator of this valley. Only you can revoke access and make a new link.',
+      extra.push(el('div', "You are the creator of this valley. Only you can revoke everyone's access, which also makes a new link.",
         { fontSize: '13px', color: '#c8bfd6', marginTop: '12px', lineHeight: '1.35' }));
-      extra.push(twice('Make a new link', 'Tap again: the old link will stop working',
-        async () => ({ ...(await newInviteCode(v)), message: "Here's the new link. The old one doesn't work anymore, but everyone already in can still play." })));
-      extra.push(twice('Revoke everyone else', 'Tap again: everyone else loses access',
-        async () => ({ ...(await revokeOthers(v)), message: "Everyone else's access has ended. Share the new link with the people you still want." })));
+      extra.push(twice("Revoke everyone's access", 'Tap again: everyone is sent out and the old link stops working',
+        async () => ({ ...(await revokeOthers(v)), message: "Everyone else's access has ended. Share the new link with the people you trust." })));
     }
     const finish = () => { wrap.remove(); resolve(v); };
     closeX.addEventListener('click', finish);

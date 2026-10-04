@@ -1023,7 +1023,7 @@ class Game {
    */
   /**
    * The invite for the valley we're in, on the public server: its link, code,
-   * QR code, and for its creator the two buttons. `first` is the card shown
+   * QR code, and for its creator the revoke button. `first` is the card shown
    * once, after starting a new cafe.
    */
   openInvite(first = false) {

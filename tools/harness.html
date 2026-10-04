@@ -6242,7 +6242,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             if (!box.textContent.includes(mine[0].code)) err('the invite does not show the code');
             if (!box.querySelector('canvas')) err('no QR code');
             if (!button(box, 'Copy link')) err('no copy button by the link');
-            if (button(box, 'Make a new link') || button(box, 'Revoke everyone else')) err('the first card has the creator buttons');
+            if (button(box, "Revoke everyone's access")) err('the first card has the revoke button');
+            if (button(box, 'Make a new link')) err('there is still a Make a new link button');
             if (box.querySelector('hr')) err('the first card has a separator with nothing under it');
             if (button(box, 'Close').textContent) err('Close is a word, not an X');
             button(box, 'Close').click();
@@ -6261,13 +6262,14 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           box = document.querySelector('[data-invite]');
           if (!box) err('Invite friends did not open');
           else {
-            if (!box.querySelector('hr')) err('no separator above the creator buttons');
+            if (!box.querySelector('hr')) err('no separator above the revoke button');
             if (!/You are the creator of this valley/.test(box.textContent)) err('the creator note is not the new wording');
-            const mk = button(box, 'Make a new link');
-            if (!mk || !button(box, 'Revoke everyone else')) err('the creator has no buttons');
+            if (button(box, 'Make a new link')) err('there is still a Make a new link button');
+            const mk = button(box, "Revoke everyone's access");
+            if (!mk) err('the creator has no revoke button');
             else {
               mk.click();
-              if (V.deviceValleys()[0].code !== mine[0].code) err('one tap changed the code');
+              if (V.deviceValleys()[0].code !== mine[0].code) err('one tap revoked');
               mk.click();
               await until(() => V.deviceValleys()[0].code !== mine[0].code, 4000);
               const code2 = V.deviceValleys()[0].code;
@@ -6342,7 +6344,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           g.openInvite();
           await until(() => document.querySelector('[data-invite]'), 3000);
           const box = document.querySelector('[data-invite]');
-          if (box && button(box, 'Make a new link')) err('a friend got the creator buttons');
+          if (box && button(box, "Revoke everyone's access")) err('a friend got the revoke button');
           if (box) button(box, 'Close').click();
           await settle();
           window.__reloaded = false;

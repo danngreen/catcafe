@@ -1,11 +1,11 @@
 // Valleys on the public server, from the browser's side: the ones this device
-// has been in, getting into a new one, and the creator's two buttons.
+// has been in, getting into a new one, and the creator's revoke button.
 //
 // There are no accounts. A valley's invite code is how you get in the first
 // time; the server answers with a device key, and the key is what this device
 // keeps (in localStorage) to come back. The device that made a valley holds the
-// creator key, which is also the only one that can change the code or send
-// everybody else away. On the LAN none of this is used.
+// creator key, which is also the only one that can send everybody else away
+// (which changes the code too). On the LAN none of this is used.
 
 const LIST_KEY = 'catcafe.valleys';
 
@@ -139,13 +139,6 @@ export async function refreshValleys() {
     .map((v) => fresh.get(v.id) || v)
     .map(({ id, key, code, cafe, creator, at, welcomed }) => ({ id, key, code, cafe, creator, at, welcomed })));
   return out;
-}
-
-/** Creator only: a new invite code; the old one stops working. */
-export async function newInviteCode(v) {
-  const r = await post(`/valleys/${v.id}/code`, { key: v.key });
-  if (r.ok) rememberValley({ ...v, code: r.code });
-  return r;
 }
 
 /** Creator only: everyone else's access ends, and there's a new code. */
