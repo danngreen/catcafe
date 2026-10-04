@@ -25,7 +25,7 @@
 
 /** Every holiday there is. `from` and `to` are MM-DD, inclusive. */
 export const HOLIDAYS = [
-  { id: 'halloween', name: 'Halloween', from: '10-15', to: '11-02' },
+  { id: 'halloween', name: 'Halloween', from: '10-04', to: '11-04' },
 ];
 
 const BY_ID = Object.fromEntries(HOLIDAYS.map((h) => [h.id, h]));
