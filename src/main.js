@@ -53,7 +53,7 @@ import { TaxiFlight, StairWalk } from './ui/cutscene.js';
 import { net, NetClient } from './net/client.js';
 import { RESIDENT_NAMES, householder } from './world/residents.js';
 import {
-  deviceValleys, rememberValley, forgetValley, findValley, inviteFromAddress, normalizeCode,
+  deviceValleys, rememberValley, forgetValley, findValley, inviteFromAddress, normalizeCode, unopened,
   makeValley, joinValley, refreshValleys, localValleySeed, markPublicSite, wasPublicSite, homeScreenTipDue,
 } from './net/valleys.js';
 import { askText } from './ui/textinput.js';
@@ -311,7 +311,7 @@ class Game {
     let target = null;
     if (invite.creator) {
       // A creator link from tools/rescue.js: this device gets its buttons back.
-      target = rememberValley({ id: invite.creator.id, key: invite.creator.key, code: invite.code, creator: true });
+      target = rememberValley({ id: invite.creator.id, key: invite.creator.key, code: invite.code, creator: true, welcomed: true });
     } else if (invite.code) {
       const r = await joinValley(invite.code);
       if (r.ok) target = findValley(r.id);
@@ -368,9 +368,25 @@ class Game {
     this.publicValley = null;
     const seed = this.localSeed();
     if (seed !== this.worldSeed) this.buildWorld(seed);
-    this.titleScreen = new TitleScreen(this);
+    this.showTitle();
+  }
+
+  /**
+   * The title screen for the valley we're in. Picked from a list (your
+   * valleys, the lobby, an invite link), there's no menu in between: a valley
+   * this browser has played picks straight back up where you left it, and one
+   * it hasn't goes straight to choosing how you look. With no list to have
+   * picked from, it's the title menu, as it always was. `direct` false keeps the
+   * menu regardless.
+   */
+  showTitle(direct = true) {
+    const title = new TitleScreen(this);
+    this.titleScreen = title;
     this.screens.length = 0;
-    this.screens.push(this.titleScreen);
+    this.screens.push(title);
+    if (!direct || !title.canGoBack) return;
+    if (title.options[0] === RESUME) { title.done = true; this.continueGame(); }
+    else title.stage = 'create';
   }
 
   /**
@@ -392,7 +408,7 @@ class Game {
    * over to the usual title screen, which already knows how to tell a cafe
    * that is open from one that isn't.
    */
-  async enterGame(id, key = null) {
+  async enterGame(id, key = null, direct = true) {
     net.gameId = id;
     net.gameKey = key;
     this.publicValley = key ? findValley(id) : null;
@@ -401,9 +417,8 @@ class Game {
     if (ok && Number.isFinite(net.seed) && net.seed !== this.worldSeed) {
       this.buildWorld(net.seed);
     }
-    this.titleScreen = new TitleScreen(this);
-    this.screens.length = 0;
-    this.screens.push(this.titleScreen);
+    // Not in, so nothing to go straight into: the menu, with Back on it.
+    this.showTitle(direct && ok);
     return ok;
   }
 
@@ -620,8 +635,8 @@ class Game {
     } else if (this.lobbyGames && this.lobbyGames.length) {
       this.screens.push(new LobbyScreen(this, this.lobbyGames));
     } else {
-      this.titleScreen = new TitleScreen(this);
-      this.screens.push(this.titleScreen);
+      // An invite link to a valley lands here, already in it.
+      this.showTitle(net.connected);
     }
     this.markReady(this);
 
@@ -3350,7 +3365,7 @@ class ValleysScreen extends Screen {
     this.game = game;
     // Opened with no connection: the shared valleys wait, this device's own plays.
     this.offline = !!game.offlinePublic;
-    this.valleys = deviceValleys().map((v) => (this.offline ? { ...v, offline: true } : v));
+    this.valleys = deviceValleys().filter((v) => !unopened(v)).map((v) => (this.offline ? { ...v, offline: true } : v));
     // What the valley kept on this device has in it, if anything yet.
     this.localSave = GameState.readSlot(game.localSeed());
     this.index = 0;
@@ -3369,7 +3384,7 @@ class ValleysScreen extends Screen {
 
   refresh() {
     refreshValleys().then((list) => {
-      this.valleys = list;
+      this.valleys = list.filter((v) => !unopened(v));
       this.index = Math.min(this.index, this.rows.length - 1);
     });
   }
@@ -3754,6 +3769,7 @@ class LobbyScreen extends Screen {
 }
 
 const BACK_OPTION = 'Back to the valleys';
+const RESUME = 'Resume Game';
 
 class TitleScreen extends Screen {
   constructor(game) {
@@ -3774,7 +3790,7 @@ class TitleScreen extends Screen {
     // to: the wrong one is one press away from the right one. A direct link,
     // or no server, has nowhere to go back to.
     this.canGoBack = !!(game.lobbyGames && !new URLSearchParams(location.search).get('game'));
-    this.options = mine ? ['Resume Game', 'New game'] : ['New game'];
+    this.options = mine ? [RESUME, 'New game'] : ['New game'];
     if (this.canGoBack) this.options.push(BACK_OPTION);
     // Whatever this browser played as last time, so the usual answer is just
     // to press Space.
@@ -3814,7 +3830,7 @@ class TitleScreen extends Screen {
     // way, and what the save is for is picking your own name, face and spot back
     // up rather than starting again on the doorstep every time you rejoin.
     this.options = GameState.hasSave(this.game.worldSeed)
-      ? ['Resume Game', 'Start new game in valley'] : ['Start new game in valley'];
+      ? [RESUME, 'Start new game in valley'] : ['Start new game in valley'];
     if (this.canGoBack) this.options.push(BACK_OPTION);
     this.index = 0;
     this.row = Math.min(this.row, 2);
@@ -3839,7 +3855,7 @@ class TitleScreen extends Screen {
       }
       if (input.hit('use')) {
         audio.sfx('ui_ok');
-        if (this.options[this.index] === 'Resume Game') { this.done = true; this.game.continueGame(); }
+        if (this.options[this.index] === RESUME) { this.done = true; this.game.continueGame(); }
         else this.stage = 'create';
       }
       return;
@@ -3872,7 +3888,17 @@ class TitleScreen extends Screen {
       saveMe(this.name, this.look);
       this.game.startNewGame({ ...this.look }, { ...this.style });
     }
-    if (input.hit('cancel')) { this.stage = 'title'; audio.sfx('ui_back'); }
+    if (input.hit('cancel')) {
+      audio.sfx('ui_back');
+      // Came straight here from the list of valleys, so that's where back is.
+      if (!this.canGoBack) { this.stage = 'title'; return; }
+      // A valley you only just made, and backed out of before opening it, was
+      // never really there: nobody has its link, so it goes off your list.
+      const v = this.game.publicValley;
+      if (v && v.creator && !v.welcomed) forgetValley(v.id);
+      this.done = true;
+      this.game.backToLobby();
+    }
   }
 
   draw(ctx) {
@@ -4072,7 +4098,8 @@ class TitleScreen extends Screen {
       }
     }
 
-    drawTextCentered(ctx, 'Left / Right to change    Space to begin', x + w / 2, y + h - 16, { color: P.uiTextDim, shadow: P.uiShadow });
+    drawTextCentered(ctx, this.canGoBack ? 'Left/Right to change   Space to begin   X to go back'
+      : 'Left / Right to change    Space to begin', x + w / 2, y + h - 16, { color: P.uiTextDim, shadow: P.uiShadow });
     drawTextCentered(ctx, "(You can skip all this — it's only for looks)", VIEW_W / 2, y + h + 10, { color: '#2f3d22' });
   }
 }

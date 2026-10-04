@@ -6188,16 +6188,17 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         const topName = () => (top() ? top().constructor.name : 'none');
         const err = (m) => window.__errors.push(m);
         const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }).then((r) => r.json());
-        const button = (root, label) => [...root.querySelectorAll('button')].find((b) => b.textContent === label);
+        const button = (root, label) => [...root.querySelectorAll('button')]
+          .find((b) => b.textContent === label || b.getAttribute('aria-label') === label);
         // Every scenario starts as a device that has never been here.
         localStorage.removeItem('catcafe.valleys');
         g.backToLobby();
         await settle();
         if (topName() !== 'ValleysScreen') err(`first screen is ${topName()}`);
-        /** Through the title and the creation screen, and the welcome. */
+        /** Through the creation screen (picked from the list: no menu first), and the welcome. */
         const startCafe = async () => {
           await until(() => topName() === 'TitleScreen', 6000);
-          await pressKey('Space'); await settle();
+          if (top().stage !== 'create') err(`picked a valley and got the ${top().stage} menu, not the chooser`);
           await pressKey('Space'); await settle();
           for (let i = 0; i < 8 && g.dialogue.active; i++) await pressKey('Space');
           await settle();
@@ -6206,22 +6207,64 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (SCRIPT === 'pubstart') {
           const rows = top().rows;
           if (rows.length !== 3 || !rows[0].local || !rows[1].make || !rows[2].join) err(`a new device sees ${JSON.stringify(rows)}`);
-          top().index = rows.findIndex((r) => r.make);
-          await pressKey('Space');
-          await until(() => topName() === 'TitleScreen', 6000);
+          const make = async () => {
+            top().index = top().rows.findIndex((r) => r.make);
+            await pressKey('Space');
+            await until(() => topName() === 'TitleScreen', 6000);
+          };
+          // Made, then backed out of before opening: it was never really there.
+          await make();
+          if (top().stage !== 'create') err(`a new valley opened on the ${top().stage} menu`);
+          const ghost = V.deviceValleys()[0];
+          await pressKey('KeyX');
+          await until(() => topName() === 'ValleysScreen', 3000);
+          if (V.deviceValleys().some((v) => v.id === ghost.id)) err('backing out left the new valley on the list');
+          // Made, and the tab closed on the chooser: hidden, and gone after a refresh.
+          // The same one again, as the list would have it after a closed tab (and
+          // one valley fewer against the server's hourly limit).
+          const closed = V.rememberValley({ id: ghost.id, key: ghost.key, code: ghost.code, creator: true });
+          g.backToLobby();
+          await settle();
+          if (top().valleys.some((v) => v.id === closed.id)) err('a valley nobody opened is listed');
+          await V.refreshValleys();
+          if (V.deviceValleys().some((v) => v.id === closed.id)) err('a valley nobody opened was kept');
+
+          await make();
           const mine = V.deviceValleys();
           if (mine.length !== 1 || !mine[0].creator) err(`device list after making one: ${JSON.stringify(mine)}`);
           if (!g.net.connected || !mine[0] || g.net.gameKey !== mine[0].key) err('not connected to the new valley with its key');
           await startCafe();
           await until(() => document.querySelector('[data-invite]'), 4000);
-          const box = document.querySelector('[data-invite]');
+          let box = document.querySelector('[data-invite]');
           if (!box) err('the first-time invite never showed');
           else {
             if (!/ready/.test(box.textContent)) err('not the first-time card');
             if (!box.textContent.includes(mine[0].code)) err('the invite does not show the code');
             if (!box.querySelector('canvas')) err('no QR code');
+            if (!button(box, 'Copy link')) err('no copy button by the link');
+            if (button(box, 'Make a new link') || button(box, 'Revoke everyone else')) err('the first card has the creator buttons');
+            if (box.querySelector('hr')) err('the first card has a separator with nothing under it');
+            if (button(box, 'Close').textContent) err('Close is a word, not an X');
+            button(box, 'Close').click();
+          }
+          await settle();
+          if (document.querySelector('[data-invite]')) err('the invite did not close');
+          if (g.screens.some((x) => x.constructor.name === 'HoldScreen')) err('the game is still held');
+          await V.refreshValleys();     // which rewrites the list: it must keep the flag
+          if (!V.deviceValleys()[0].welcomed) err('the first-time card would show again');
+          if (!new M.PauseScreen(g).items.includes('Invite friends')) err('no Invite friends in the pause menu');
+          if (!new M.PauseScreen(g).items.includes('Villagers')) err('no Villagers in the pause menu');
+
+          // From the pause menu, once playing: the creator's buttons, under a line.
+          g.openInvite();
+          await until(() => document.querySelector('[data-invite]'), 3000);
+          box = document.querySelector('[data-invite]');
+          if (!box) err('Invite friends did not open');
+          else {
+            if (!box.querySelector('hr')) err('no separator above the creator buttons');
+            if (!/You are the creator of this valley/.test(box.textContent)) err('the creator note is not the new wording');
             const mk = button(box, 'Make a new link');
-            if (!mk) err('the creator has no Make a new link');
+            if (!mk || !button(box, 'Revoke everyone else')) err('the creator has no buttons');
             else {
               mk.click();
               if (V.deviceValleys()[0].code !== mine[0].code) err('one tap changed the code');
@@ -6233,14 +6276,23 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
               const joinOld = await post('/valleys/join', { code: mine[0].code });
               if (joinOld.ok) err('the old code still works');
             }
-            button(box, 'Close').click();
+            // A click inside the card leaves it open; a click on the page around it closes it.
+            box.firstChild.click();
+            box.querySelector('canvas').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            if (!document.querySelector('[data-invite]')) err('a click inside the card closed it');
+            box.dispatchEvent(new MouseEvent('click', { bubbles: true }));
           }
           await settle();
-          if (document.querySelector('[data-invite]')) err('the invite did not close');
-          if (g.screens.some((x) => x.constructor.name === 'HoldScreen')) err('the game is still held');
-          await V.refreshValleys();     // which rewrites the list: it must keep the flag
-          if (!V.deviceValleys()[0].welcomed) err('the first-time card would show again');
-          if (!new M.PauseScreen(g).items.includes('Invite friends')) err('no Invite friends in the pause menu');
+          if (document.querySelector('[data-invite]')) err('a click off the card did not close it');
+
+          // Back to the list and in again: straight into play, no menu.
+          g.state.save();
+          g.backToLobby();
+          await until(() => topName() === 'ValleysScreen', 3000);
+          top().index = top().rows.findIndex((r) => r.id === mine[0].id);
+          await pressKey('Space');
+          await until(() => g.mode === 'play' && !g.screens.length, 6000);
+          if (g.screens.length || g.mode !== 'play') err(`picking a valley you've played showed ${topName()}, not the valley`);
           window.__cont = `valleys=${V.deviceValleys().length} creator=${V.deviceValleys()[0].creator}`;
         } else if (SCRIPT === 'pubjoin') {
           const other = await post('/valleys', {});
@@ -6344,12 +6396,14 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           if (keys.length !== 1 || keys[0] !== name) err(`after the update the caches are ${keys.join(', ')}`);
           window.__cont = `cache=${name} files=${list.files.length} updated=${told()}`;
         }
-      } else if (SCRIPT === 'pubshot' || SCRIPT === 'pubshotinvite' || SCRIPT === 'pubshotoffline') {
+      } else if (SCRIPT === 'pubshot' || SCRIPT.startsWith('pubshotinvite') || SCRIPT === 'pubshotoffline') {
         // Pictures, not checks: the valleys screen with a couple of valleys on
-        // it, or the invite card. Take with --shot.
+        // it, or the invite card (the first-time one, or `pubshotinvitelater`
+        // from the pause menu). Take with --shot.
         const V = await import('../src/net/valleys.js');
         localStorage.removeItem('catcafe.valleys');
         const mine = await V.makeValley();
+        V.rememberValley({ id: mine.id, key: mine.key, welcomed: true });   // as if opened
         const other = await fetch('/valleys', { method: 'POST', body: '{}' }).then((r) => r.json());
         await V.joinValley(other.code);
         if (SCRIPT === 'pubshot' || SCRIPT === 'pubshotoffline') {
@@ -6363,8 +6417,9 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
           g.screens.length = 0;
           g.startNewGame({ species: 'cat', coat: 'ginger', cloth: '#5b8fd6' }, { wall: '#efe2c8', roof: '#c86a4a', awning: '#c05a7a', floor: 1, name: 'The Sleepy Saucer' });
           g.dialogue.active = false;
+          g.pendingInvite = false;
           await settle();
-          g.openInvite(true);
+          g.openInvite(SCRIPT === 'pubshotinvite');
           await until(() => document.querySelector('[data-invite]'), 3000);
         }
         await wait(300);
@@ -6861,8 +6916,8 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         if (st.money !== before - 100) window.__errors.push('missed what happened while away: ' + window.__drop);
         bot.close();
       } else if (SCRIPT === 'netlobbyback') {
-        // Picked the wrong valley. The title screen for it has a way back to
-        // the list, which hangs up — so the server stops counting us as being
+        // Picked the wrong valley. Picking one goes straight to choosing your
+        // look, and X there goes back to the list, which hangs up — so the server stops counting us as being
         // in the lobby for that one — and a morning card sent to everybody
         // connected is not put up over a title screen.
         const names = () => g.screens.map((sc) => sc.constructor.name).join(',');
@@ -6875,7 +6930,7 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await until(() => !(!g.titleScreen), 4500);
         await settle();
         const title = g.titleScreen;
-        const options = title ? title.options.join('/') : '';
+        const stage = title ? title.stage : 'none';
         entered = g.net.gameId;
         const inLobbyFor = await here();
 
@@ -6885,15 +6940,13 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         await wait(300);
         const afterMidnight = names();
 
-        for (let i = 0; title && i < title.options.length - 1; i++) await press('ArrowDown');
-        const onBack = title && title.options[title.index];
-        await press('Space');
+        await press('KeyX');
         await wait(900);
         const back = names();
         const stillThere = await here();
-        window.__back = `start=${start} options=${options} midnight=${afterMidnight} picked="${onBack}"`
+        window.__back = `start=${start} stage=${stage} midnight=${afterMidnight}`
           + ` after=${back} sockets ${inLobbyFor}->${stillThere} connected=${g.net.connected}`;
-        if (!/Back/.test(options)) window.__errors.push('no way back from the wrong valley: ' + window.__back);
+        if (stage !== 'create') window.__errors.push('picking a valley did not go straight to the chooser: ' + window.__back);
         if (/Summary/.test(afterMidnight)) window.__errors.push('the morning card came up over the title screen: ' + window.__back);
         if (back !== 'LobbyScreen') window.__errors.push('Back did not go back to the valleys: ' + window.__back);
         if (g.net.connected || stillThere >= inLobbyFor) window.__errors.push('still connected to the valley we backed out of: ' + window.__back);

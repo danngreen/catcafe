@@ -1,5 +1,6 @@
-// Inviting people to a valley on the public server: the link, the code in big
-// letters, a QR code to scan across the room, and Copy and Share.
+// Inviting people to a valley on the public server: the link (with a copy
+// button beside it), the code in big letters, a QR code to scan across the
+// room, and Share where the device has one.
 //
 // It's a page overlay rather than a canvas screen, because a phone only lets a
 // page copy to the clipboard or open its share sheet from inside a real tap on
@@ -50,6 +51,7 @@ export function showInvite({ valley, first = false }) {
     });
     const card = document.createElement('div');
     Object.assign(card.style, {
+      position: 'relative',
       width: 'min(420px, calc(100vw - 32px))', boxSizing: 'border-box', padding: '18px', margin: '16px 0',
       background: '#2a2438', border: '2px solid #4a3f5e', borderRadius: '6px', color: '#f3ead8',
       textAlign: 'center',
@@ -61,26 +63,49 @@ export function showInvite({ valley, first = false }) {
       return e;
     };
     const title = el('div', first ? 'Your valley is ready!' : 'Invite friends',
-      { fontSize: '21px', fontWeight: 'bold', color: '#f2c75c', marginBottom: '6px' });
+      { fontSize: '21px', fontWeight: 'bold', color: '#f2c75c', margin: '0 28px 6px' });
     const lead = el('div', first
       ? 'This link is the way back into your cafe. Bookmark it, or add the game to your Home Screen. Anyone you share it with can come and play.'
       : 'Anyone with this link or code can come and play in your valley.',
     { fontSize: '15px', color: '#c8bfd6', marginBottom: '12px', lineHeight: '1.35' });
     const qrBox = el('div', null, { margin: '0 auto 10px', lineHeight: '0' });
     const code = el('div', '', { fontSize: '24px', fontWeight: 'bold', letterSpacing: '1px', color: '#f3ead8' });
-    const link = el('div', '', { fontSize: '14px', color: '#c8bfd6', margin: '4px 0 12px', wordBreak: 'break-all' });
+    const linkRow = el('div', null, {
+      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', margin: '4px 0 12px',
+    });
+    const link = el('span', '', { fontSize: '14px', color: '#c8bfd6', wordBreak: 'break-all' });
     const note = el('div', '', { fontSize: '14px', color: '#8fd18a', minHeight: '18px', marginBottom: '8px' });
 
     const button = (label, kind) => {
       const b = el('button', label, {
         display: 'block', width: '100%', padding: '11px', marginTop: '8px', fontSize: '16px',
         fontFamily: 'inherit', fontWeight: 'bold', border: '0', borderRadius: '4px', cursor: 'pointer',
-        background: kind === 'main' ? '#f2c75c' : kind === 'danger' ? '#7a3344' : '#4a3f5e',
-        color: kind === 'main' ? '#2a2438' : '#f3ead8',
+        background: kind === 'danger' ? '#7a3344' : '#4a3f5e',
+        color: '#f3ead8',
       });
       b.type = 'button';
       return b;
     };
+
+    // A small square button holding an icon: copy, and close.
+    const iconButton = (label, svg, style) => {
+      const b = el('button', null, {
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: 'none',
+        width: '32px', height: '32px', padding: '0', border: '0', borderRadius: '4px', cursor: 'pointer',
+        background: 'transparent', color: '#c8bfd6', ...style,
+      });
+      b.type = 'button';
+      b.title = label;
+      b.setAttribute('aria-label', label);
+      b.innerHTML = svg;
+      return b;
+    };
+    const SVG = (body) => `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+    const copy = iconButton('Copy link', SVG('<rect x="6" y="6" width="10" height="10" rx="2"/><path d="M12 6V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/>'),
+      { background: '#4a3f5e', color: '#f3ead8' });
+    const closeX = iconButton('Close', SVG('<path d="M4 4l10 10M14 4L4 14"/>'),
+      { position: 'absolute', top: '8px', right: '8px' });
+    linkRow.append(link, copy);
 
     const show = () => {
       const url = inviteLink(v.code);
@@ -95,11 +120,10 @@ export function showInvite({ valley, first = false }) {
     };
     const say = (text, bad) => { note.textContent = text; note.style.color = bad ? '#ff9a8a' : '#8fd18a'; };
 
-    const copy = button('Copy link', 'main');
     copy.addEventListener('click', async () => {
       say(await copyText(inviteLink(v.code)) ? 'Copied! Paste it into a message.' : "Couldn't copy it. Press and hold the link to copy it instead.", false);
     });
-    const buttons = [copy];
+    const buttons = [];
     if (canShare()) {
       const share = button('Share...', 'plain');
       share.addEventListener('click', () => {
@@ -126,21 +150,25 @@ export function showInvite({ valley, first = false }) {
       });
       return b;
     };
+    // Not on the first card: nobody else has seen the link yet, so there's
+    // nobody to send away and no reason to change it.
     const extra = [];
-    if (v.creator) {
-      extra.push(el('div', 'Only you can do these, because you made this valley.',
-        { fontSize: '13px', color: '#c8bfd6', marginTop: '16px' }));
+    if (v.creator && !first) {
+      extra.push(el('hr', null, { border: '0', borderTop: '1px solid #4a3f5e', margin: '16px 0 0' }));
+      extra.push(el('div', 'You are the creator of this valley. Only you can revoke access and make a new link.',
+        { fontSize: '13px', color: '#c8bfd6', marginTop: '12px', lineHeight: '1.35' }));
       extra.push(twice('Make a new link', 'Tap again: the old link will stop working',
         async () => ({ ...(await newInviteCode(v)), message: "Here's the new link. The old one doesn't work anymore, but everyone already in can still play." })));
       extra.push(twice('Revoke everyone else', 'Tap again: everyone else loses access',
         async () => ({ ...(await revokeOthers(v)), message: "Everyone else's access has ended. Share the new link with the people you still want." })));
     }
-    const close = button('Close', 'plain');
     const finish = () => { wrap.remove(); resolve(v); };
-    close.addEventListener('click', finish);
+    closeX.addEventListener('click', finish);
+    // A click on the dimmed page around the card closes it too.
+    wrap.addEventListener('click', (e) => { if (e.target === wrap) finish(); });
     wrap.addEventListener('keydown', (e) => { if (e.key === 'Escape') finish(); });
 
-    card.append(title, lead, qrBox, code, link, note, ...buttons, ...extra, close);
+    card.append(closeX, title, lead, qrBox, code, linkRow, note, ...buttons, ...extra);
     wrap.append(card);
     document.body.append(wrap);
     show();

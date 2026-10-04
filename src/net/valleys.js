@@ -101,9 +101,18 @@ export async function joinValley(code) {
 }
 
 /**
+ * A valley this device made but never got as far as opening: whoever made it
+ * backed out of choosing their look, or closed the tab. Nobody has seen its
+ * link, so as far as anybody's concerned it doesn't exist yet, and it isn't
+ * listed. (The server lets an unstarted valley go after a week.)
+ */
+export const unopened = (v) => !!(v && v.creator && !v.welcomed);
+
+/**
  * Fresh details of this device's valleys for the title screen: the cafe's
  * name, the day, who's in, and the current code. A valley the server no longer
- * lets this key into comes back `gone`.
+ * lets this key into comes back `gone`. One this device made and never opened
+ * is forgotten, unless the server says it's been started after all.
  */
 export async function refreshValleys() {
   const list = deviceValleys();
@@ -111,14 +120,24 @@ export async function refreshValleys() {
   const r = await post('/valleys/mine', { valleys: list.map(({ id, key }) => ({ id, key })) });
   if (!r.ok || !Array.isArray(r.valleys)) return list.map((v) => ({ ...v, offline: true }));
   const byId = new Map(r.valleys.map((x) => [x.id, x]));
-  const out = list.map((v) => {
+  const dropped = new Set();
+  const out = [];
+  for (const v of list) {
     const s = byId.get(v.id);
-    if (!s) return { ...v, offline: true };
-    if (s.gone) return { ...v, gone: true };
-    return { ...v, ...s, key: v.key, creator: !!s.creator };
-  });
-  // Keep what we learned (the cafe's name, the latest code) for next time.
-  saveDeviceValleys(out.map(({ id, key, code, cafe, creator, at, welcomed }) => ({ id, key, code, cafe, creator, at, welcomed })));
+    if (!s) { out.push({ ...v, offline: true }); continue; }
+    if (s.gone) { out.push({ ...v, gone: true }); continue; }
+    const now = { ...v, ...s, key: v.key, creator: !!s.creator };
+    if (now.started) now.welcomed = true;
+    if (unopened(now)) { dropped.add(v.id); continue; }
+    out.push(now);
+  }
+  // Keep what we learned (the cafe's name, the latest code) for next time. Into
+  // the list as it is now, not as it was when we asked: a valley made or joined
+  // while the answer was on its way must not be written out of it.
+  const fresh = new Map(out.map((v) => [v.id, v]));
+  saveDeviceValleys(deviceValleys().filter((v) => !dropped.has(v.id))
+    .map((v) => fresh.get(v.id) || v)
+    .map(({ id, key, code, cafe, creator, at, welcomed }) => ({ id, key, code, cafe, creator, at, welcomed })));
   return out;
 }
 

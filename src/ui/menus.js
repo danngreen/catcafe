@@ -1715,7 +1715,7 @@ export class FriendsScreen extends Screen {
     const { x, w } = fitRect(16, VIEW_W - 32, 300);
     const y = 22, h = VIEW_H - 44;
     panel(ctx, x, y, w, h);
-    panelTitle(ctx, x, y, w, 'Friends');
+    panelTitle(ctx, x, y, w, 'Villagers');
 
     if (!this.rows.length) {
       drawTextCentered(ctx, "You haven't gotten to know anybody yet.", x + w / 2, y + 46,
@@ -1856,7 +1856,7 @@ export class PauseScreen extends ListScreen {
     // On the public server, a valley's link is how friends get in.
     // A costume while a holiday has them; the rest of the year, just your shirt.
     const outfit = playerCostumes().length ? 'Change costume' : 'Change clothes';
-    const items = ['Cafe book', 'Journal', 'Map', 'Friends', 'Bag', outfit, 'Save game', 'Exit', 'Settings', 'Back'];
+    const items = ['Cafe book', 'Journal', 'Map', 'Villagers', 'Bag', outfit, 'Save game', 'Exit', 'Settings', 'Back'];
     if (game.publicValley) items.splice(4, 0, 'Invite friends');
     super(items, items.length);
     this.game = game;
@@ -1871,7 +1871,7 @@ export class PauseScreen extends ListScreen {
         case 'Cafe book': this.game.push(new CafeScreen(this.game)); break;
         case 'Journal': this.game.push(new JournalScreen(this.game)); break;
         case 'Map': this.game.push(new MapScreen(this.game)); break;
-        case 'Friends': this.game.push(new FriendsScreen(this.game)); break;
+        case 'Villagers': this.game.push(new FriendsScreen(this.game)); break;
         case 'Invite friends': this.game.openInvite(); break;
         case 'Change costume':
         case 'Change clothes': this.game.push(new OutfitScreen(this.game)); break;
