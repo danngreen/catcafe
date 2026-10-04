@@ -156,10 +156,10 @@ export function showInvite({ valley, first = false }) {
     const extra = [];
     if (v.creator && !first) {
       extra.push(el('hr', null, { border: '0', borderTop: '1px solid #4a3f5e', margin: '16px 0 0' }));
-      extra.push(el('div', "You are the creator of this valley. Only you can revoke everyone's access, which also makes a new link.",
+      extra.push(el('div', "You are the creator of this valley. Only you can revoke everyone's access. This will create a new link.",
         { fontSize: '13px', color: '#c8bfd6', marginTop: '12px', lineHeight: '1.35' }));
-      extra.push(twice("Revoke everyone's access", 'Tap again: everyone is sent out and the old link stops working',
-        async () => ({ ...(await revokeOthers(v)), message: "Everyone else's access has ended. Share the new link with the people you trust." })));
+      extra.push(twice("Revoke everyone's access", 'Tap again to kick everyone off',
+        async () => ({ ...(await revokeOthers(v)), message: "Everyone else's access has ended and the old link is invalid. Share the new link with people you trust." })));
     }
     const finish = () => { wrap.remove(); resolve(v); };
     closeX.addEventListener('click', finish);
