@@ -35,7 +35,7 @@ export const QUESTS = [
       money: 140,
       flags: ['recipe_honey'],
       items: [['honey_scone', 12]],
-      journal: "After you brought Dough a jar of honey, they started selling honey scones again, and everyone in the valley rejoiced. At least, you assume they rejoiced. Nobody actually said so.",
+      journal: 'After you brought Dough a jar of honey, they started selling honey scones again, and everyone in the valley rejoiced. At least, you assume they rejoiced. Nobody actually said so.',
       friendship: ['dough'],
     },
     offer: "Clover keeps bees out in Oakhollow, east through the woods.\n\nIf you bring me a jar of her honey, I'll make honey scones. People will flock to your cafe for them.",
@@ -56,7 +56,7 @@ export const QUESTS = [
       rep: 0.5,
     },
     offer: 'Somebody named Shrimp lost a bell. How do I know? I found a bell with "Shrimp" scratched inside it, and Shrimp sounds like a Saltmere name to me.\n\nCould you take it down south to Saltmere, on the coast, and ask around?',
-    complete: "Thank you for bringing my bell back!\n\nI heard you run a cat cafe. I guess you find lost bells on the side, too? Thanks again!",
+    complete: 'Thank you for bringing my bell back!\n\nI heard you run a cat cafe. I guess you find lost bells on the side, too? Thanks again!',
   },
   {
     id: 'flower_delivery',
@@ -202,7 +202,7 @@ export const QUESTS = [
     id: 'lane_end_hedge',
     title: 'The Mystery in the Hedge',
     giver: 'button',
-    desc: 'Something moves in the hedge outside Button\'s house at night, and Button wants to know what it is.',
+    desc: "Something moves in the hedge outside Button's house at night, and Button wants to know what it is.",
     steps: [
       {
         note: 'Look at the hedge at the end of the lane, after dark',
@@ -578,7 +578,7 @@ export const QUESTS = [
         note: "Ask Moss if they've seen Pebble's costume",
         objective: { type: 'talk', to: 'moss' },
         progress: "Ask Moss if they've seen my costume. There's nothing Moss likes more than a good sit-down by the pond, so Moss sees everything that goes on around here.",
-        done: "Pebble's dragon costume? Oh, I saw it! Pebble was practicing a roar by the pond yesterday, and then took the costume off to go for a swim.\n\nA gust of wind picked it right up and carried it off down the river. Brook was fishing down that way, so ask Brook.",
+        done: "Pebble's dragon costume? Oh, I saw it! Pebble was practicing a roar by the pond yesterday, and then took the costume off.\n\nA gust of wind picked it right up and carried it off down the river. Brook was fishing down that way, so ask Brook.",
       },
       {
         note: 'Ask Brook about the costume',
@@ -599,12 +599,13 @@ export const QUESTS = [
       },
     ],
     reward: {
-      money: 150,
+      money: 0,
       rep: 0.05,
       friendship: ['pebble', 'moss', 'brook'],
       journal: "The wind blew Pebble's dragon costume down the river, and Brook fished it out of the reeds. You got it back to Pebble just in time for trick-or-treating.",
+      items: [['strawberry', 10]],
     },
-    offer: "Oh, thank goodness somebody's here! I made a dragon costume for trick-or-treating. It's green, it has a tail, and it took me three whole weeks.\n\nAnd now I can't find it anywhere! I had it yesterday, I know I did.\n\nCould you help me look? Moss might know. Moss sits by the pond all day and sees everything.",
+    offer: "Oh, thank goodness somebody's here! I made a dragon costume for trick-or-treating. It's green, it has a tail, and it took us three whole weeks to make it.\n\nAnd now I can't find it anywhere! I had it yesterday, I know I did.\n\nCould you help me look? Moss might know. Moss sits by the pond all day and sees everything.",
     complete: "My costume! You found it!\n\n*Pebble puts it on right away, and the tail swishes back and forth*\n\nRoar! ...Okay, I'm a friendly dragon, so it's more of a polite roar.\n\nThank you so much. Here, this is for you. I'm going trick-or-treating right now!",
   },
   {
@@ -644,7 +645,7 @@ export const QUESTS = [
       journal: 'Saffron talked you into stocking pumpkin lattes, and now the whole cafe smells like October.',
     },
     offer: "Can you smell that? No? Exactly. It's October, and nowhere in this whole valley smells like pumpkin spice.\n\nIf I had a cafe, I'd have pumpkin lattes on the counter from the first chilly morning until the last jack-o'-lantern goes out. I don't have a cafe, but you do.\n\nStock ten of them, and I'll make it worth your while.",
-    complete: "Ten pumpkin lattes, all lined up. Now THAT is a cafe.\n\n*Saffron takes a long, happy sniff*\n\nThat's exactly what I would have done. Here, you've earned this. And if you ever need a hand behind the counter, you know where to find me.",
+    complete: "Ten pumpkin lattes, all lined up. Now THAT is a cafe.\n\n*Saffron takes a long, happy sniff*\n\nThat's exactly what I would have done. Here, you've earned this. And if you ever need anything, you know where to find me.",
   },
   {
     id: 'woofers_treat',

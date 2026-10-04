@@ -796,7 +796,7 @@ export const ITEM_DATA = {
   },
   strawberry: {
     name: 'Strawberry',
-    desc: "It's the only time of year you can get strawberries, and every house in the valley has one to give away.",
+    desc: "It's the only time of year you can get strawberries, and every house in the valley is giving them away.",
     cat: 'food',
     icon: 'strawberry',
     holiday: 'halloween',
@@ -808,7 +808,7 @@ export const ITEM_DATA = {
   },
   pumpkin_latte: {
     name: 'Pumpkin Latte',
-    desc: "It's a latte with pumpkin and cinnamon in it, and it tastes exactly like October.",
+    desc: "It's a latte with pumpkin and cinnamon in it, and it tastes like October.",
     cat: 'drink',
     icon: 'pumpkin_latte',
     holiday: 'halloween',
@@ -820,7 +820,7 @@ export const ITEM_DATA = {
   },
   pumpkin_smoothie: {
     name: 'Pumpkin Smoothie',
-    desc: "It's orange, it's cold, and it's much nicer than it sounds.",
+    desc: "It's orange, fresh, cold, and it's much nicer than it sounds.",
     cat: 'drink',
     icon: 'pumpkin_smoothie',
     holiday: 'halloween',
@@ -832,7 +832,7 @@ export const ITEM_DATA = {
   },
   dragon_costume: {
     name: "Pebble's Dragon Costume",
-    desc: "It's green, it has a tail, and it took three whole weeks to make. It's only a little bit damp.",
+    desc: "It's green with has a tail. Pebble and his parents spent three weeks to make it.",
     cat: 'key',
     icon: 'bag',
     holiday: 'halloween',
