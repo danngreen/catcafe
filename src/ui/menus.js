@@ -1914,48 +1914,52 @@ export class PauseScreen extends ListScreen {
   }
 }
 
+/** The Settings sliders, top to bottom: Sound, Music, SFX, Background. */
+const VOLUME_KEYS = ['master', 'music', 'sfx', 'ambience'];
+
 export class SoundScreen extends ListScreen {
   constructor(game) {
-    super(['Sound', 'Music', 'SFX', 'Animation', 'Fullscreen', 'Display info', 'Back'], 8);
+    super(['Sound', 'Music', 'SFX', 'Background', 'Animation', 'Fullscreen', 'Display info', 'Back'], 8);
     this.game = game;
   }
   update(dt, input) {
     this.t += dt;
     this.navigate(dt, input);
-    const keys = ['master', 'music', 'sfx'];
-    if (this.index < 3) {
+    // Background is rain, wind and water, birds and crickets, the cafe's hum.
+    const keys = VOLUME_KEYS;
+    if (this.index < keys.length) {
       if (input.repeat('left', dt)) { audio.setVolume(keys[this.index], audio.volumes[keys[this.index]] - 0.1); audio.sfx('ui_move'); }
       if (input.repeat('right', dt)) { audio.setVolume(keys[this.index], audio.volumes[keys[this.index]] + 0.1); audio.sfx('ui_move'); }
     }
     // Smooth mode is a setting of this machine, not of the valley — one
     // player's old laptop is nobody else's business, so it never goes near
     // the shared books.
-    if (this.index === 3 && (input.hit('use') || input.repeat('left', dt) || input.repeat('right', dt))) {
+    if (this.index === 4 && (input.hit('use') || input.repeat('left', dt) || input.repeat('right', dt))) {
       toggleSetting('lowFx');
       audio.sfx('ui_ok');
     }
-    if (input.hit('use') && this.index === 4) { this.game.requestFullscreen(); audio.sfx('ui_ok'); }
+    if (input.hit('use') && this.index === 5) { this.game.requestFullscreen(); audio.sfx('ui_ok'); }
     // Drawn as a page rather than on the canvas: the one time anybody wants
     // this, the canvas is the wrong size, and everything on it is too small to
     // read on the very device that has the problem.
-    if (input.hit('use') && this.index === 5) { showDisplayReport(this.game.display, true); audio.sfx('ui_ok'); }
-    if (input.hit('use') && this.index === 6) this.close();
+    if (input.hit('use') && this.index === 6) { showDisplayReport(this.game.display, true); audio.sfx('ui_ok'); }
+    if (input.hit('use') && this.index === 7) this.close();
     if (input.hit('cancel') || input.hit('menu')) this.close();
   }
   draw(ctx) {
     dim(ctx, 0.6);
-    const w = 216, h = 166;
+    const w = 216, h = 184;
     const x = (VIEW_W - w) / 2, y = (VIEW_H - h) / 2;
     panel(ctx, x, y, w, h);
     panelTitle(ctx, x, y, w, 'Settings');
-    const keys = ['master', 'music', 'sfx'];
+    const keys = VOLUME_KEYS;
     this.items.forEach((label, i) => {
       const ry = y + 16 + i * 18;
       const sel = i === this.index;
       if (sel) cursor(ctx, x + 8, ry, this.t);
       drawText(ctx, label, x + 22, ry, { color: sel ? P.uiGold : P.uiText, shadow: P.uiShadow });
-      if (i < 3) bar(ctx, x + 100, ry + 1, 84, 7, audio.volumes[keys[i]], P.uiGold);
-      if (i === 3) {
+      if (i < keys.length) bar(ctx, x + 100, ry + 1, 84, 7, audio.volumes[keys[i]], P.uiGold);
+      if (i === 4) {
         drawText(ctx, setting('lowFx') ? 'Reduce' : 'Full', x + 100, ry,
           { color: setting('lowFx') ? P.uiGreen : P.uiTextDim, shadow: P.uiShadow });
       }

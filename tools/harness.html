@@ -7615,6 +7615,36 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.player.y = (g.homeDoor.y + 3) * 16;
         g.cam.follow(g.overworld, g.player.x, g.player.y, true);
         await wait(600);
+      } else if (SCRIPT === 'soundslider' || SCRIPT === 'settingsshot') {
+        // Settings has a Background slider, for rain, wind, birds and the
+        // cafe's hum, between SFX and Animation.
+        const M = await import('../src/ui/menus.js');
+        const { audio } = await import('../src/engine/audio.js');
+        const err = (m) => window.__errors.push(m);
+        const scr = new M.SoundScreen(g);
+        g.push(scr);
+        await settle();
+        if (scr.items[3] !== 'Background') err(`row 4 is ${scr.items[3]}`);
+        if (SCRIPT === 'soundslider') {
+          const before = { ...audio.volumes };
+          for (let i = 0; i < 3; i++) await pressKey('ArrowDown');
+          await pressKey('ArrowLeft');
+          await pressKey('ArrowLeft');
+          const after = { ...audio.volumes };
+          if (!(after.ambience < before.ambience - 0.15)) err(`Background went ${before.ambience} -> ${after.ambience}`);
+          if (after.sfx !== before.sfx || after.music !== before.music || after.master !== before.master) err('another slider moved');
+          // The rows below it still do what they say.
+          const low = !!(await import('../src/engine/settings.js')).setting('lowFx');
+          await pressKey('ArrowDown');
+          await pressKey('Space');
+          if (!!(await import('../src/engine/settings.js')).setting('lowFx') === low) err('Animation no longer toggles');
+          await pressKey('Space');
+          for (let i = 0; i < 3; i++) await pressKey('ArrowDown');
+          await pressKey('Space');
+          if (g.screens.includes(scr)) err('Back no longer closes Settings');
+          audio.setVolume('ambience', before.ambience);
+          window.__cont = `ambience ${before.ambience} -> ${after.ambience.toFixed(2)}`;
+        }
       } else if (SCRIPT === 'piano' || SCRIPT === 'netpiano') {
         // Space at a piano plays a little tune: once, not again until it's
         // done, and a different one next time. On a shared valley, everybody

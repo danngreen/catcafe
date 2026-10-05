@@ -72,6 +72,10 @@ const TRACKS = {
   },
 };
 
+// Background one-shots used to go out with the sound effects; this keeps them
+// as loud as they were when both sliders are where they start.
+const BG_LIFT = 0.75 / 0.5;
+
 // Pentatonic-ish degrees used to pick melody notes over the current chord.
 const MELODY_STEPS = [0, 2, 4, 7, 9, 11, 14, 16];
 
@@ -147,6 +151,8 @@ export class AudioEngine {
     this.sfxBus.connect(this.sfxSend);
     this.sfxSend.connect(this.reverb);
 
+    // Background: rain, wind, water, the cafe's hum, and the birds, crickets
+    // and clinks that come and go over them. The Background slider.
     this.ambBus = c.createGain();
     this.ambBus.gain.value = this.volumes.ambience;
     this.ambBus.connect(this.limiter);
@@ -554,7 +560,12 @@ export class AudioEngine {
     return osc;
   }
 
-  /** Random one-shots layered over the beds: birds, crickets, distant meows. */
+  /**
+   * Random one-shots layered over the beds: birds, crickets, distant meows.
+   * They're background, so they follow its volume rather than the sound
+   * effects'. BG_LIFT keeps them where they were at the default settings
+   * (background 0.5, effects 0.75) from when they went out with the effects.
+   */
   updateAmbience(dt, opts = {}) {
     if (!this.ready || !this.enabled) return;
     const amb = this.ambience;
@@ -564,29 +575,29 @@ export class AudioEngine {
       this.birdTimer -= dt;
       if (this.birdTimer <= 0) {
         this.birdTimer = this.rng.range(2.2, 9) / Math.max(0.2, amb.forest);
-        this.chirp(amb.forest * 0.55);
+        this.chirp(amb.forest * 0.55 * BG_LIFT);
       }
     }
     if (night > 0.4 && (amb.forest || amb.wind)) {
       this.critterTimer -= dt;
       if (this.critterTimer <= 0) {
         this.critterTimer = this.rng.range(3.5, 11);
-        this.cricket(0.4);
+        this.cricket(0.4 * BG_LIFT);
       }
       // An owl somewhere you can't see. Rare on purpose: the point of a sound
       // like this is that you look up, and you can't do that twice a minute.
       this.owlTimer = (this.owlTimer != null ? this.owlTimer : 18) - dt;
       if (this.owlTimer <= 0) {
         this.owlTimer = this.rng.range(22, 60);
-        this.sfx('owl', { gain: 0.5, pan: this.rng.range(-0.8, 0.8) });
+        this.sfx('owl', { gain: 0.5 * BG_LIFT, pan: this.rng.range(-0.8, 0.8), background: true });
       }
     }
     if ((amb.chatter || 0) > 0.05) {
       this.critterTimer2 = (this.critterTimer2 || 3) - dt;
       if (this.critterTimer2 <= 0) {
         this.critterTimer2 = this.rng.range(1.4, 5.0) / Math.max(0.2, amb.chatter);
-        if (this.rng.chance(0.45)) this.sfx('clink', { gain: 0.35 * amb.chatter });
-        else this.sfx('murmur', { gain: 0.5 * amb.chatter });
+        if (this.rng.chance(0.45)) this.sfx('clink', { gain: 0.35 * amb.chatter * BG_LIFT, background: true });
+        else this.sfx('murmur', { gain: 0.5 * amb.chatter * BG_LIFT, background: true });
       }
     }
   }
@@ -597,7 +608,7 @@ export class AudioEngine {
     const base = this.rng.range(2200, 3600);
     for (let i = 0; i < n; i++) {
       const t0 = t + i * this.rng.range(0.07, 0.13);
-      this.tone(this.sfxBus, {
+      this.tone(this.ambBus, {
         type: 'sine', freq: base * this.rng.range(0.92, 1.1), glideTo: base * this.rng.range(1.15, 1.5), glideTime: 0.05,
         t0, attack: 0.006, decay: 0.05, sustain: 0.2, release: 0.05, dur: 0.06, gain: 0.09 * vol,
       });
@@ -607,14 +618,15 @@ export class AudioEngine {
   cricket(vol = 0.3) {
     const c = this.ctx, t = c.currentTime + 0.01;
     for (let i = 0; i < 3; i++) {
-      this.noiseHit(this.sfxBus, { t0: t + i * 0.085, dur: 0.035, gain: 0.05 * vol, type: 'bandpass', freq: 5200, q: 14 });
+      this.noiseHit(this.ambBus, { t0: t + i * 0.085, dur: 0.035, gain: 0.05 * vol, type: 'bandpass', freq: 5200, q: 14 });
     }
   }
 
   // ---- sound effects -------------------------------------------------------
 
   /**
-   * Fire a named effect. opts: { gain, pitch, pan }
+   * Fire a named effect. opts: { gain, pitch, pan, background }, where
+   * `background` sends it out with the rain and birds instead of the effects.
    * Everything is defined here rather than in a data file so the recipes live
    * next to the synth helpers they use.
    */
@@ -628,11 +640,12 @@ export class AudioEngine {
     const t = c.currentTime + 0.005;
     const vol = opts.gain != null ? opts.gain : 1;
     const pitch = opts.pitch != null ? opts.pitch : 1;
-    let dest = this.sfxBus;
+    const out = opts.background ? this.ambBus : this.sfxBus;
+    let dest = out;
     if (opts.pan !== undefined && c.createStereoPanner) {
       const p = c.createStereoPanner();
       p.pan.value = clamp(opts.pan, -1, 1);
-      p.connect(this.sfxBus);
+      p.connect(out);
       dest = p;
     }
     const R = this.rng;

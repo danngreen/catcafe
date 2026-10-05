@@ -216,7 +216,7 @@ const GROUPS = {
   // read slower without anything being wrong, so they assert on what the code
   // does — how much work it asks for — rather than on how long it took.
   perf: ['waterperf'],
-  ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'counter', 'hwcore', 'hwcostumes', 'hwworld', 'holidayoff', 'hwoutfit', 'outfit', 'piano', 'exterior',
+  ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'counter', 'hwcore', 'hwcostumes', 'hwworld', 'holidayoff', 'hwoutfit', 'outfit', 'piano', 'soundslider', 'exterior',
     'summarylines', 'journalstep', 'titleme', 'signkeys', 'menukeys', 'oldsafari', 'patio', 'deaditems', 'booktabs', 'bigpieces', 'painting', 'friends', 'confirm', 'catvoices', 'delivery', 'deliverhouse', 'clearnight', 'wagekeys', 'patiorain'],
   cutscene: ['taxi', 'sleep', 'door'],
   mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile', 'pickupmobile', 'slidepad', 'bookmobile', 'staffmobile', 'hoursmobile'],
