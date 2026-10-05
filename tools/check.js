@@ -216,7 +216,7 @@ const GROUPS = {
   // read slower without anything being wrong, so they assert on what the code
   // does — how much work it asks for — rather than on how long it took.
   perf: ['waterperf'],
-  ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'counter', 'hwcore', 'hwcostumes', 'hwworld', 'holidayoff', 'hwoutfit', 'outfit', 'exterior',
+  ui: ['menus', 'build', 'furnish', 'furnkeys', 'furnshop', 'shop', 'counter', 'hwcore', 'hwcostumes', 'hwworld', 'holidayoff', 'hwoutfit', 'outfit', 'piano', 'exterior',
     'summarylines', 'journalstep', 'titleme', 'signkeys', 'menukeys', 'oldsafari', 'patio', 'deaditems', 'booktabs', 'bigpieces', 'painting', 'friends', 'confirm', 'catvoices', 'delivery', 'deliverhouse', 'clearnight', 'wagekeys', 'patiorain'],
   cutscene: ['taxi', 'sleep', 'door'],
   mobile: ['tabmobile', 'runmobile', 'pausemobile', 'dialogmobile', 'pickupmobile', 'slidepad', 'bookmobile', 'staffmobile', 'hoursmobile'],
@@ -224,7 +224,7 @@ const GROUPS = {
   // and are listed in the README rather than here.
   // Each of these gets a valley of its own — see freshValley() — so the order
   // they run in no longer matters.
-  net: ['netclock', 'net', 'netmobile', 'netbooks', 'netdrop', 'netoffline', 'netbuildlock', 'netforget',
+  net: ['netclock', 'net', 'netmobile', 'netbooks', 'netdrop', 'netoffline', 'netbuildlock', 'netpiano', 'netforget',
     'netpollbooks', 'netpollgone', 'netfallback', 'netmapplayers', 'netlobby', 'netlobbyback', 'netlobbydel', 'netlobbyone', 'netnewvalley', 'netexit', 'netbookfields', 'nettitlecafe', 'nettitlecontinue', 'nettitleghost', 'nettitleghostpoll', 'netghostmove', 'netghostmovepoll', 'solo'],
   slow: ['netidle', 'netping', 'netmute', 'netpollquiet', 'netidletitle'],
   // The public server: a valley of your own, joining with a code, and the creator

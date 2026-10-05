@@ -7615,6 +7615,116 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.player.y = (g.homeDoor.y + 3) * 16;
         g.cam.follow(g.overworld, g.player.x, g.player.y, true);
         await wait(600);
+      } else if (SCRIPT === 'piano' || SCRIPT === 'netpiano') {
+        // Space at a piano plays a little tune: once, not again until it's
+        // done, and a different one next time. On a shared valley, everybody
+        // else on the same map hears it too.
+        const st = g.state;
+        const err = (m) => window.__errors.push(m);
+        const { audio } = await import('../src/engine/audio.js');
+        const { TUNES } = await import('../src/game/tunes.js');
+        const played = [];
+        const real = audio.playTune.bind(audio);
+        audio.playTune = (tune, opts) => { played.push({ tune, gain: (opts && opts.gain) || 1 }); return real(tune, opts); };
+        // A piano in the cafe, somewhere with room in front of it.
+        const room = st.cafe.rooms[0];
+        let piano = null;
+        for (let y = room.y + 1; y < room.y + room.h - 2 && !piano; y++) {
+          for (let x = room.x; x < room.x + room.w - 3 && !piano; x++) {
+            st.cafe.furniture.push({ type: 'piano', x, y, variant: 0 });
+            st.rebuildCafe();
+            const map = st.cafeMap;
+            const o = map.objects.find((ob) => ob.type === 'piano');
+            const ok = o && [0, 1, 2].every((i) => !map.solid(o.tx + i, o.ty + 1));
+            if (ok) piano = o;
+            else st.cafe.furniture.pop();
+          }
+        }
+        st.rebuildCafe();
+        g.maps.set('cafe', st.cafeMap);
+        piano = st.cafeMap.objects.find((ob) => ob.type === 'piano');
+        if (!piano) err('nowhere to put a piano');
+        g.enterInterior('cafe', st.cafeMap, g.homeDoor.x, g.homeDoor.y);
+        await settle();
+        const sitAt = () => {
+          g.player.x = (piano.tx + 1) * 16 + 8;
+          g.player.y = (piano.ty + 2) * 16 - 2;
+          g.player.dir = 'up';
+        };
+
+        if (SCRIPT === 'piano' && piano) {
+          sitAt();
+          await settle();
+          if (g.promptLabel !== 'Play the piano') err(`the prompt at a piano says ${g.promptLabel}`);
+          g.hud.toasts.length = 0;
+          await pressKey('Space');
+          if (played.length !== 1) err(`Space at the piano played ${played.length} tunes`);
+          if (g.player.emote !== 'music') err('no music notes over the player');
+          if (!g.hud.toasts.some((t) => /^You play /.test(t.text))) err('nothing says what was played');
+          await pressKey('Space');
+          if (played.length !== 1) err('a second press started another tune over the first');
+          g.pianoUntil = 0;                               // as if it had finished
+          await pressKey('Space');
+          if (played.length !== 2) err('no second tune once the first was done');
+          else if (played[0].tune === played[1].tune) err('the same tune twice running');
+          // The inn has one too.
+          const { buildShopInterior } = await import('../src/world/interiors.js');
+          const inn = buildShopInterior('inn');
+          const pianos = inn.objects.filter((o) => o.type === 'piano');
+          if (!pianos.length) err('the inn has no piano');
+          for (const o of pianos) {
+            for (let i = 0; i < 3; i++) {
+              const it = inn.interactAt(o.tx + i, o.ty);
+              if (!it || it.kind !== 'piano') err(`the inn's piano does not play from its key ${i}`);
+            }
+          }
+          window.__cont = `tunes=${played.map((x) => x.tune.name).join('|')} innPianos=${pianos.length}`;
+        } else if (piano) {
+          // Mason, at the other end of the cafe, plays; then we do.
+          const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const bot = new WebSocket(`${proto}//${location.host}/ws${GAMEQ}`);
+          const heard = [];
+          let botId = null;
+          bot.onmessage = (ev) => {
+            const m = JSON.parse(ev.data);
+            if (m.t === 'welcome') {
+              botId = m.id;
+              bot.send(JSON.stringify({ t: 'join', name: 'Mason', look: st.playerLook, x: 0, y: 0, map: 'cafe' }));
+            }
+            if (m.t === 'tune') heard.push(m);
+          };
+          await until(() => botId && g.remotes.has(botId), 4000);
+          await roundTrip();
+          const far = { x: g.player.x + 300, y: g.player.y };
+          bot.send(JSON.stringify({ t: 'tune', n: 2, map: 'cafe', x: far.x, y: far.y }));
+          await until(() => played.length, 3000);
+          const mason = g.remotes.get(botId);
+          if (played.length !== 1) err(`Mason's tune was heard ${played.length} times`);
+          else {
+            if (played[0].tune !== TUNES[2]) err(`heard ${played[0].tune.name}, not ${TUNES[2].name}`);
+            if (!(played[0].gain < 1 && played[0].gain >= 0.35)) err(`from across the cafe it was at ${played[0].gain}`);
+          }
+          if (!mason || mason.emote !== 'music') err('no music notes over Mason');
+          if (!g.hud.toasts.some((t) => /^Mason plays /.test(t.text))) err('nothing says Mason is playing');
+          // From somewhere else in the valley, not a note.
+          await wait(1100);
+          bot.send(JSON.stringify({ t: 'tune', n: 3, map: 'overworld', x: 0, y: 0 }));
+          await roundTrip(); await wait(200);
+          if (played.length !== 1) err('heard a piano from another map');
+          // Ours, as Mason hears it.
+          sitAt();
+          await settle();
+          await pressKey('Space');
+          await until(() => heard.length, 3000);
+          const mine = heard[0];
+          if (!mine) err('Mason never heard our tune');
+          else {
+            if (mine.n !== g.lastTune) err(`Mason heard tune ${mine.n}, we played ${g.lastTune}`);
+            if (mine.map !== 'cafe') err(`Mason was told it was on ${mine.map}`);
+          }
+          bot.close();
+          window.__cont = `heard=${played.length} masonHeard=${heard.length}`;
+        }
       } else if (SCRIPT === 'furnish') {
         // The whole "I bought a chair, now what" path, with no builders hired.
         const st = g.state;

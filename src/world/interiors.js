@@ -86,6 +86,11 @@ const SHOP_LAYOUTS = {
   library: { w: 17, h: 12, floor: T.FLOOR_WOOD, fixtures: ['bookshelf', 'bookshelf', 'bookshelf', 'lampIn'] },
 };
 
+/** Any piano plays when you face it and press Space, from anywhere along its keys. */
+function pianoKeys(map, o) {
+  for (let i = 0; i < (o.tw || 1); i++) map.setInteract(o.tx + i, o.ty, { kind: 'piano', prompt: 'Play the piano' });
+}
+
 export function buildShopInterior(shopId) {
   const shop = SHOPS.find((s) => s.id === shopId);
   if (!shop) return null;
@@ -156,7 +161,8 @@ export function buildShopInterior(shopId) {
   const wanted = Math.min(free.length, L.fixtures.length + 3);
   for (let i = 0; i < wanted; i++) {
     const f = L.fixtures[i % L.fixtures.length];
-    map.addObject(f, free[i].x, free[i].y, { variant: rng.int(3) });
+    const o = map.addObject(f, free[i].x, free[i].y, { variant: rng.int(3) });
+    if (o && f === 'piano') pianoKeys(map, o);
   }
 
   map.addObject('lampIn', room.x + Math.floor(room.w / 2) + 3, room.y + 1, { lightR: 60 });
@@ -434,6 +440,7 @@ export function buildCafeMap(cafe) {
     }
     // The telephone answers when you talk to it, like anybody else in here.
     if (f.type === 'phone') map.setInteract(x, y, { kind: 'phone' });
+    if (f.type === 'piano') pianoKeys(map, o);
     if (f.type.startsWith('table') || f.type.startsWith('patioTable')
       || f.type === 'bar' || f.type === 'umbrella') tables.push({ x, y, w: o.tw });
     // The canopy keeps the rain off what is under it, which is the whole

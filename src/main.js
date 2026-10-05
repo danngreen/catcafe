@@ -58,6 +58,7 @@ import {
 } from './net/valleys.js';
 import { askText } from './ui/textinput.js';
 import { showInvite } from './ui/invite.js';
+import { TUNES, tuneLength, pickTune } from './game/tunes.js';
 
 const WORLD_SEED = 20260724;
 
@@ -448,6 +449,7 @@ class Game {
     const st = this.state;
     st.net = net;
     net.on('joined', (p) => this.hud.toast(`${p.n} joined the valley.`, 'good'));
+    net.on('tune', (msg) => this.hearTune(msg));
     // The server renames you if the name you picked is already in the valley.
     net.on('youare', (name) => {
       if (name === st.playerName) return;
@@ -2388,6 +2390,10 @@ class Game {
         this.answerPhone();
         break;
 
+      case 'piano':
+        this.playPiano();
+        break;
+
       case 'taxi':
         this.openTaxi(it.town);
         break;
@@ -2396,6 +2402,39 @@ class Game {
       default:
         holidayHook('interact', this, it, tile);
         break;
+    }
+  }
+
+  /**
+   * Sit down at a piano and play a few bars of something. Everybody else on the
+   * same map hears it too, a little quieter from across the room.
+   */
+  playPiano() {
+    const now = performance.now();
+    if (now < (this.pianoUntil || 0)) return;        // still playing the last one
+    const n = pickTune(this.lastTune);
+    const tune = TUNES[n];
+    this.lastTune = n;
+    const len = tuneLength(tune);
+    this.pianoUntil = now + len * 1000;
+    audio.playTune(tune);
+    this.player.showEmote('music', len + 0.5);
+    this.hud.toast(`You play ${tuneTitle(tune)}`, 'info', Math.min(4, len + 1));
+    net.playTune(n, this.state.mapId, this.player.x, this.player.y);
+  }
+
+  /** Somebody else played a piano. Heard if it's on the map we're on. */
+  hearTune(msg) {
+    const tune = TUNES[msg.n];
+    if (!tune || msg.map !== this.state.mapId) return;
+    const len = tuneLength(tune);
+    // Next to them it's as loud as playing it yourself; across a big cafe, softer.
+    const d = Math.hypot(msg.x - this.player.x, msg.y - this.player.y);
+    audio.playTune(tune, { gain: Math.max(0.35, 1 - d / 400) });
+    const who = this.remotes.get(msg.id);
+    if (who) {
+      who.showEmote('music', len + 0.5);
+      this.hud.toast(`${who.name} plays ${tuneTitle(tune)}`, 'info', Math.min(4, len + 1));
     }
   }
 
@@ -3767,6 +3806,9 @@ class LobbyScreen extends Screen {
     });
   }
 }
+
+/** "Ode to Joy." but "Charge!", for the line that says who's playing what. */
+const tuneTitle = (tune) => (/[.!?]$/.test(tune.name) ? tune.name : `${tune.name}.`);
 
 const BACK_OPTION = 'Back to the valleys';
 const RESUME = 'Resume Game';

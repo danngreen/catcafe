@@ -471,6 +471,11 @@ export class NetClient {
         if (r && msg.look) r.look = msg.look;
         break;
       }
+      // Somebody else is playing a piano. The game decides whether it's in
+      // earshot.
+      case 'tune':
+        this.emit('tune', msg);
+        break;
       case 'joined':
         this.remotes.set(msg.p.id, { ...msg.p });
         this.emit('joined', msg.p);
@@ -508,6 +513,11 @@ export class NetClient {
   /** We changed clothes: tell the valley, if we're in one. */
   setLook(look) {
     if (this.joined) this.send({ t: 'look', look });
+  }
+
+  /** We sat down at a piano: tune `n` of tunes.js, on this map, from here. */
+  playTune(n, map, x, y) {
+    if (this.joined) this.send({ t: 'tune', n, map, x: Math.round(x), y: Math.round(y) });
   }
 
   /**

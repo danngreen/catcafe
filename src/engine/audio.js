@@ -129,10 +129,14 @@ export class AudioEngine {
 
     this.musicBus = c.createGain();
     this.musicBus.gain.value = this.volumes.music;
-    this.musicBus.connect(this.limiter);
+    // The music steps back while somebody plays the piano. A gain of its own,
+    // so it never fights the volume setting or the music being switched off.
+    this.musicDuck = c.createGain();
+    this.musicBus.connect(this.musicDuck);
+    this.musicDuck.connect(this.limiter);
     this.musicSend = c.createGain();
     this.musicSend.gain.value = 0.5;
-    this.musicBus.connect(this.musicSend);
+    this.musicDuck.connect(this.musicSend);
     this.musicSend.connect(this.reverb);
 
     this.sfxBus = c.createGain();
@@ -268,6 +272,50 @@ export class AudioEngine {
     mod.stop(t0 + dur + release + 0.05);
     carrier.stop(t0 + dur + release + 0.05);
     return g;
+  }
+
+  // ---- the piano -----------------------------------------------------------
+
+  /**
+   * One piano note: a bright strike that mellows as it rings, and a quiet
+   * partial an octave up for the hammer's ping.
+   */
+  pianoNote(dest, t0, midi, beats, spb, gain) {
+    const freq = mtof(midi);
+    // Low notes ring longer; and nothing is held past its length plus a tail.
+    const dur = Math.max(0.12, beats * spb * 0.9);
+    const release = midi < 55 ? 0.9 : 0.6;
+    this.fmVoice(dest, { t0, freq, ratio: 1, index: 1.6, dur, gain: 0.068 * gain, attack: 0.003, release });
+    this.tone(dest, { type: 'sine', freq: freq * 2, t0, attack: 0.002, decay: 0.25, sustain: 0, release: 0.1, dur: 0.25, gain: 0.015 * gain });
+  }
+
+  /**
+   * Play a tune from tunes.js on the piano. `gain` is for hearing somebody
+   * else play across the room. Returns how long it lasts, in seconds.
+   */
+  playTune(tune, { gain = 1 } = {}) {
+    if (!this.ready || !this.enabled || !tune) return 0;
+    const c = this.ctx;
+    const spb = 60 / tune.bpm;
+    const t0 = c.currentTime + 0.05;
+    let end = 0;
+    for (const [at, pitch, beats] of tune.notes) {
+      const chord = Array.isArray(pitch) ? pitch : [pitch];
+      // A chord's notes share the hand's weight, so a big one isn't louder.
+      const each = chord.length > 1 ? 0.75 / Math.sqrt(chord.length) + 0.25 : 1;
+      for (const m of chord) this.pianoNote(this.sfxBus, t0 + at * spb, m, beats, spb, gain * each);
+      end = Math.max(end, (at + beats) * spb);
+    }
+    this.duckMusic(t0, end + 0.4);
+    return end;
+  }
+
+  /** Bring the music down from `t0` for `seconds`, then back up. */
+  duckMusic(t0, seconds) {
+    const g = this.musicDuck.gain;
+    g.cancelScheduledValues(t0);
+    g.setTargetAtTime(0.25, t0, 0.08);
+    g.setTargetAtTime(1, t0 + seconds, 0.6);
   }
 
   // ---- music ---------------------------------------------------------------

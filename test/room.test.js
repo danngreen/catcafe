@@ -295,3 +295,33 @@ test('a change of clothes reaches everyone else at once, and junk is ignored', (
   a.say({ t: 'look', look: { cloth: 'x'.repeat(400) } });
   assert.equal(b.count('look'), before);
 });
+
+test('a piano tune goes to everyone else, not back to the one playing', (t) => {
+  const { join } = setup(t);
+  const a = join('Ada', 'wa');
+  const b = join('Bea', 'wb');
+  a.say({ t: 'tune', n: 3, map: 'cafe', x: 40, y: 50 });
+  const heard = b.last('tune');
+  assert.ok(heard, 'Bea hears it');
+  assert.equal(heard.id, a.id);
+  assert.equal(heard.n, 3);
+  assert.equal(heard.map, 'cafe');
+  assert.equal(a.count('tune'), 0, 'Ada is not sent her own tune');
+});
+
+test('one tune a second at most, and nothing that is not a tune number', (t) => {
+  const { pass, join } = setup(t);
+  const a = join('Ada', 'wa');
+  const b = join('Bea', 'wb');
+  a.say({ t: 'tune', n: 1, map: 'cafe' });
+  a.say({ t: 'tune', n: 2, map: 'cafe' });
+  assert.equal(b.count('tune'), 1, 'mashing Space is one tune');
+  pass(1100);
+  a.say({ t: 'tune', n: 'loud', map: 'cafe' });
+  a.say({ t: 'tune', n: -1, map: 'cafe' });
+  a.say({ t: 'tune', n: 2.5, map: 'cafe' });
+  assert.equal(b.count('tune'), 1, 'bad numbers are dropped');
+  a.say({ t: 'tune', n: 2, map: 'x'.repeat(500) });
+  assert.equal(b.count('tune'), 2);
+  assert.equal(b.last('tune').map.length, 60, 'a map name is cut short');
+});

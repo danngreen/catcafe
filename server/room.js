@@ -201,6 +201,21 @@ export class Room {
         this.broadcast({ t: 'look', id: player.id, look }, player.id);
         break;
       }
+      // Somebody played a piano. Passed on for anyone on the same map to hear,
+      // at most once a second each, which is faster than any tune is long.
+      case 'tune': {
+        const n = Number(msg.n);
+        if (!player.joined || !Number.isInteger(n) || n < 0 || n > 999) break;
+        const now = Date.now();
+        if (now - (player.lastTune || 0) < 1000) break;
+        player.lastTune = now;
+        this.broadcast({
+          t: 'tune', id: player.id, n,
+          map: String(msg.map || 'overworld').slice(0, 60),
+          x: Number(msg.x) || 0, y: Number(msg.y) || 0,
+        }, player.id);
+        break;
+      }
       case 'move': {
         player.x = Number(msg.x) || 0;
         player.y = Number(msg.y) || 0;
