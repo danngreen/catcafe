@@ -10,7 +10,9 @@
 //                                    a corn maze... Must use its own RNG, never
 //                                    the world's, so the ordinary valley is
 //                                    exactly the same with or without it.
-//   costumeFor(villagerId)           what a villager wears, or null.
+//   costumeFor(villagerId, st)       what a villager wears, or null. Asked again
+//                                    whenever quests change, so one can depend
+//                                    on them (Pebble's, once it's found).
 //   fillHouse(game, map, houseId)    who's home when you walk into a cottage.
 //   visitResident(game, v, finish)   talking to somebody at home; return true
 //                                    if it handled the conversation.

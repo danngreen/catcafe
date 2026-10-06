@@ -21,16 +21,27 @@ const MASK = 0.35;
 // A few people it's decided for. Sir Woofers is already a ghost, and has been
 // talked into going as a pumpkin, which he's very patient about. Pebble has lost
 // his dragon costume (that's the quest "The Missing Costume"), so he's the one
-// villager in ordinary clothes.
+// villager in ordinary clothes until it's found.
 const CHOSEN = {
   woofers: 'pumpkin',
   pebble: null,
 };
 
-/** A costume key for this villager, or null. See ../content.js. */
-export function costumeFor(villagerId) {
+// ...and then he puts it on right away. (It's green and has a tail: the
+// dinosaur costume is the closest thing to a dragon there is.)
+const RETURNED = {
+  pebble: { quest: 'lost_costume', costume: 'dinosaur' },
+};
+
+/**
+ * A costume key for this villager, or null. See ../content.js. `st`, the game
+ * state, is for the costumes a quest gives back; without it they're not back.
+ */
+export function costumeFor(villagerId, st) {
   if (villagerId == null || villagerId === '') return null;
   const id = String(villagerId);
+  const back = RETURNED[id];
+  if (back && st && st.quests && st.quests[back.quest] === 'done') return back.costume;
   if (Object.prototype.hasOwnProperty.call(CHOSEN, id)) return CHOSEN[id];
   // Salted, so the roll has nothing to do with the one that picked their
   // species and coat from the same id.

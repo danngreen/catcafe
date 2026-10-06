@@ -206,7 +206,7 @@ const GROUPS = {
     'barriers', 'nightfolk', 'nightplaces', 'questchain', 'logbook', 'hedgestuck', 'freshstones', 'questwalk', 'piercheck', 'hedgewalk', 'shellchain', 'spotcheck', 'coatgoal', 'ghosthidden', 'shellwalk', 'hintheard', 'bear', 'deliverspots', 'rugs', 'taxitime', 'snowday', 'firelight', 'confirmbox', 'bearlegs', 'cottages', 'content', 'questextras', 'regular', 'barstool',
     // Halloween at home and its jobs. housefolk runs either way round, so the
     // plain sweep checks the cottages are as they were without the holiday.
-    'hwhouses', 'housefolk', 'hwquests'],
+    'hwhouses', 'housefolk', 'hwquests', 'hwpebble'],
   cafe: ['cafe', 'takeover', 'wishlist', 'summarylines', 'promptlook', 'treats', 'furncustomers', 'employee',
     'weathercafe', 'hourly'],
   world: ['walk', 'town', 'coast', 'shore', 'night', 'map', 'door', 'nightplaces',

@@ -38,7 +38,7 @@ import {
 } from './game/deliveries.js';
 import { BOOK_BY_ID } from './world/places.js';
 import { holidayOn, setHoliday, holiday, holidayName } from './holidays/index.js';
-import { holidayHook } from './holidays/content.js';
+import { holidayHook, holidayContent } from './holidays/content.js';
 import { QUESTS, liveQuests, liveQuestsFrom, objectiveMet, questSteps, currentStep,
   stepIndex, isLastStep, progressText, objectiveText, requiredFlag } from './game/quests.js';
 
@@ -485,6 +485,8 @@ class Game {
       st.applySync(k, v);
       // Somebody else may have just shifted the chalk. Open our copy too.
       if (k === 'flags' && this.overworld) this.applyClearedBarriers();
+      // Somebody else finished a quest: marks, and anybody it changes the look of.
+      if (k === 'quests' && this.mode === 'play') this.refreshQuestMarks();
     });
     // The authoritative books, sent when we join and whenever a cafe is opened.
     // On the title screen we only file it away; `announce` adopts it on start.
@@ -2983,9 +2985,23 @@ class Game {
     this.refreshQuestMarks();
   }
 
+  /**
+   * What everybody's wearing, asked again: a costume can depend on a quest
+   * (Pebble's, once you've found it), and quests change.
+   */
+  dressVillagers() {
+    const hc = holidayContent();
+    if (!hc.costumeFor) return;
+    const st = this.state;
+    const dress = (v) => { v.costume = hc.costumeFor(v.def.id, st) || null; };
+    for (const v of this.villagers) dress(v);
+    for (const [, map] of this.maps) if (map.villagers) map.villagers.forEach(dress);
+  }
+
   /** Put a ! over anyone who has something for you. */
   refreshQuestMarks() {
     const st = this.state;
+    this.dressVillagers();
     for (const v of this.villagers) {
       // Somebody waiting for an order always has something for you, and is not
       // in the quest table at all — this pass would quietly unmark them.

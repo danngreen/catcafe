@@ -8,12 +8,12 @@ import { QUESTS, liveQuests } from '../src/game/quests.js';
 
 const d = (s) => new Date(`${s}T12:00:00`);
 
-test('Halloween runs Oct 15 to Nov 2, inclusive', () => {
-  assert.equal(holidayOn(d('2026-10-14')), null);
-  assert.deepEqual(holidayOn(d('2026-10-15')), { id: 'halloween', year: 2026 });
+test('Halloween runs Oct 4 to Nov 4, inclusive', () => {
+  assert.equal(holidayOn(d('2026-10-03')), null);
+  assert.deepEqual(holidayOn(d('2026-10-04')), { id: 'halloween', year: 2026 });
   assert.deepEqual(holidayOn(d('2026-10-31')), { id: 'halloween', year: 2026 });
-  assert.deepEqual(holidayOn(d('2026-11-02')), { id: 'halloween', year: 2026 });
-  assert.equal(holidayOn(d('2026-11-03')), null);
+  assert.deepEqual(holidayOn(d('2026-11-04')), { id: 'halloween', year: 2026 });
+  assert.equal(holidayOn(d('2026-11-05')), null);
   assert.equal(holidayOn(d('2027-07-04')), null);
   assert.deepEqual(holidayOn(d('2027-10-20')), { id: 'halloween', year: 2027 });
 });

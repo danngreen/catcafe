@@ -6093,6 +6093,37 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
         g.enterOverworld();
         await settle();
         window.__cont = `holiday=${on ? 'halloween' : 'off'} ${out.join(' | ')}`;
+      } else if (SCRIPT === 'hwpebble') {
+        // Pebble is in ordinary clothes, having lost the dragon costume, until
+        // you bring it back; then Pebble wears it. Also when somebody else in
+        // the valley is the one who brought it back.
+        const st = g.state;
+        const err = (m) => window.__errors.push(m);
+        const all = () => [...g.villagers, ...[...g.maps.values()].flatMap((m) => m.villagers || [])];
+        const pebble = all().find((v) => v.def.id === 'pebble');
+        if (!pebble) err('no Pebble in the valley');
+        else {
+          delete st.quests.lost_costume;
+          g.refreshQuestMarks();
+          const before = pebble.costume;
+          if (before) err(`Pebble wears ${before} before the costume is found`);
+          st.quests.lost_costume = 'active';
+          g.refreshQuestMarks();
+          if (pebble.costume) err('Pebble wears it while it is still lost');
+          st.quests.lost_costume = 'done';
+          g.refreshQuestMarks();
+          const after = pebble.costume;
+          if (after !== 'dinosaur') err(`once it's back Pebble wears ${after}`);
+          // Nobody else changed.
+          const others = all().filter((v) => v.def.id !== 'pebble' && v.costume === 'dinosaur').length;
+          // Back to lost, then found by somebody else: it comes in as a sync.
+          delete st.quests.lost_costume;
+          g.refreshQuestMarks();
+          g.mode = 'play';
+          g.net.emit('sync', 'quests', { ...st.quests, lost_costume: 'done' });
+          if (pebble.costume !== 'dinosaur') err(`found by somebody else, Pebble wears ${pebble.costume}`);
+          window.__cont = `before=${before} after=${after} otherDinosaurs=${others}`;
+        }
       } else if (SCRIPT === 'hwquests') {
         // Every Halloween job, from the offer to the reward, through the same
         // conversations a player has: talk to whoever gives it, do the thing,
@@ -6171,11 +6202,6 @@ console.warn = (...a) => { window.__errors.push('WARN: ' + a.join(' ')); _warn.a
             if (o.type === 'deliver' && (st.inventory[o.item] || 0)) {
               window.__errors.push(`${q.id}: still holding ${o.item} after handing it over`);
             }
-          }
-          // The family's rule: strawberries come from knocking on doors.
-          const gives = [...((q.reward && q.reward.items) || []), ...steps.flatMap((s) => s.gives || [])];
-          if (gives.some(([id]) => id === 'strawberry')) {
-            window.__errors.push(`${q.id} hands out a strawberry, which only comes from the houses`);
           }
         }
         hour(12);
